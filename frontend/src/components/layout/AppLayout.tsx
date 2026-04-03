@@ -6,6 +6,7 @@ import DMSidebar from '../sidebar/DMSidebar';
 import MemberList from '../sidebar/MemberList';
 import ChatPanel from '../chat/ChatPanel';
 import UserProfilePopover from '../shared/UserProfilePopover';
+import SelfProfilePopover from '../shared/SelfProfilePopover';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useHubStore } from '../../stores/hubStore';
 import { useDMStore } from '../../stores/dmStore';
@@ -41,10 +42,11 @@ export default function AppLayout() {
   return (
     <div className="h-screen flex overflow-hidden">
       <HubSidebar />
-      {activeConversationId ? <DMSidebar /> : <StreamSidebar />}
+      {!activeHubId ? <DMSidebar /> : <StreamSidebar />}
       <ChatPanel />
       {activeHubId && !activeConversationId && <MemberList />}
       <UserProfilePopover />
+      <SelfProfilePopover />
     </div>
   );
 }
