@@ -1,6 +1,8 @@
 import { useRef, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useAppStore } from '../../stores/app';
+import { useStreamStore } from '../../stores/streamStore';
+import { useMessageStore } from '../../stores/messageStore';
+import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/auth';
 import { useWsSend } from '../../hooks/useWebSocket';
 import MessageInput from './MessageInput';
@@ -9,23 +11,23 @@ import TypingIndicator from './TypingIndicator';
 import NotificationBell from '../notifications/NotificationBell';
 
 export default function ChatPanel() {
-  const messages = useAppStore((s) => s.messages);
-  const messagesLoading = useAppStore((s) => s.messagesLoading);
-  const activeStreamId = useAppStore((s) => s.activeStreamId);
-  const streams = useAppStore((s) => s.streams);
+  const messages = useMessageStore((s) => s.messages);
+  const messagesLoading = useMessageStore((s) => s.messagesLoading);
+  const activeStreamId = useStreamStore((s) => s.activeStreamId);
+  const streams = useStreamStore((s) => s.streams);
   const user = useAuthStore((s) => s.user);
   const bottomRef = useRef<HTMLDivElement>(null);
   const unreadRef = useRef<HTMLDivElement>(null);
   const send = useWsSend();
-  const lastReadMessageIds = useAppStore((s) => s.lastReadMessageIds);
+  const lastReadMessageIds = useStreamStore((s) => s.lastReadMessageIds);
 
   // DM state
-  const activeConversationId = useAppStore((s) => s.activeConversationId);
-  const dmMessages = useAppStore((s) => s.dmMessages);
-  const dmMessagesLoading = useAppStore((s) => s.dmMessagesLoading);
-  const conversations = useAppStore((s) => s.conversations);
-  const sendDMMessage = useAppStore((s) => s.sendDMMessage);
-  const ackDM = useAppStore((s) => s.ackDM);
+  const activeConversationId = useDMStore((s) => s.activeConversationId);
+  const dmMessages = useDMStore((s) => s.dmMessages);
+  const dmMessagesLoading = useDMStore((s) => s.dmMessagesLoading);
+  const conversations = useDMStore((s) => s.conversations);
+  const sendDMMessage = useDMStore((s) => s.sendDMMessage);
+  const ackDM = useDMStore((s) => s.ackDM);
 
   const isDMMode = !!activeConversationId;
 

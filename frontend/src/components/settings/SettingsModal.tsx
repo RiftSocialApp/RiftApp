@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../stores/auth';
-import { useAppStore } from '../../stores/app';
+import { usePresenceStore } from '../../stores/presenceStore';
 import { useWsSend } from '../../hooks/useWebSocket';
 import { api } from '../../api/client';
 import { statusColor, statusLabel } from '../shared/StatusDot';
@@ -281,8 +281,8 @@ function AccountTab({
   onClose: () => void;
 }) {
   const send = useWsSend();
-  const liveStatus = useAppStore((s) => s.presence[user.id]);
-  const setPresence = useAppStore((s) => s.setPresence);
+  const liveStatus = usePresenceStore((s) => s.presence[user.id]);
+  const setPresence = usePresenceStore((s) => s.setPresence);
   const currentStatus = liveStatus ?? user.status;
   const [confirmLogout, setConfirmLogout] = useState(false);
 

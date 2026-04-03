@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, memo } from 'react';
 import type { Message } from '../../types';
-import { useAppStore } from '../../stores/app';
+import { useMessageStore } from '../../stores/messageStore';
 import { useAuthStore } from '../../stores/auth';
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '😮', '🙏'];
@@ -109,7 +109,7 @@ interface MessageItemProps {
 const MessageItem = memo(function MessageItem({ message, showHeader, isOwn }: MessageItemProps) {
   const author = message.author;
   const authorName = author?.display_name || 'Unknown';
-  const toggleReaction = useAppStore((s) => s.toggleReaction);
+  const toggleReaction = useMessageStore((s) => s.toggleReaction);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [pickerOpen, setPickerOpen] = useState(false);
 

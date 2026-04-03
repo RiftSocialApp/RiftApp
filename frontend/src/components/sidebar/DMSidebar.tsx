@@ -1,16 +1,17 @@
 import { useEffect, useState, useRef } from 'react';
-import { useAppStore } from '../../stores/app';
+import { useDMStore } from '../../stores/dmStore';
+import { usePresenceStore } from '../../stores/presenceStore';
 import { api } from '../../api/client';
 import type { User } from '../../types';
 import StatusDot from '../shared/StatusDot';
 
 export default function DMSidebar() {
-  const conversations = useAppStore((s) => s.conversations);
-  const activeConversationId = useAppStore((s) => s.activeConversationId);
-  const setActiveConversation = useAppStore((s) => s.setActiveConversation);
-  const loadConversations = useAppStore((s) => s.loadConversations);
-  const ackDM = useAppStore((s) => s.ackDM);
-  const presence = useAppStore((s) => s.presence);
+  const conversations = useDMStore((s) => s.conversations);
+  const activeConversationId = useDMStore((s) => s.activeConversationId);
+  const setActiveConversation = useDMStore((s) => s.setActiveConversation);
+  const loadConversations = useDMStore((s) => s.loadConversations);
+  const ackDM = useDMStore((s) => s.ackDM);
+  const presence = usePresenceStore((s) => s.presence);
 
   // New-DM search state
   const [showSearch, setShowSearch] = useState(false);

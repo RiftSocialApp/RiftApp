@@ -1,14 +1,17 @@
 import { useState } from 'react';
-import { useAppStore } from '../../stores/app';
+import { useHubStore } from '../../stores/hubStore';
+import { useDMStore } from '../../stores/dmStore';
+import { useStreamStore } from '../../stores/streamStore';
+import { useMessageStore } from '../../stores/messageStore';
 import { api } from '../../api/client';
 
 export default function HubSidebar() {
-  const hubs = useAppStore((s) => s.hubs);
-  const activeHubId = useAppStore((s) => s.activeHubId);
-  const activeConversationId = useAppStore((s) => s.activeConversationId);
-  const setActiveHub = useAppStore((s) => s.setActiveHub);
-  const createHub = useAppStore((s) => s.createHub);
-  const loadConversations = useAppStore((s) => s.loadConversations);
+  const hubs = useHubStore((s) => s.hubs);
+  const activeHubId = useHubStore((s) => s.activeHubId);
+  const activeConversationId = useDMStore((s) => s.activeConversationId);
+  const setActiveHub = useHubStore((s) => s.setActiveHub);
+  const createHub = useHubStore((s) => s.createHub);
+  const loadConversations = useDMStore((s) => s.loadConversations);
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [showJoin, setShowJoin] = useState(false);
@@ -37,7 +40,7 @@ export default function HubSidebar() {
       const result = await api.joinInvite(code);
       setJoinCode('');
       setShowJoin(false);
-      await useAppStore.getState().loadHubs();
+      await useHubStore.getState().loadHubs();
       await setActiveHub(result.hub.id);
     } catch (err: unknown) {
       setJoinError(err instanceof Error ? err.message : 'Invalid invite code');
@@ -48,13 +51,9 @@ export default function HubSidebar() {
 
   const handleDMClick = () => {
     // Enter DM mode: clear hub selection, load conversations
-    useAppStore.setState({
-      activeHubId: null,
-      activeStreamId: null,
-      messages: [],
-      streams: [],
-      activeConversationId: useAppStore.getState().activeConversationId,
-    });
+    useHubStore.getState().clearActive();
+    useStreamStore.getState().clearStreams();
+    useMessageStore.getState().clearMessages();
     loadConversations();
   };
 

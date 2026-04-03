@@ -13,6 +13,9 @@ import (
 	"github.com/riptide-cloud/riptide/internal/auth"
 	"github.com/riptide-cloud/riptide/internal/config"
 	"github.com/riptide-cloud/riptide/internal/database"
+	"github.com/riptide-cloud/riptide/internal/pubsub"
+	"github.com/riptide-cloud/riptide/internal/repository"
+	"github.com/riptide-cloud/riptide/internal/service"
 	"github.com/riptide-cloud/riptide/internal/user"
 	"github.com/riptide-cloud/riptide/internal/ws"
 )
@@ -20,7 +23,6 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Database
 	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("failed to connect to database: %v", err)
@@ -28,20 +30,46 @@ func main() {
 	defer db.Close()
 	log.Println("connected to database")
 
-	// Run migrations
 	if err := database.Migrate(db); err != nil {
 		log.Fatalf("failed to run migrations: %v", err)
 	}
 	log.Println("database migrated")
 
-	// Services
+	// Repositories
+	hubRepo := repository.NewHubRepo(db)
+	streamRepo := repository.NewStreamRepo(db)
+	msgRepo := repository.NewMessageRepo(db)
+	dmRepo := repository.NewDMRepo(db)
+	notifRepo := repository.NewNotificationRepo(db)
+	inviteRepo := repository.NewInviteRepo(db)
+
+	// Auth & User services (existing)
 	authService := auth.NewService(db, cfg.JWTSecret)
 	userRepo := user.NewRepo(db)
 	userService := user.NewService(userRepo)
 
+	// Redis pub/sub
+	var broker pubsub.Broker
+	redisBroker, err := pubsub.NewRedisBroker(cfg.RedisURL)
+	if err != nil {
+		log.Printf("warning: Redis unavailable, using in-memory only: %v", err)
+		broker = pubsub.NewNoopBroker()
+	} else {
+		broker = redisBroker
+		log.Println("connected to Redis")
+	}
+	defer broker.Close()
+
 	// WebSocket hub
 	wsHub := ws.NewHub(db)
 	go wsHub.Run()
+
+	// Services
+	notifSvc := service.NewNotificationService(notifRepo, wsHub)
+	hubSvc := service.NewHubService(hubRepo, streamRepo, inviteRepo, notifRepo)
+	streamSvc := service.NewStreamService(streamRepo, hubSvc)
+	msgSvc := service.NewMessageService(msgRepo, streamRepo, hubSvc, notifSvc, wsHub)
+	dmSvc := service.NewDMService(dmRepo, msgRepo, notifSvc, wsHub)
 
 	// Upload handler (MinIO/S3)
 	uploadH, err := api.NewUploadHandler(cfg, db)
@@ -50,9 +78,20 @@ func main() {
 	}
 
 	// Router
-	router := api.NewRouter(db, authService, userService, wsHub, cfg, uploadH)
+	router := api.NewRouter(api.RouterDeps{
+		AuthService:   authService,
+		UserService:   userService,
+		HubService:    hubSvc,
+		StreamService: streamSvc,
+		MsgService:    msgSvc,
+		DMService:     dmSvc,
+		NotifService:  notifSvc,
+		WSHub:         wsHub,
+		Config:        cfg,
+		UploadHandler: uploadH,
+		NotifRepo:     notifRepo,
+	})
 
-	// HTTP server with graceful shutdown
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      router,
@@ -61,7 +100,6 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server in goroutine
 	go func() {
 		log.Printf("riptide server starting on :%s", cfg.Port)
 		log.Printf("  → REST API: http://localhost:%s/api", cfg.Port)
@@ -71,13 +109,11 @@ func main() {
 		}
 	}()
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-quit
 	log.Printf("received signal %s, shutting down gracefully…", sig)
 
-	// Give outstanding requests up to 10s to finish
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 

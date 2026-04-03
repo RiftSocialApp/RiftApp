@@ -5,26 +5,22 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/livekit/protocol/auth"
 
 	"github.com/riptide-cloud/riptide/internal/config"
 	"github.com/riptide-cloud/riptide/internal/middleware"
+	"github.com/riptide-cloud/riptide/internal/service"
 )
 
 type VoiceHandler struct {
-	cfg *config.Config
-	db  *pgxpool.Pool
+	cfg    *config.Config
+	hubSvc *service.HubService
 }
 
-func NewVoiceHandler(cfg *config.Config, db *pgxpool.Pool) *VoiceHandler {
-	return &VoiceHandler{cfg: cfg, db: db}
+func NewVoiceHandler(cfg *config.Config, hubSvc *service.HubService) *VoiceHandler {
+	return &VoiceHandler{cfg: cfg, hubSvc: hubSvc}
 }
 
-// Token generates a LiveKit access token for the authenticated user
-// to join a voice room scoped to the given stream.
-//
-// GET /api/voice/token?streamID=...
 func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.GetUserID(r.Context())
 	streamID := r.URL.Query().Get("streamID")
@@ -36,19 +32,13 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify the stream exists and user is a member of its hub
-	var hubID string
-	err := h.db.QueryRow(r.Context(),
-		`SELECT s.hub_id FROM streams s
-		 JOIN hub_members hm ON s.hub_id = hm.hub_id
-		 WHERE s.id = $1 AND hm.user_id = $2`, streamID, userID,
-	).Scan(&hubID)
+	hubID, err := h.hubSvc.GetStreamHubID(r.Context(), streamID, userID)
 	if err != nil {
 		writeError(w, http.StatusForbidden, "stream not found or access denied")
 		return
 	}
+	_ = hubID
 
-	// Room name scoped to stream
 	roomName := "stream:" + streamID
 
 	at := auth.NewAccessToken(h.cfg.LiveKitKey, h.cfg.LiveKitSecret)
@@ -67,8 +57,8 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{
-		"token":    token,
-		"url":      h.cfg.LiveKitHost,
-		"room":     roomName,
+		"token": token,
+		"url":   h.cfg.LiveKitHost,
+		"room":  roomName,
 	})
 }

@@ -4,9 +4,15 @@ const BASE = '/api';
 
 class ApiClient {
   private token: string | null = null;
+  private refreshTokenValue: string | null = null;
+  private refreshPromise: Promise<AuthResponse> | null = null;
 
   setToken(token: string | null) {
     this.token = token;
+  }
+
+  setRefreshToken(token: string | null) {
+    this.refreshTokenValue = token;
   }
 
   private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -18,7 +24,15 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    const res = await fetch(`${BASE}${path}`, { ...options, headers });
+    let res = await fetch(`${BASE}${path}`, { ...options, headers });
+
+    if (res.status === 401 && this.refreshTokenValue && !path.includes('/auth/')) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+        res = await fetch(`${BASE}${path}`, { ...options, headers });
+      }
+    }
 
     if (res.status === 204) return undefined as T;
 
@@ -27,6 +41,29 @@ class ApiClient {
       throw new Error(data.error || 'Request failed');
     }
     return data as T;
+  }
+
+  private async tryRefresh(): Promise<boolean> {
+    if (!this.refreshTokenValue) return false;
+    try {
+      if (!this.refreshPromise) {
+        this.refreshPromise = this.refreshToken(this.refreshTokenValue);
+      }
+      const res = await this.refreshPromise;
+      this.token = res.access_token;
+      this.refreshTokenValue = res.refresh_token;
+      localStorage.setItem('riptide_token', res.access_token);
+      localStorage.setItem('riptide_refresh', res.refresh_token);
+      return true;
+    } catch {
+      this.token = null;
+      this.refreshTokenValue = null;
+      localStorage.removeItem('riptide_token');
+      localStorage.removeItem('riptide_refresh');
+      return false;
+    } finally {
+      this.refreshPromise = null;
+    }
   }
 
   // Auth
@@ -51,6 +88,13 @@ class ApiClient {
     });
   }
 
+  logout(refreshToken?: string) {
+    return this.request<void>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  }
+
   getMe() {
     return this.request<User>('/users/@me');
   }
@@ -62,191 +106,59 @@ class ApiClient {
     });
   }
 
-  // Hubs
-  getHubs() {
-    return this.request<Hub[]>('/hubs');
-  }
+  getHubs() { return this.request<Hub[]>('/hubs'); }
+  createHub(name: string) { return this.request<Hub>('/hubs', { method: 'POST', body: JSON.stringify({ name }) }); }
+  getHub(hubId: string) { return this.request<Hub>(`/hubs/${hubId}`); }
+  getHubMembers(hubId: string) { return this.request<User[]>(`/hubs/${hubId}/members`); }
+  joinHub(hubId: string) { return this.request(`/hubs/${hubId}/join`, { method: 'POST' }); }
+  updateHub(hubId: string, data: { name?: string; icon_url?: string }) { return this.request<Hub>(`/hubs/${hubId}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+  createInvite(hubId: string, options?: { max_uses?: number; expires_in?: number }) { return this.request<HubInvite>(`/hubs/${hubId}/invite`, { method: 'POST', body: JSON.stringify(options ?? {}) }); }
+  joinInvite(code: string) { return this.request<{ status: string; hub: Hub }>(`/invites/${code}`, { method: 'POST' }); }
 
-  createHub(name: string) {
-    return this.request<Hub>('/hubs', {
-      method: 'POST',
-      body: JSON.stringify({ name }),
-    });
-  }
+  getStreams(hubId: string) { return this.request<Stream[]>(`/hubs/${hubId}/streams`); }
+  createStream(hubId: string, name: string, type: number = 0) { return this.request<Stream>(`/hubs/${hubId}/streams`, { method: 'POST', body: JSON.stringify({ name, type }) }); }
 
-  getHub(hubId: string) {
-    return this.request<Hub>(`/hubs/${hubId}`);
-  }
-
-  getHubMembers(hubId: string) {
-    return this.request<User[]>(`/hubs/${hubId}/members`);
-  }
-
-  joinHub(hubId: string) {
-    return this.request(`/hubs/${hubId}/join`, { method: 'POST' });
-  }
-
-  updateHub(hubId: string, data: { name?: string; icon_url?: string }) {
-    return this.request<Hub>(`/hubs/${hubId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
-  }
-
-  createInvite(hubId: string, options?: { max_uses?: number; expires_in?: number }) {
-    return this.request<HubInvite>(`/hubs/${hubId}/invite`, {
-      method: 'POST',
-      body: JSON.stringify(options ?? {}),
-    });
-  }
-
-  joinInvite(code: string) {
-    return this.request<{ status: string; hub: Hub }>(`/invites/${code}`, {
-      method: 'POST',
-    });
-  }
-
-  // Streams
-  getStreams(hubId: string) {
-    return this.request<Stream[]>(`/hubs/${hubId}/streams`);
-  }
-
-  createStream(hubId: string, name: string, type: number = 0) {
-    return this.request<Stream>(`/hubs/${hubId}/streams`, {
-      method: 'POST',
-      body: JSON.stringify({ name, type }),
-    });
-  }
-
-  // Messages
   getMessages(streamId: string, before?: string, limit = 50) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
     return this.request<Message[]>(`/streams/${streamId}/messages?${params}`);
   }
+  sendMessage(streamId: string, content: string, attachmentIds?: string[]) { return this.request<Message>(`/streams/${streamId}/messages`, { method: 'POST', body: JSON.stringify({ content, attachment_ids: attachmentIds }) }); }
+  editMessage(messageId: string, content: string) { return this.request<Message>(`/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ content }) }); }
+  deleteMessage(messageId: string) { return this.request(`/messages/${messageId}`, { method: 'DELETE' }); }
 
-  sendMessage(streamId: string, content: string, attachmentIds?: string[]) {
-    return this.request<Message>(`/streams/${streamId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content, attachment_ids: attachmentIds }),
-    });
-  }
+  addReaction(messageId: string, emoji: string) { return this.request(`/messages/${messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }); }
+  removeReaction(messageId: string, emoji: string) { return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE' }); }
 
-  editMessage(messageId: string, content: string) {
-    return this.request<Message>(`/messages/${messageId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ content }),
-    });
-  }
+  ackStream(streamId: string, messageId: string) { return this.request(`/streams/${streamId}/ack`, { method: 'PUT', body: JSON.stringify({ message_id: messageId }) }); }
+  getReadStates(hubId: string) { return this.request<import('../types').StreamReadState[]>(`/hubs/${hubId}/read-states`); }
 
-  deleteMessage(messageId: string) {
-    return this.request(`/messages/${messageId}`, { method: 'DELETE' });
-  }
+  getNotifications() { return this.request<Notification[]>('/notifications'); }
+  markNotificationRead(notifId: string) { return this.request(`/notifications/${notifId}/read`, { method: 'PATCH' }); }
+  markAllNotificationsRead() { return this.request('/notifications/read-all', { method: 'POST' }); }
 
-  addReaction(messageId: string, emoji: string) {
-    return this.request(`/messages/${messageId}/reactions`, {
-      method: 'POST',
-      body: JSON.stringify({ emoji }),
-    });
-  }
-
-  removeReaction(messageId: string, emoji: string) {
-    return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, {
-      method: 'DELETE',
-    });
-  }
-
-  // Read states
-  ackStream(streamId: string, messageId: string) {
-    return this.request(`/streams/${streamId}/ack`, {
-      method: 'PUT',
-      body: JSON.stringify({ message_id: messageId }),
-    });
-  }
-
-  getReadStates(hubId: string) {
-    return this.request<import('../types').StreamReadState[]>(`/hubs/${hubId}/read-states`);
-  }
-
-  // Notifications
-  getNotifications() {
-    return this.request<Notification[]>('/notifications');
-  }
-
-  markNotificationRead(notifId: string) {
-    return this.request(`/notifications/${notifId}/read`, { method: 'PATCH' });
-  }
-
-  markAllNotificationsRead() {
-    return this.request('/notifications/read-all', { method: 'POST' });
-  }
-
-  // Direct Messages
-  getDMs() {
-    return this.request<Conversation[]>('/dms');
-  }
-
-  createOrOpenDM(recipientId: string) {
-    return this.request<Conversation>('/dms', {
-      method: 'POST',
-      body: JSON.stringify({ recipient_id: recipientId }),
-    });
-  }
-
+  getDMs() { return this.request<Conversation[]>('/dms'); }
+  createOrOpenDM(recipientId: string) { return this.request<Conversation>('/dms', { method: 'POST', body: JSON.stringify({ recipient_id: recipientId }) }); }
   getDMMessages(conversationId: string, before?: string, limit = 50) {
     const params = new URLSearchParams({ limit: String(limit) });
     if (before) params.set('before', before);
     return this.request<Message[]>(`/dms/${conversationId}/messages?${params}`);
   }
+  sendDMMessage(conversationId: string, content: string, attachmentIds?: string[]) { return this.request<Message>(`/dms/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ content, attachment_ids: attachmentIds }) }); }
+  ackDM(conversationId: string, messageId: string) { return this.request(`/dms/${conversationId}/ack`, { method: 'PUT', body: JSON.stringify({ message_id: messageId }) }); }
+  getDMReadStates() { return this.request<import('../types').DMReadState[]>('/dms/read-states'); }
 
-  sendDMMessage(conversationId: string, content: string, attachmentIds?: string[]) {
-    return this.request<Message>(`/dms/${conversationId}/messages`, {
-      method: 'POST',
-      body: JSON.stringify({ content, attachment_ids: attachmentIds }),
-    });
-  }
+  searchUser(username: string) { return this.request<User>(`/users/search?q=${encodeURIComponent(username)}`); }
+  getVoiceToken(streamId: string) { return this.request<{ token: string; url: string; room: string }>(`/voice/token?streamID=${streamId}`); }
 
-  ackDM(conversationId: string, messageId: string) {
-    return this.request(`/dms/${conversationId}/ack`, {
-      method: 'PUT',
-      body: JSON.stringify({ message_id: messageId }),
-    });
-  }
-
-  getDMReadStates() {
-    return this.request<import('../types').DMReadState[]>('/dms/read-states');
-  }
-
-  // User search
-  searchUser(username: string) {
-    return this.request<User>(`/users/search?q=${encodeURIComponent(username)}`);
-  }
-
-  // Voice
-  getVoiceToken(streamId: string) {
-    return this.request<{ token: string; url: string; room: string }>(`/voice/token?streamID=${streamId}`);
-  }
-
-  // Uploads
   async uploadFile(file: File): Promise<Attachment> {
     const formData = new FormData();
     formData.append('file', file);
-
     const headers: Record<string, string> = {};
-    if (this.token) {
-      headers['Authorization'] = `Bearer ${this.token}`;
-    }
-
-    const res = await fetch(`${BASE}/upload`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
+    if (this.token) { headers['Authorization'] = `Bearer ${this.token}`; }
+    const res = await fetch(`${BASE}/upload`, { method: 'POST', headers, body: formData });
     const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.error || 'Upload failed');
-    }
+    if (!res.ok) throw new Error(data.error || 'Upload failed');
     return data as Attachment;
   }
 }

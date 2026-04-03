@@ -1,11 +1,11 @@
-import { useAppStore } from '../../stores/app';
+import { usePresenceStore } from '../../stores/presenceStore';
 
 interface TypingIndicatorProps {
   streamId: string;
 }
 
 export default function TypingIndicator({ streamId }: TypingIndicatorProps) {
-  const typers = useAppStore((s) => s.typers[streamId]);
+  const typers = usePresenceStore((s) => s.typers[streamId]);
 
   if (!typers || typers.size === 0) return null;
 

@@ -26,6 +26,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   login: async (username, password) => {
     const res = await api.login(username, password);
     api.setToken(res.access_token);
+    api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riptide_token', res.access_token);
     localStorage.setItem('riptide_refresh', res.refresh_token);
     set({
@@ -39,6 +40,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   register: async (username, password, email) => {
     const res = await api.register(username, password, email);
     api.setToken(res.access_token);
+    api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riptide_token', res.access_token);
     localStorage.setItem('riptide_refresh', res.refresh_token);
     set({
@@ -50,7 +52,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: () => {
+    const refreshToken = get().refreshToken;
+    if (refreshToken) {
+      api.logout(refreshToken).catch(() => {});
+    }
     api.setToken(null);
+    api.setRefreshToken(null);
     localStorage.removeItem('riptide_token');
     localStorage.removeItem('riptide_refresh');
     set({
@@ -70,15 +77,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     api.setToken(token);
+    api.setRefreshToken(refresh);
     try {
       const user = await api.getMe();
       set({ user, token, refreshToken: refresh, isAuthenticated: true, isLoading: false });
     } catch {
-      // Try refresh
       if (refresh) {
         try {
           const res = await api.refreshToken(refresh);
           api.setToken(res.access_token);
+          api.setRefreshToken(res.refresh_token);
           localStorage.setItem('riptide_token', res.access_token);
           localStorage.setItem('riptide_refresh', res.refresh_token);
           set({
@@ -89,9 +97,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             isLoading: false,
           });
           return;
-        } catch {
-          // Fall through to logout
-        }
+        } catch {}
       }
       get().logout();
       set({ isLoading: false });

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { useAppStore } from '../../stores/app';
+import { useMessageStore } from '../../stores/messageStore';
 import { api } from '../../api/client';
 import type { Attachment } from '../../types';
 
@@ -26,7 +26,7 @@ export default function MessageInput({ streamName, onTyping, onTypingStop, isDMM
   const [content, setContent] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
-  const sendMessage = useAppStore((s) => s.sendMessage);
+  const sendMessage = useMessageStore((s) => s.sendMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingRef = useRef(0);

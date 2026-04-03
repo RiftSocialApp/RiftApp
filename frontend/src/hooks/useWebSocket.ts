@@ -1,6 +1,10 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthStore } from '../stores/auth';
-import { useAppStore } from '../stores/app';
+import { useStreamStore } from '../stores/streamStore';
+import { useMessageStore } from '../stores/messageStore';
+import { usePresenceStore } from '../stores/presenceStore';
+import { useNotificationStore } from '../stores/notificationStore';
+import { useDMStore } from '../stores/dmStore';
 import type { Message, Notification, Conversation, WSEvent } from '../types';
 
 const HEARTBEAT_INTERVAL = 30000;
@@ -30,19 +34,17 @@ export function useWebSocket() {
   const heartbeatRef = useRef<number>();
   const typingTimersRef = useRef<Map<string, number>>(new Map());
   const token = useAuthStore((s) => s.token);
-  const activeStreamId = useAppStore((s) => s.activeStreamId);
-  const addMessage = useAppStore((s) => s.addMessage);
-  const updateMessage = useAppStore((s) => s.updateMessage);
-  const removeMessage = useAppStore((s) => s.removeMessage);
-  const addTyper = useAppStore((s) => s.addTyper);
-  const removeTyper = useAppStore((s) => s.removeTyper);
-  const setPresence = useAppStore((s) => s.setPresence);
-  const addNotification = useAppStore((s) => s.addNotification);
-  const addDMMessage = useAppStore((s) => s.addDMMessage);
-  const addConversation = useAppStore((s) => s.addConversation);
-  const ackDM = useAppStore((s) => s.ackDM);
-  const applyReactionAdd = useAppStore((s) => s.applyReactionAdd);
-  const applyReactionRemove = useAppStore((s) => s.applyReactionRemove);
+  const activeStreamId = useStreamStore((s) => s.activeStreamId);
+  const addMessage = useMessageStore((s) => s.addMessage);
+  const updateMessage = useMessageStore((s) => s.updateMessage);
+  const removeMessage = useMessageStore((s) => s.removeMessage);
+  const addTyper = usePresenceStore((s) => s.addTyper);
+  const removeTyper = usePresenceStore((s) => s.removeTyper);
+  const setPresence = usePresenceStore((s) => s.setPresence);
+  const addNotification = useNotificationStore((s) => s.addNotification);
+  const addDMMessage = useDMStore((s) => s.addDMMessage);
+  const addConversation = useDMStore((s) => s.addConversation);
+  const ackDM = useDMStore((s) => s.ackDM);
   const prevStreamRef = useRef<string | null>(null);
 
   const send = useCallback((op: string, d?: unknown) => {
@@ -78,7 +80,7 @@ export function useWebSocket() {
         }, HEARTBEAT_INTERVAL);
 
         // Re-subscribe to active stream on (re)connect
-        const currentStream = useAppStore.getState().activeStreamId;
+        const currentStream = useStreamStore.getState().activeStreamId;
         if (currentStream) {
           send('subscribe', { stream_id: currentStream });
           prevStreamRef.current = currentStream;
@@ -143,7 +145,7 @@ export function useWebSocket() {
             const dmMsg = evt.d as Message;
             addDMMessage(dmMsg);
             // Auto-ack if this conversation is currently active (user can see the message)
-            const activeConvId = useAppStore.getState().activeConversationId;
+            const activeConvId = useDMStore.getState().activeConversationId;
             if (dmMsg.conversation_id && dmMsg.conversation_id === activeConvId) {
               ackDM(dmMsg.conversation_id);
             }
@@ -155,12 +157,24 @@ export function useWebSocket() {
           }
           case 'reaction_add': {
             const { message_id, user_id, emoji } = evt.d as { message_id: string; user_id: string; emoji: string };
-            applyReactionAdd(message_id, user_id, emoji);
+            const msgState = useMessageStore.getState();
+            const dmState = useDMStore.getState();
+            if (msgState.messages.some((m) => m.id === message_id)) {
+              msgState.applyReactionAdd(message_id, user_id, emoji);
+            } else if (dmState.dmMessages.some((m) => m.id === message_id)) {
+              dmState.applyReactionAdd(message_id, user_id, emoji);
+            }
             break;
           }
           case 'reaction_remove': {
             const { message_id, user_id, emoji } = evt.d as { message_id: string; user_id: string; emoji: string };
-            applyReactionRemove(message_id, user_id, emoji);
+            const msgState = useMessageStore.getState();
+            const dmState = useDMStore.getState();
+            if (msgState.messages.some((m) => m.id === message_id)) {
+              msgState.applyReactionRemove(message_id, user_id, emoji);
+            } else if (dmState.dmMessages.some((m) => m.id === message_id)) {
+              dmState.applyReactionRemove(message_id, user_id, emoji);
+            }
             break;
           }
         }
@@ -194,7 +208,7 @@ export function useWebSocket() {
       typingTimersRef.current.clear();
       wsRef.current?.close();
     };
-  }, [token, send, addMessage, updateMessage, removeMessage, addTyper, removeTyper, setPresence, addNotification, addDMMessage, addConversation, ackDM, applyReactionAdd, applyReactionRemove]);
+  }, [token, send, addMessage, updateMessage, removeMessage, addTyper, removeTyper, setPresence, addNotification, addDMMessage, addConversation, ackDM]);
 
   // Subscribe/unsubscribe to active stream
   useEffect(() => {

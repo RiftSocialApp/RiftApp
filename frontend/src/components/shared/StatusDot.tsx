@@ -1,4 +1,4 @@
-import { useAppStore } from '../../stores/app';
+import { usePresenceStore } from '../../stores/presenceStore';
 
 const statusColors: Record<number, string> = {
   0: 'bg-gray-500',       // offline
@@ -34,7 +34,7 @@ export default function StatusDot({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const liveStatus = useAppStore((s) => s.presence[userId]);
+  const liveStatus = usePresenceStore((s) => s.presence[userId]);
   const status = liveStatus ?? fallbackStatus ?? 0;
 
   const sizeClass = size === 'sm' ? 'w-2 h-2' : size === 'lg' ? 'w-3.5 h-3.5' : 'w-2.5 h-2.5';

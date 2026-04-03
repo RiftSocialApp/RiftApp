@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { useAppStore } from '../../stores/app';
+import { useHubStore } from '../../stores/hubStore';
+import { useStreamStore } from '../../stores/streamStore';
+import { usePresenceStore } from '../../stores/presenceStore';
 import { useAuthStore } from '../../stores/auth';
 import { useVoice } from '../../hooks/useVoice';
 import SettingsModal from '../settings/SettingsModal';
@@ -9,16 +11,16 @@ import StatusDot, { statusLabel } from '../shared/StatusDot';
 import { api } from '../../api/client';
 
 export default function StreamSidebar() {
-  const streams = useAppStore((s) => s.streams);
-  const activeHubId = useAppStore((s) => s.activeHubId);
-  const activeStreamId = useAppStore((s) => s.activeStreamId);
-  const setActiveStream = useAppStore((s) => s.setActiveStream);
-  const createStream = useAppStore((s) => s.createStream);
-  const hubs = useAppStore((s) => s.hubs);
+  const streams = useStreamStore((s) => s.streams);
+  const activeHubId = useHubStore((s) => s.activeHubId);
+  const activeStreamId = useStreamStore((s) => s.activeStreamId);
+  const setActiveStream = useStreamStore((s) => s.setActiveStream);
+  const createStream = useStreamStore((s) => s.createStream);
+  const hubs = useHubStore((s) => s.hubs);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const streamUnreads = useAppStore((s) => s.streamUnreads);
-  const hubMembers = useAppStore((s) => s.hubMembers);
+  const streamUnreads = useStreamStore((s) => s.streamUnreads);
+  const hubMembers = usePresenceStore((s) => s.hubMembers);
   const [newStreamName, setNewStreamName] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [showHubSettings, setShowHubSettings] = useState(false);
@@ -284,7 +286,7 @@ export default function StreamSidebar() {
 
 function UserBar({ user }: { user: { id: string; username: string; display_name: string; status: number } | null; logout: () => void }) {
   const [showSettings, setShowSettings] = useState(false);
-  const liveStatus = useAppStore((s) => user ? s.presence[user.id] : undefined);
+  const liveStatus = usePresenceStore((s) => user ? s.presence[user.id] : undefined);
 
   if (!user) return null;
 

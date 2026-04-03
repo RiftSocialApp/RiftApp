@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/riptide-cloud/riptide/internal/auth"
+	"github.com/riptide-cloud/riptide/internal/middleware"
 )
 
 type AuthHandler struct {
@@ -74,4 +75,16 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	_ = middleware.GetUserID(r.Context())
+	var body struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	readJSON(r, &body)
+	if body.RefreshToken != "" {
+		h.service.Logout(r.Context(), body.RefreshToken)
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

@@ -10,11 +10,20 @@ import (
 	wsHub "github.com/riptide-cloud/riptide/internal/ws"
 )
 
+var allowedOrigins = map[string]bool{
+	"http://localhost:3000": true,
+	"http://localhost:5173": true,
+}
+
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		return true // TODO: restrict in production
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true
+		}
+		return allowedOrigins[origin]
 	},
 }
 
@@ -46,7 +55,7 @@ func (h *WSHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := wsHub.NewClient(h.hub, conn, claims.UserID)
+	client := wsHub.NewClient(h.hub, conn, claims.UserID, wsHub.GenerateSessionID())
 	h.hub.Register(client)
 
 	go client.WritePump()

@@ -1,12 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
-import { useAppStore } from '../../stores/app';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 export default function NotificationBell() {
-  const notifications = useAppStore((s) => s.notifications);
-  const unreadCount = useAppStore((s) => s.unreadCount);
-  const loadNotifications = useAppStore((s) => s.loadNotifications);
-  const markNotifRead = useAppStore((s) => s.markNotifRead);
-  const markAllNotifsRead = useAppStore((s) => s.markAllNotifsRead);
+  const notifications = useNotificationStore((s) => s.notifications);
+  const unreadCount = useNotificationStore((s) => s.unreadCount);
+  const loadNotifications = useNotificationStore((s) => s.loadNotifications);
+  const markNotifRead = useNotificationStore((s) => s.markNotifRead);
+  const markAllNotifsRead = useNotificationStore((s) => s.markAllNotifsRead);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 

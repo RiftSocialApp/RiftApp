@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { useAppStore } from '../../stores/app';
+import { useHubStore } from '../../stores/hubStore';
+import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/auth';
 import { api } from '../../api/client';
 import StatusDot from '../shared/StatusDot';
@@ -101,7 +102,7 @@ export default function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: 
 /* ───────── Overview Tab ───────── */
 
 function OverviewTab({ hub, isOwner }: { hub: Hub; isOwner: boolean }) {
-  const updateHub = useAppStore((s) => s.updateHub);
+  const updateHub = useHubStore((s) => s.updateHub);
   const [name, setName] = useState(hub.name);
   const [iconUrl, setIconUrl] = useState(hub.icon_url ?? '');
   const [saving, setSaving] = useState(false);
@@ -308,8 +309,8 @@ function MembersTab({ hub }: { hub: Hub }) {
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const setActiveConversation = useAppStore((s) => s.setActiveConversation);
-  const loadConversations = useAppStore((s) => s.loadConversations);
+  const setActiveConversation = useDMStore((s) => s.setActiveConversation);
+  const loadConversations = useDMStore((s) => s.loadConversations);
   const currentUser = useAuthStore((s) => s.user);
 
   useEffect(() => {
@@ -360,8 +361,7 @@ function MembersTab({ hub }: { hub: Hub }) {
       const conv = await api.createOrOpenDM(member.id);
       await loadConversations();
       // Switch to DM mode
-      useAppStore.setState({ activeHubId: null, activeStreamId: null, messages: [], streams: [] });
-      setActiveConversation(conv.id);
+      await setActiveConversation(conv.id);
     } catch { /* silently fail */ }
   };
 

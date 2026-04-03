@@ -1,0 +1,103 @@
+package service
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/riptide-cloud/riptide/internal/apperror"
+	"github.com/riptide-cloud/riptide/internal/models"
+	"github.com/riptide-cloud/riptide/internal/repository"
+)
+
+type StreamService struct {
+	streamRepo *repository.StreamRepo
+	hubService *HubService
+}
+
+func NewStreamService(streamRepo *repository.StreamRepo, hubService *HubService) *StreamService {
+	return &StreamService{streamRepo: streamRepo, hubService: hubService}
+}
+
+func (s *StreamService) Create(ctx context.Context, hubID, userID, name string, streamType int, isPrivate bool) (*models.Stream, error) {
+	if !s.hubService.HasPermission(ctx, hubID, userID, models.PermManageStreams) {
+		return nil, apperror.Forbidden("you do not have permission to manage channels")
+	}
+	if name == "" {
+		return nil, apperror.BadRequest("name is required")
+	}
+
+	maxPos, _ := s.streamRepo.GetMaxPosition(ctx, hubID)
+
+	stream := &models.Stream{
+		ID:        uuid.New().String(),
+		HubID:     hubID,
+		Name:      name,
+		Type:      streamType,
+		Position:  maxPos + 1,
+		IsPrivate: isPrivate,
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.streamRepo.Create(ctx, stream); err != nil {
+		return nil, apperror.Internal("failed to create stream", err)
+	}
+	return stream, nil
+}
+
+func (s *StreamService) List(ctx context.Context, hubID string) ([]models.Stream, error) {
+	streams, err := s.streamRepo.ListByHub(ctx, hubID)
+	if err != nil {
+		return nil, apperror.Internal("internal error", err)
+	}
+	return streams, nil
+}
+
+func (s *StreamService) Get(ctx context.Context, streamID string) (*models.Stream, error) {
+	stream, err := s.streamRepo.GetByID(ctx, streamID)
+	if err != nil {
+		return nil, apperror.NotFound("stream not found")
+	}
+	return stream, nil
+}
+
+func (s *StreamService) Delete(ctx context.Context, streamID, userID string) error {
+	hubID, err := s.streamRepo.GetHubID(ctx, streamID)
+	if err != nil {
+		return apperror.NotFound("stream not found")
+	}
+	if !s.hubService.HasPermission(ctx, hubID, userID, models.PermManageStreams) {
+		return apperror.Forbidden("you do not have permission to manage channels")
+	}
+	if err := s.streamRepo.Delete(ctx, streamID); err != nil {
+		return apperror.Internal("failed to delete stream", err)
+	}
+	return nil
+}
+
+func (s *StreamService) Ack(ctx context.Context, streamID, userID, messageID string) error {
+	if messageID == "" {
+		return apperror.BadRequest("message_id is required")
+	}
+	if err := s.streamRepo.AckStream(ctx, userID, streamID, messageID); err != nil {
+		return apperror.Internal("failed to mark stream read", err)
+	}
+	return nil
+}
+
+func (s *StreamService) ReadStates(ctx context.Context, hubID, userID string) ([]repository.ReadState, error) {
+	states, err := s.streamRepo.GetReadStates(ctx, hubID, userID)
+	if err != nil {
+		return nil, apperror.Internal("internal error", err)
+	}
+	return states, nil
+}
+
+func (s *StreamService) GetHubID(ctx context.Context, streamID string) (string, error) {
+	return s.streamRepo.GetHubID(ctx, streamID)
+}
+
+func (s *StreamService) GetName(ctx context.Context, streamID string) (string, error) {
+	return s.streamRepo.GetName(ctx, streamID)
+}

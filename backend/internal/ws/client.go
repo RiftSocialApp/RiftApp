@@ -17,21 +17,23 @@ const (
 )
 
 type Client struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	userID   string
-	streams  map[string]bool
-	mu       sync.RWMutex
+	hub       *Hub
+	conn      *websocket.Conn
+	send      chan []byte
+	userID    string
+	sessionID string
+	streams   map[string]bool
+	mu        sync.RWMutex
 }
 
-func NewClient(hub *Hub, conn *websocket.Conn, userID string) *Client {
+func NewClient(hub *Hub, conn *websocket.Conn, userID, sessionID string) *Client {
 	return &Client{
-		hub:     hub,
-		conn:    conn,
-		send:    make(chan []byte, 256),
-		userID:  userID,
-		streams: make(map[string]bool),
+		hub:       hub,
+		conn:      conn,
+		send:      make(chan []byte, 256),
+		userID:    userID,
+		sessionID: sessionID,
+		streams:   make(map[string]bool),
 	}
 }
 
@@ -122,6 +124,6 @@ func (c *Client) Send(data []byte) {
 	select {
 	case c.send <- data:
 	default:
-		log.Printf("client %s send buffer full, dropping", c.userID)
+		log.Printf("client %s/%s send buffer full, dropping", c.userID, c.sessionID)
 	}
 }

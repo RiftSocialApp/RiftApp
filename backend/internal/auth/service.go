@@ -2,6 +2,8 @@ package auth
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"time"
 
@@ -10,14 +12,15 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
+	"github.com/riptide-cloud/riptide/internal/apperror"
 	"github.com/riptide-cloud/riptide/internal/models"
 )
 
 var (
-	ErrUsernameTaken  = errors.New("username already taken")
-	ErrEmailTaken     = errors.New("email already taken")
+	ErrUsernameTaken      = errors.New("username already taken")
+	ErrEmailTaken         = errors.New("email already taken")
 	ErrInvalidCredentials = errors.New("invalid credentials")
-	ErrUserNotFound   = errors.New("user not found")
+	ErrUserNotFound       = errors.New("user not found")
 )
 
 type Service struct {
@@ -71,10 +74,10 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthRespo
 		id, input.Username, input.Email, string(hash), input.Username, now, now,
 	)
 	if err != nil {
-		if isDuplicateKey(err, "users_username_key") {
+		if apperror.IsDuplicateKey(err, "users_username_key") {
 			return nil, ErrUsernameTaken
 		}
-		if isDuplicateKey(err, "users_email_key") {
+		if apperror.IsDuplicateKey(err, "users_email_key") {
 			return nil, ErrEmailTaken
 		}
 		return nil, err
@@ -90,7 +93,12 @@ func (s *Service) Register(ctx context.Context, input RegisterInput) (*AuthRespo
 		UpdatedAt:   now,
 	}
 
-	return s.generateTokens(user)
+	resp, err := s.generateTokens(user)
+	if err != nil {
+		return nil, err
+	}
+	s.storeRefreshToken(ctx, user.ID, resp.RefreshToken)
+	return resp, nil
 }
 
 func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthResponse, error) {
@@ -113,7 +121,12 @@ func (s *Service) Login(ctx context.Context, input LoginInput) (*AuthResponse, e
 		return nil, ErrInvalidCredentials
 	}
 
-	return s.generateTokens(&user)
+	resp, err := s.generateTokens(&user)
+	if err != nil {
+		return nil, err
+	}
+	s.storeRefreshToken(ctx, user.ID, resp.RefreshToken)
+	return resp, nil
 }
 
 func (s *Service) GetUser(ctx context.Context, userID string) (*models.User, error) {
@@ -140,12 +153,34 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 		return nil, ErrInvalidCredentials
 	}
 
+	tokenHash := hashToken(refreshToken)
+	var tokenID string
+	err = s.db.QueryRow(ctx,
+		`SELECT id FROM refresh_tokens WHERE token_hash = $1 AND user_id = $2 AND expires_at > now()`,
+		tokenHash, claims.UserID).Scan(&tokenID)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE id = $1`, tokenID)
+
 	user, err := s.GetUser(ctx, claims.UserID)
 	if err != nil {
 		return nil, err
 	}
 
-	return s.generateTokens(user)
+	resp, err := s.generateTokens(user)
+	if err != nil {
+		return nil, err
+	}
+	s.storeRefreshToken(ctx, user.ID, resp.RefreshToken)
+	return resp, nil
+}
+
+func (s *Service) Logout(ctx context.Context, refreshToken string) error {
+	tokenHash := hashToken(refreshToken)
+	s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash)
+	return nil
 }
 
 func (s *Service) ValidateToken(token string) (*Claims, error) {
@@ -168,19 +203,15 @@ func (s *Service) generateTokens(user *models.User) (*AuthResponse, error) {
 	}, nil
 }
 
-func isDuplicateKey(err error, constraint string) bool {
-	return err != nil && contains(err.Error(), constraint)
+func (s *Service) storeRefreshToken(ctx context.Context, userID, token string) {
+	tokenHash := hashToken(token)
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	s.db.Exec(ctx,
+		`INSERT INTO refresh_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+		userID, tokenHash, expiresAt)
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchStr(s, substr)
-}
-
-func searchStr(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
+func hashToken(token string) string {
+	h := sha256.Sum256([]byte(token))
+	return hex.EncodeToString(h[:])
 }

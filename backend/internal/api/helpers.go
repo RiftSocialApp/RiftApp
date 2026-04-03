@@ -3,6 +3,8 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+
+	"github.com/riptide-cloud/riptide/internal/apperror"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -13,6 +15,10 @@ func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func writeAppError(w http.ResponseWriter, err error) {
+	writeError(w, apperror.HTTPCode(err), apperror.Message(err))
 }
 
 func readJSON(r *http.Request, v interface{}) error {
