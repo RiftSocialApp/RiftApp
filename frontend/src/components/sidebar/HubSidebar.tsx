@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useHubStore } from '../../stores/hubStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useStreamStore } from '../../stores/streamStore';
@@ -8,7 +9,6 @@ import { api } from '../../api/client';
 export default function HubSidebar() {
   const hubs = useHubStore((s) => s.hubs);
   const activeHubId = useHubStore((s) => s.activeHubId);
-  const activeConversationId = useDMStore((s) => s.activeConversationId);
   const setActiveHub = useHubStore((s) => s.setActiveHub);
   const createHub = useHubStore((s) => s.createHub);
   const loadConversations = useDMStore((s) => s.loadConversations);
@@ -21,7 +21,7 @@ export default function HubSidebar() {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [dmHovered, setDmHovered] = useState(false);
 
-  const isDMMode = activeConversationId !== null;
+  const isDMMode = !activeHubId;
 
   const handleCreate = async () => {
     if (!newName.trim()) return;
@@ -148,36 +148,6 @@ export default function HubSidebar() {
 
       {/* Create hub button */}
       <div className="relative flex items-center justify-center w-full">
-        {showCreate ? (
-          <div className="absolute left-[72px] top-0 z-50 bg-riptide-surface border border-riptide-border/60 rounded-xl p-4 w-72 shadow-elevation-high animate-scale-in">
-            <h3 className="text-sm font-semibold mb-3">Create a Hub</h3>
-            <input
-              type="text"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreate();
-                if (e.key === 'Escape') { setShowCreate(false); setNewName(''); }
-              }}
-              placeholder="Hub name"
-              className="settings-input"
-              autoFocus
-              maxLength={100}
-            />
-            <div className="flex gap-2 mt-3">
-              <button onClick={handleCreate} className="btn-primary flex-1 py-2">
-                Create
-              </button>
-              <button
-                onClick={() => { setShowCreate(false); setNewName(''); }}
-                className="btn-ghost flex-1 py-2"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : null}
-
         <button
           onClick={() => { setShowCreate(!showCreate); setShowJoin(false); }}
           className="hub-icon rounded-3xl bg-riptide-surface text-riptide-success hover:rounded-2xl hover:bg-riptide-success hover:text-white transition-all duration-300"
@@ -190,45 +160,8 @@ export default function HubSidebar() {
         </button>
       </div>
 
-      {/* Join hub via invite code */}
+      {/* Join hub button */}
       <div className="relative flex items-center justify-center w-full">
-        {showJoin ? (
-          <div className="absolute left-[72px] top-0 z-50 bg-riptide-surface border border-riptide-border/60 rounded-xl p-4 w-72 shadow-elevation-high animate-scale-in">
-            <h3 className="text-sm font-semibold mb-1">Join a Hub</h3>
-            <p className="text-[11px] text-riptide-text-dim mb-3">Enter an invite code to join an existing hub.</p>
-            <input
-              type="text"
-              value={joinCode}
-              onChange={(e) => { setJoinCode(e.target.value); setJoinError(null); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleJoin();
-                if (e.key === 'Escape') { setShowJoin(false); setJoinCode(''); setJoinError(null); }
-              }}
-              placeholder="Invite code"
-              className="settings-input"
-              autoFocus
-              maxLength={64}
-            />
-            {joinError && (
-              <p className="text-[11px] text-riptide-danger mt-1.5">{joinError}</p>
-            )}
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={handleJoin}
-                disabled={!joinCode.trim() || joining}
-                className="btn-primary flex-1 py-2"
-              >
-                {joining ? 'Joining…' : 'Join Hub'}
-              </button>
-              <button
-                onClick={() => { setShowJoin(false); setJoinCode(''); setJoinError(null); }}
-                className="btn-ghost flex-1 py-2"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : null}
         <button
           onClick={() => { setShowJoin(!showJoin); setShowCreate(false); }}
           className="hub-icon rounded-3xl bg-riptide-surface text-riptide-accent hover:rounded-2xl hover:bg-riptide-accent hover:text-white transition-all duration-300"
@@ -241,6 +174,91 @@ export default function HubSidebar() {
           </svg>
         </button>
       </div>
+
+      {/* Create Hub Modal (portal) */}
+      {showCreate && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowCreate(false); setNewName(''); }}>
+          <div
+            className="bg-riptide-surface border border-riptide-border/60 rounded-xl p-6 w-[420px] shadow-modal animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold mb-1">Create a Hub</h2>
+            <p className="text-sm text-riptide-text-dim mb-5">Give your new hub a name to get started.</p>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-riptide-text-dim mb-1.5 block">Hub Name</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreate();
+                if (e.key === 'Escape') { setShowCreate(false); setNewName(''); }
+              }}
+              placeholder="My Awesome Hub"
+              className="settings-input text-base"
+              autoFocus
+              maxLength={100}
+            />
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => { setShowCreate(false); setNewName(''); }}
+                className="btn-ghost px-5 py-2.5"
+              >
+                Cancel
+              </button>
+              <button onClick={handleCreate} disabled={!newName.trim()} className="btn-primary px-5 py-2.5">
+                Create Hub
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Join Hub Modal (portal) */}
+      {showJoin && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60" onClick={() => { setShowJoin(false); setJoinCode(''); setJoinError(null); }}>
+          <div
+            className="bg-riptide-surface border border-riptide-border/60 rounded-xl p-6 w-[420px] shadow-modal animate-scale-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 className="text-xl font-bold mb-1">Join a Hub</h2>
+            <p className="text-sm text-riptide-text-dim mb-5">Enter an invite code or link to join an existing hub.</p>
+            <label className="text-[11px] font-semibold uppercase tracking-wider text-riptide-text-dim mb-1.5 block">Invite Code</label>
+            <input
+              type="text"
+              value={joinCode}
+              onChange={(e) => { setJoinCode(e.target.value); setJoinError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleJoin();
+                if (e.key === 'Escape') { setShowJoin(false); setJoinCode(''); setJoinError(null); }
+              }}
+              placeholder="Enter invite code"
+              className="settings-input text-base"
+              autoFocus
+              maxLength={64}
+            />
+            {joinError && (
+              <p className="text-sm text-riptide-danger mt-2">{joinError}</p>
+            )}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => { setShowJoin(false); setJoinCode(''); setJoinError(null); }}
+                className="btn-ghost px-5 py-2.5"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleJoin}
+                disabled={!joinCode.trim() || joining}
+                className="btn-primary px-5 py-2.5"
+              >
+                {joining ? 'Joining...' : 'Join Hub'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
