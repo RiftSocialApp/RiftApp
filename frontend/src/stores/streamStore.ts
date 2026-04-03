@@ -6,12 +6,14 @@ interface StreamState {
   streams: Stream[];
   categories: Category[];
   activeStreamId: string | null;
+  viewingVoiceStreamId: string | null;
   streamUnreads: Record<string, number>;
   lastReadMessageIds: Record<string, string>;
 
   loadStreams: (hubId: string) => Promise<void>;
   loadCategories: (hubId: string) => Promise<void>;
   setActiveStream: (streamId: string) => Promise<void>;
+  setViewingVoice: (streamId: string | null) => void;
   createStream: (hubId: string, name: string, type?: number, categoryId?: string) => Promise<Stream>;
   createCategory: (hubId: string, name: string) => Promise<Category>;
   deleteCategory: (hubId: string, categoryId: string) => Promise<void>;
@@ -25,6 +27,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   streams: [],
   categories: [],
   activeStreamId: null,
+  viewingVoiceStreamId: null,
   streamUnreads: {},
   lastReadMessageIds: {},
 
@@ -51,10 +54,14 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   setActiveStream: async (streamId) => {
     const { useMessageStore } = await import('./messageStore');
 
-    set({ activeStreamId: streamId });
+    set({ activeStreamId: streamId, viewingVoiceStreamId: null });
     useMessageStore.getState().clearMessages();
     await useMessageStore.getState().loadMessages(streamId);
     await get().ackStream(streamId);
+  },
+
+  setViewingVoice: (streamId) => {
+    set({ viewingVoiceStreamId: streamId });
   },
 
   createStream: async (hubId, name, type = 0, categoryId?) => {
@@ -119,6 +126,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   },
 
   clearStreams: () => {
-    set({ streams: [], categories: [], activeStreamId: null, streamUnreads: {}, lastReadMessageIds: {} });
+    set({ streams: [], categories: [], activeStreamId: null, viewingVoiceStreamId: null, streamUnreads: {}, lastReadMessageIds: {} });
   },
 }));

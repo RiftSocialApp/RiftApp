@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import type { Attachment } from '../../types';
 
 const TYPING_THROTTLE_MS = 500;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
 
 interface PendingFile {
   file: File;
@@ -50,7 +50,7 @@ export default function MessageInput({ streamName, onTyping, onTypingStop, isDMM
     const newFiles: PendingFile[] = [];
     for (const file of Array.from(files)) {
       if (file.size > MAX_FILE_SIZE) {
-        newFiles.push({ file, uploading: false, error: 'File too large (max 10 MB)' });
+        newFiles.push({ file, uploading: false, error: 'File too large (max 2 GB)' });
         continue;
       }
       const preview = file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined;

@@ -5,11 +5,13 @@ import StreamSidebar from '../sidebar/StreamSidebar';
 import DMSidebar from '../sidebar/DMSidebar';
 import MemberList from '../sidebar/MemberList';
 import ChatPanel from '../chat/ChatPanel';
+import VoiceView from '../voice/VoiceView';
 import UserProfilePopover from '../shared/UserProfilePopover';
 import SelfProfilePopover from '../shared/SelfProfilePopover';
 import UserContextMenu from '../shared/UserContextMenu';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useHubStore } from '../../stores/hubStore';
+import { useStreamStore } from '../../stores/streamStore';
 import { useDMStore } from '../../stores/dmStore';
 
 export default function AppLayout() {
@@ -39,13 +41,14 @@ export default function AppLayout() {
   }, [params.hubId, params.conversationId]);
 
   const activeHubId = useHubStore((s) => s.activeHubId);
+  const viewingVoiceStreamId = useStreamStore((s) => s.viewingVoiceStreamId);
 
   return (
     <div className="h-screen flex overflow-hidden">
       <HubSidebar />
       {!activeHubId ? <DMSidebar /> : <StreamSidebar />}
-      <ChatPanel />
-      {activeHubId && !activeConversationId && <MemberList />}
+      {viewingVoiceStreamId ? <VoiceView /> : <ChatPanel />}
+      {activeHubId && !activeConversationId && !viewingVoiceStreamId && <MemberList />}
       <UserProfilePopover />
       <SelfProfilePopover />
       <UserContextMenu />

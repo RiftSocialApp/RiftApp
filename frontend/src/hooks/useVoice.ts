@@ -3,8 +3,10 @@ import {
   Room,
   RoomEvent,
   Track,
+  VideoPresets,
   type RemoteParticipant,
   type RemoteTrackPublication,
+  type LocalTrackPublication,
   type Participant,
   ConnectionState,
 } from 'livekit-client';
@@ -14,9 +16,13 @@ export interface VoiceParticipant {
   identity: string;
   isSpeaking: boolean;
   isMuted: boolean;
+  isCameraOn: boolean;
+  isScreenSharing: boolean;
+  videoTrack?: Track;
+  screenTrack?: Track;
 }
 
-interface VoiceState {
+export interface VoiceState {
   connected: boolean;
   connecting: boolean;
   roomName: string | null;
@@ -24,18 +30,21 @@ interface VoiceState {
   participants: VoiceParticipant[];
   isMuted: boolean;
   isDeafened: boolean;
+  isCameraOn: boolean;
+  isScreenSharing: boolean;
   pttActive: boolean;
   pttMode: boolean;
   join: (streamId: string) => Promise<void>;
   leave: () => void;
   toggleMute: () => void;
   toggleDeafen: () => void;
+  toggleCamera: () => void;
+  toggleScreenShare: () => void;
   togglePTT: () => void;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
 
-// Generate a simple tone-based sound via Web Audio API
 function playTone(frequency: number, duration: number, gain: number) {
   try {
     const ctx = new AudioContext();
@@ -64,10 +73,9 @@ function playLeaveSound() {
   setTimeout(() => playTone(440, 0.2, 0.1), 100);
 }
 
-/** Remove all <audio>/<video> elements that livekit-client attached to document.body */
-function detachAllRoomAudio(room: Room) {
+function detachAllRoomMedia(room: Room) {
   room.remoteParticipants.forEach((rp) => {
-    rp.audioTrackPublications.forEach((pub) => {
+    rp.trackPublications.forEach((pub) => {
       if (pub.track) {
         pub.track.detach().forEach((el) => el.remove());
       }
@@ -75,17 +83,23 @@ function detachAllRoomAudio(room: Room) {
   });
 }
 
-/** Safely stop local microphone and release the hardware device */
-async function stopLocalMic(room: Room) {
+async function stopLocalTracks(room: Room) {
   try {
-    const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
-    if (micPub?.track) {
-      micPub.track.stop();
-      await room.localParticipant.unpublishTrack(micPub.track);
+    for (const source of [Track.Source.Microphone, Track.Source.Camera, Track.Source.ScreenShare]) {
+      const pub = room.localParticipant.getTrackPublication(source);
+      if (pub?.track) {
+        pub.track.stop();
+        await room.localParticipant.unpublishTrack(pub.track);
+      }
     }
   } catch {
-    // Already stopped — ignore
+    // Already stopped
   }
+}
+
+function getTrackForSource(p: Participant, source: Track.Source): Track | undefined {
+  const pub = p.getTrackPublication(source);
+  return pub?.track ?? undefined;
 }
 
 export function useVoice(): VoiceState {
@@ -98,6 +112,8 @@ export function useVoice(): VoiceState {
   const [participants, setParticipants] = useState<VoiceParticipant[]>([]);
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [isCameraOn, setIsCameraOn] = useState(false);
+  const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [pttMode, setPttMode] = useState(false);
   const [pttActive, setPttActive] = useState(false);
   const pttModeRef = useRef(false);
@@ -111,6 +127,8 @@ export function useVoice(): VoiceState {
     setParticipants([]);
     setIsMuted(false);
     setIsDeafened(false);
+    setIsCameraOn(false);
+    setIsScreenSharing(false);
     setPttActive(false);
   }, []);
 
@@ -120,6 +138,10 @@ export function useVoice(): VoiceState {
       identity: p.identity,
       isSpeaking: p.isSpeaking,
       isMuted: !p.isMicrophoneEnabled,
+      isCameraOn: p.isCameraEnabled,
+      isScreenSharing: p.isScreenShareEnabled,
+      videoTrack: getTrackForSource(p, Track.Source.Camera),
+      screenTrack: getTrackForSource(p, Track.Source.ScreenShare),
     });
 
     const list: VoiceParticipant[] = [toVP(room.localParticipant)];
@@ -127,22 +149,22 @@ export function useVoice(): VoiceState {
       list.push(toVP(rp));
     });
     setParticipants(list);
+
+    setIsCameraOn(room.localParticipant.isCameraEnabled);
+    setIsScreenSharing(room.localParticipant.isScreenShareEnabled);
   }, []);
 
-  /** Fully tear down current room — mic release, audio detach, disconnect */
   const destroyRoom = useCallback(async (room: Room) => {
-    detachAllRoomAudio(room);
-    await stopLocalMic(room);
+    detachAllRoomMedia(room);
+    await stopLocalTracks(room);
     room.removeAllListeners();
     room.disconnect();
   }, []);
 
   const join = useCallback(async (sid: string) => {
-    // Prevent concurrent join calls (double-click guard)
     if (joiningRef.current) return;
     joiningRef.current = true;
 
-    // Leave existing room first
     if (roomRef.current) {
       const old = roomRef.current;
       roomRef.current = null;
@@ -156,23 +178,16 @@ export function useVoice(): VoiceState {
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
+        videoCaptureDefaults: {
+          resolution: VideoPresets.h1080.resolution,
+        },
       });
       roomRef.current = room;
 
-      // Wire events
       const onUpdate = () => updateParticipants(room);
 
-      room.on(RoomEvent.ParticipantConnected, (rp) => {
-        onUpdate();
-        playJoinSound();
-        // If we are deafened, preemptively mute any tracks from the new participant
-        // (they haven't subscribed yet, TrackSubscribed will handle it)
-        void rp;
-      });
-      room.on(RoomEvent.ParticipantDisconnected, () => {
-        onUpdate();
-        playLeaveSound();
-      });
+      room.on(RoomEvent.ParticipantConnected, () => { onUpdate(); playJoinSound(); });
+      room.on(RoomEvent.ParticipantDisconnected, () => { onUpdate(); playLeaveSound(); });
       room.on(RoomEvent.TrackSubscribed, onUpdate);
       room.on(RoomEvent.TrackUnsubscribed, onUpdate);
       room.on(RoomEvent.TrackMuted, onUpdate);
@@ -182,17 +197,15 @@ export function useVoice(): VoiceState {
       room.on(RoomEvent.LocalTrackUnpublished, onUpdate);
       room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
         if (state === ConnectionState.Disconnected) {
-          // Only reset if this is still the active room (not replaced)
           if (roomRef.current === room) {
             roomRef.current = null;
-            detachAllRoomAudio(room);
+            detachAllRoomMedia(room);
             room.removeAllListeners();
             resetState();
           }
         }
       });
 
-      // Attach remote audio tracks automatically, clean up on unsubscribe
       room.on(
         RoomEvent.TrackSubscribed,
         (track: RemoteTrackPublication['track'], _pub: RemoteTrackPublication, _rp: RemoteParticipant) => {
@@ -211,7 +224,6 @@ export function useVoice(): VoiceState {
         },
       );
 
-      // Connect with timeout
       await Promise.race([
         room.connect(url, token),
         new Promise<never>((_, reject) =>
@@ -219,13 +231,11 @@ export function useVoice(): VoiceState {
         ),
       ]);
 
-      // Guard: if we were replaced or unmounted during the await, bail out
       if (roomRef.current !== room) {
         room.disconnect();
         return;
       }
 
-      // In PTT mode, start muted; otherwise start unmuted
       const startMuted = pttModeRef.current;
       await room.localParticipant.setMicrophoneEnabled(!startMuted);
 
@@ -234,11 +244,12 @@ export function useVoice(): VoiceState {
       setStreamId(sid);
       setIsMuted(startMuted);
       setIsDeafened(false);
+      setIsCameraOn(false);
+      setIsScreenSharing(false);
       updateParticipants(room);
       playJoinSound();
     } catch (err) {
       console.error('Failed to join voice channel:', err);
-      // Clean up failed room
       if (roomRef.current) {
         roomRef.current.removeAllListeners();
         roomRef.current.disconnect();
@@ -272,13 +283,46 @@ export function useVoice(): VoiceState {
     updateParticipants(room);
   }, [updateParticipants]);
 
+  const toggleCamera = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+    const wasEnabled = room.localParticipant.isCameraEnabled;
+    await room.localParticipant.setCameraEnabled(!wasEnabled);
+    setIsCameraOn(!wasEnabled);
+    updateParticipants(room);
+  }, [updateParticipants]);
+
+  const toggleScreenShare = useCallback(async () => {
+    const room = roomRef.current;
+    if (!room || room.state !== ConnectionState.Connected) return;
+
+    if (room.localParticipant.isScreenShareEnabled) {
+      const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare) as LocalTrackPublication | undefined;
+      if (pub?.track) {
+        pub.track.stop();
+        await room.localParticipant.unpublishTrack(pub.track);
+      }
+      setIsScreenSharing(false);
+    } else {
+      try {
+        await room.localParticipant.setScreenShareEnabled(true, {
+          resolution: { width: 3840, height: 2160, frameRate: 60 },
+          contentHint: 'detail',
+        });
+        setIsScreenSharing(true);
+      } catch {
+        // User cancelled the picker
+      }
+    }
+    updateParticipants(room);
+  }, [updateParticipants]);
+
   const toggleDeafen = useCallback(async () => {
     const room = roomRef.current;
     if (!room || room.state !== ConnectionState.Connected) return;
 
     setIsDeafened((prev) => {
       const next = !prev;
-      // Mute/unmute all remote audio tracks
       room.remoteParticipants.forEach((rp) => {
         rp.audioTrackPublications.forEach((pub) => {
           if (pub.track) {
@@ -292,7 +336,6 @@ export function useVoice(): VoiceState {
         });
       });
       if (next) {
-        // Remember mic state before deafening, then mute
         wasMutedBeforeDeafenRef.current = !room.localParticipant.isMicrophoneEnabled;
         if (room.localParticipant.isMicrophoneEnabled) {
           room.localParticipant.setMicrophoneEnabled(false);
@@ -300,7 +343,6 @@ export function useVoice(): VoiceState {
           updateParticipants(room);
         }
       } else {
-        // Restore mic to pre-deafen state
         if (!wasMutedBeforeDeafenRef.current) {
           room.localParticipant.setMicrophoneEnabled(true);
           setIsMuted(false);
@@ -317,14 +359,12 @@ export function useVoice(): VoiceState {
       pttModeRef.current = next;
       const room = roomRef.current;
       if (room && room.state === ConnectionState.Connected) {
-        // When enabling PTT, mute mic immediately
         if (next) {
           room.localParticipant.setMicrophoneEnabled(false);
           setIsMuted(true);
           setPttActive(false);
           updateParticipants(room);
         } else {
-          // When disabling PTT, unmute mic
           room.localParticipant.setMicrophoneEnabled(true);
           setIsMuted(false);
           updateParticipants(room);
@@ -334,12 +374,10 @@ export function useVoice(): VoiceState {
     });
   }, [updateParticipants]);
 
-  // Push-to-talk key handler (spacebar)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!pttModeRef.current || !roomRef.current) return;
       if (e.code !== 'Space') return;
-      // Ignore if user is typing in an input/textarea
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) return;
       e.preventDefault();
@@ -373,14 +411,13 @@ export function useVoice(): VoiceState {
     };
   }, [updateParticipants]);
 
-  // Cleanup on unmount — full teardown
   useEffect(() => {
     return () => {
       const room = roomRef.current;
       if (room) {
         roomRef.current = null;
-        detachAllRoomAudio(room);
-        stopLocalMic(room);
+        detachAllRoomMedia(room);
+        stopLocalTracks(room);
         room.removeAllListeners();
         room.disconnect();
       }
@@ -395,12 +432,16 @@ export function useVoice(): VoiceState {
     participants,
     isMuted,
     isDeafened,
+    isCameraOn,
+    isScreenSharing,
     pttActive,
     pttMode,
     join,
     leave,
     toggleMute,
     toggleDeafen,
+    toggleCamera,
+    toggleScreenShare,
     togglePTT,
   };
 }

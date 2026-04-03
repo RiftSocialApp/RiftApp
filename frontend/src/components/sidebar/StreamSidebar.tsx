@@ -19,7 +19,9 @@ export default function StreamSidebar() {
   const categories = useStreamStore((s) => s.categories);
   const activeHubId = useHubStore((s) => s.activeHubId);
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
+  const viewingVoiceStreamId = useStreamStore((s) => s.viewingVoiceStreamId);
   const setActiveStream = useStreamStore((s) => s.setActiveStream);
+  const setViewingVoice = useStreamStore((s) => s.setViewingVoice);
   const hubs = useHubStore((s) => s.hubs);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -93,6 +95,16 @@ export default function StreamSidebar() {
       else next.add(catId);
       return next;
     });
+  };
+
+  const handleVoiceClick = (streamId: string) => {
+    const isConnected = voice.streamId === streamId && voice.connected;
+    if (isConnected) {
+      setViewingVoice(streamId);
+    } else {
+      voice.join(streamId);
+      setViewingVoice(streamId);
+    }
   };
 
   const handleHeaderContext = (e: React.MouseEvent) => {
@@ -214,8 +226,10 @@ export default function StreamSidebar() {
           <ChannelGroup
             streams={uncategorized}
             activeStreamId={activeStreamId}
+            viewingVoiceStreamId={viewingVoiceStreamId}
             streamUnreads={streamUnreads}
             onSelect={setActiveStream}
+            onVoiceClick={handleVoiceClick}
             voice={voice}
           />
         )}
@@ -252,8 +266,10 @@ export default function StreamSidebar() {
                 <ChannelGroup
                   streams={catStreams}
                   activeStreamId={activeStreamId}
+                  viewingVoiceStreamId={viewingVoiceStreamId}
                   streamUnreads={streamUnreads}
                   onSelect={setActiveStream}
+                  onVoiceClick={handleVoiceClick}
                   voice={voice}
                 />
               )}
@@ -308,19 +324,21 @@ export default function StreamSidebar() {
 interface ChannelGroupProps {
   streams: Stream[];
   activeStreamId: string | null;
+  viewingVoiceStreamId: string | null;
   streamUnreads: Record<string, number>;
   onSelect: (id: string) => Promise<void>;
+  onVoiceClick: (streamId: string) => void;
   voice: ReturnType<typeof useVoice>;
 }
 
-function ChannelGroup({ streams, activeStreamId, streamUnreads, onSelect, voice }: ChannelGroupProps) {
+function ChannelGroup({ streams, activeStreamId, viewingVoiceStreamId, streamUnreads, onSelect, onVoiceClick, voice }: ChannelGroupProps) {
   const textStreams = streams.filter((s) => s.type === 0);
   const voiceStreams = streams.filter((s) => s.type === 1);
 
   return (
     <div className="space-y-0.5">
       {textStreams.map((stream) => {
-        const isActive = activeStreamId === stream.id;
+        const isActive = activeStreamId === stream.id && !viewingVoiceStreamId;
         const unread = streamUnreads[stream.id] || 0;
         const hasUnread = unread > 0 && !isActive;
         return (
@@ -342,15 +360,13 @@ function ChannelGroup({ streams, activeStreamId, streamUnreads, onSelect, voice 
       })}
       {voiceStreams.map((stream) => {
         const isConnected = voice.streamId === stream.id && voice.connected;
+        const isViewing = viewingVoiceStreamId === stream.id;
         return (
           <button
             key={stream.id}
-            onClick={() => {
-              if (isConnected) voice.leave();
-              else voice.join(stream.id);
-            }}
-            title={isConnected ? `Leave ${stream.name}` : `Join ${stream.name}`}
-            className={`channel-item ${isConnected ? 'channel-item-active !text-riptide-success' : 'channel-item-idle'}`}
+            onClick={() => onVoiceClick(stream.id)}
+            title={isConnected ? stream.name : `Join ${stream.name}`}
+            className={`channel-item ${isViewing ? 'channel-item-active !text-riptide-success' : isConnected ? '!text-riptide-success channel-item-idle' : 'channel-item-idle'}`}
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
               className={`flex-shrink-0 ${isConnected ? 'text-riptide-success' : 'text-riptide-text-dim'}`}

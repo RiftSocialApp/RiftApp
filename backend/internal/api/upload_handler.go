@@ -18,7 +18,7 @@ import (
 	"github.com/riptide-cloud/riptide/internal/middleware"
 )
 
-const maxUploadSize = 10 << 20 // 10 MB
+const maxUploadSize = 2 << 30 // 2 GB
 const maxAttachmentsPerMessage = 10
 
 // Allowed MIME type prefixes/types for uploads
@@ -30,6 +30,9 @@ var allowedContentTypes = map[string]bool{
 	"image/svg+xml":         true,
 	"video/mp4":             true,
 	"video/webm":            true,
+	"video/quicktime":       true,
+	"video/x-matroska":      true,
+	"video/x-msvideo":       true,
 	"audio/mpeg":            true,
 	"audio/ogg":             true,
 	"audio/wav":             true,
@@ -102,7 +105,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
 
 	if err := r.ParseMultipartForm(maxUploadSize); err != nil {
-		writeError(w, http.StatusRequestEntityTooLarge, "file too large (max 10 MB)")
+		writeError(w, http.StatusRequestEntityTooLarge, "file too large (max 2 GB)")
 		return
 	}
 
@@ -115,7 +118,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 
 	// Enforce file size on the server side (defense in depth)
 	if header.Size > maxUploadSize {
-		writeError(w, http.StatusRequestEntityTooLarge, "file too large (max 10 MB)")
+		writeError(w, http.StatusRequestEntityTooLarge, "file too large (max 2 GB)")
 		return
 	}
 
