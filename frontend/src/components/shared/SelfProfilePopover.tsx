@@ -161,7 +161,6 @@ export default function SelfProfilePopover() {
 
         {/* Action items */}
         <div className="px-2 py-2 space-y-0.5">
-          {/* Status row + picker */}
           <button
             onClick={() => setShowStatusPicker((v) => !v)}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-riptide-panel/60 transition-colors text-left group"
