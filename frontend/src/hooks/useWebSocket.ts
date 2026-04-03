@@ -69,8 +69,11 @@ export function useWebSocket() {
     function connect() {
       if (disposed) return;
 
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(`${protocol}//${window.location.host}/ws?token=${token}`);
+      const wsBase = import.meta.env.VITE_WS_URL;
+      const wsUrl = wsBase
+        ? `${wsBase}/ws?token=${token}`
+        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws?token=${token}`;
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
