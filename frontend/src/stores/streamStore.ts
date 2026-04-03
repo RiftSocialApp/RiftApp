@@ -1,16 +1,20 @@
 import { create } from 'zustand';
-import type { Stream } from '../types';
+import type { Stream, Category } from '../types';
 import { api } from '../api/client';
 
 interface StreamState {
   streams: Stream[];
+  categories: Category[];
   activeStreamId: string | null;
   streamUnreads: Record<string, number>;
   lastReadMessageIds: Record<string, string>;
 
   loadStreams: (hubId: string) => Promise<void>;
+  loadCategories: (hubId: string) => Promise<void>;
   setActiveStream: (streamId: string) => Promise<void>;
-  createStream: (hubId: string, name: string, type?: number) => Promise<Stream>;
+  createStream: (hubId: string, name: string, type?: number, categoryId?: string) => Promise<Stream>;
+  createCategory: (hubId: string, name: string) => Promise<Category>;
+  deleteCategory: (hubId: string, categoryId: string) => Promise<void>;
   loadReadStates: (hubId: string) => Promise<void>;
   ackStream: (streamId: string) => Promise<void>;
   incrementUnread: (streamId: string) => void;
@@ -19,20 +23,29 @@ interface StreamState {
 
 export const useStreamStore = create<StreamState>((set, get) => ({
   streams: [],
+  categories: [],
   activeStreamId: null,
   streamUnreads: {},
   lastReadMessageIds: {},
 
   loadStreams: async (hubId) => {
-    const streams = await api.getStreams(hubId);
+    const [streams, categories] = await Promise.all([
+      api.getStreams(hubId),
+      api.getCategories(hubId),
+    ]);
     const { useHubStore } = await import('./hubStore');
     if (useHubStore.getState().activeHubId !== hubId) return;
-    set({ streams });
+    set({ streams, categories });
 
     const textStream = streams.find((s) => s.type === 0);
     if (textStream) {
       await get().setActiveStream(textStream.id);
     }
+  },
+
+  loadCategories: async (hubId) => {
+    const categories = await api.getCategories(hubId);
+    set({ categories });
   },
 
   setActiveStream: async (streamId) => {
@@ -44,10 +57,24 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     await get().ackStream(streamId);
   },
 
-  createStream: async (hubId, name, type = 0) => {
-    const stream = await api.createStream(hubId, name, type);
+  createStream: async (hubId, name, type = 0, categoryId?) => {
+    const stream = await api.createStream(hubId, name, type, categoryId);
     set((s) => ({ streams: [...s.streams, stream] }));
     return stream;
+  },
+
+  createCategory: async (hubId, name) => {
+    const cat = await api.createCategory(hubId, name);
+    set((s) => ({ categories: [...s.categories, cat] }));
+    return cat;
+  },
+
+  deleteCategory: async (hubId, categoryId) => {
+    await api.deleteCategory(hubId, categoryId);
+    set((s) => ({
+      categories: s.categories.filter((c) => c.id !== categoryId),
+      streams: s.streams.map((st) => st.category_id === categoryId ? { ...st, category_id: null } : st),
+    }));
   },
 
   loadReadStates: async (hubId) => {
@@ -92,6 +119,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   },
 
   clearStreams: () => {
-    set({ streams: [], activeStreamId: null, streamUnreads: {}, lastReadMessageIds: {} });
+    set({ streams: [], categories: [], activeStreamId: null, streamUnreads: {}, lastReadMessageIds: {} });
   },
 }));

@@ -65,9 +65,11 @@ func main() {
 	go wsHub.Run()
 
 	// Services
+	catRepo := repository.NewCategoryRepo(db)
 	notifSvc := service.NewNotificationService(notifRepo, wsHub)
 	hubSvc := service.NewHubService(hubRepo, streamRepo, inviteRepo, notifRepo)
 	streamSvc := service.NewStreamService(streamRepo, hubSvc)
+	catSvc := service.NewCategoryService(catRepo, hubSvc)
 	msgSvc := service.NewMessageService(msgRepo, streamRepo, hubSvc, notifSvc, wsHub)
 	dmSvc := service.NewDMService(dmRepo, msgRepo, notifSvc, wsHub)
 
@@ -79,17 +81,18 @@ func main() {
 
 	// Router
 	router := api.NewRouter(api.RouterDeps{
-		AuthService:   authService,
-		UserService:   userService,
-		HubService:    hubSvc,
-		StreamService: streamSvc,
-		MsgService:    msgSvc,
-		DMService:     dmSvc,
-		NotifService:  notifSvc,
-		WSHub:         wsHub,
-		Config:        cfg,
-		UploadHandler: uploadH,
-		NotifRepo:     notifRepo,
+		AuthService:     authService,
+		UserService:     userService,
+		HubService:      hubSvc,
+		StreamService:   streamSvc,
+		CategoryService: catSvc,
+		MsgService:      msgSvc,
+		DMService:       dmSvc,
+		NotifService:    notifSvc,
+		WSHub:           wsHub,
+		Config:          cfg,
+		UploadHandler:   uploadH,
+		NotifRepo:       notifRepo,
 	})
 
 	srv := &http.Server{

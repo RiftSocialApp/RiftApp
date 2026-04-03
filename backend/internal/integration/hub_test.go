@@ -185,7 +185,7 @@ func TestStream_CreateAndList(t *testing.T) {
 	streamRepo := repository.NewStreamRepo(testPool)
 	streamSvc := service.NewStreamService(streamRepo, hubSvc)
 
-	stream, err := streamSvc.Create(ctx, hub.ID, ownerID, "general-2", 0, false)
+	stream, err := streamSvc.Create(ctx, hub.ID, ownerID, "general-2", 0, false, nil)
 	if err != nil {
 		t.Fatalf("Create stream failed: %v", err)
 	}

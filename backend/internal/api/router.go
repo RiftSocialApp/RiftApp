@@ -19,17 +19,18 @@ import (
 )
 
 type RouterDeps struct {
-	AuthService   *auth.Service
-	UserService   *user.Service
-	HubService    *service.HubService
-	StreamService *service.StreamService
-	MsgService    *service.MessageService
-	DMService     *service.DMService
-	NotifService  *service.NotificationService
-	WSHub         *ws.Hub
-	Config        *config.Config
-	UploadHandler *UploadHandler
-	NotifRepo     *repository.NotificationRepo
+	AuthService     *auth.Service
+	UserService     *user.Service
+	HubService      *service.HubService
+	StreamService   *service.StreamService
+	CategoryService *service.CategoryService
+	MsgService      *service.MessageService
+	DMService       *service.DMService
+	NotifService    *service.NotificationService
+	WSHub           *ws.Hub
+	Config          *config.Config
+	UploadHandler   *UploadHandler
+	NotifRepo       *repository.NotificationRepo
 }
 
 func NewRouter(deps RouterDeps) *chi.Mux {
@@ -50,6 +51,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	userH := NewUserHandler(deps.UserService)
 	hubH := NewHubHandler(deps.HubService, deps.NotifService, deps.NotifRepo)
 	streamH := NewStreamHandler(deps.StreamService)
+	catH := NewCategoryHandler(deps.CategoryService)
 	msgH := NewMessageHandler(deps.MsgService)
 	wsH := NewWSHandler(deps.WSHub, deps.AuthService, deps.Config.AllowedOrigins)
 	voiceH := NewVoiceHandler(deps.Config, deps.HubService)
@@ -97,6 +99,10 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Post("/api/hubs/{hubID}/streams", streamH.Create)
 		r.Get("/api/hubs/{hubID}/streams", streamH.List)
 		r.Get("/api/hubs/{hubID}/read-states", streamH.ReadStates)
+
+		r.Post("/api/hubs/{hubID}/categories", catH.Create)
+		r.Get("/api/hubs/{hubID}/categories", catH.List)
+		r.Delete("/api/hubs/{hubID}/categories/{categoryID}", catH.Delete)
 		r.Get("/api/streams/{streamID}", streamH.Get)
 		r.Delete("/api/streams/{streamID}", streamH.Delete)
 		r.Put("/api/streams/{streamID}/ack", streamH.Ack)

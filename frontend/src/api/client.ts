@@ -1,4 +1,4 @@
-import type { AuthResponse, Hub, HubInvite, Stream, Message, User, Attachment, Notification, Conversation } from '../types';
+import type { AuthResponse, Hub, HubInvite, Stream, Category, Message, User, Attachment, Notification, Conversation } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -116,7 +116,11 @@ class ApiClient {
   joinInvite(code: string) { return this.request<{ status: string; hub: Hub }>(`/invites/${code}`, { method: 'POST' }); }
 
   getStreams(hubId: string) { return this.request<Stream[]>(`/hubs/${hubId}/streams`); }
-  createStream(hubId: string, name: string, type: number = 0) { return this.request<Stream>(`/hubs/${hubId}/streams`, { method: 'POST', body: JSON.stringify({ name, type }) }); }
+  createStream(hubId: string, name: string, type: number = 0, categoryId?: string) { return this.request<Stream>(`/hubs/${hubId}/streams`, { method: 'POST', body: JSON.stringify({ name, type, category_id: categoryId }) }); }
+
+  getCategories(hubId: string) { return this.request<Category[]>(`/hubs/${hubId}/categories`); }
+  createCategory(hubId: string, name: string) { return this.request<Category>(`/hubs/${hubId}/categories`, { method: 'POST', body: JSON.stringify({ name }) }); }
+  deleteCategory(hubId: string, categoryId: string) { return this.request(`/hubs/${hubId}/categories/${categoryId}`, { method: 'DELETE' }); }
 
   getMessages(streamId: string, before?: string, limit = 50) {
     const params = new URLSearchParams({ limit: String(limit) });

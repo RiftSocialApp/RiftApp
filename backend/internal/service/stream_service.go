@@ -20,7 +20,7 @@ func NewStreamService(streamRepo *repository.StreamRepo, hubService *HubService)
 	return &StreamService{streamRepo: streamRepo, hubService: hubService}
 }
 
-func (s *StreamService) Create(ctx context.Context, hubID, userID, name string, streamType int, isPrivate bool) (*models.Stream, error) {
+func (s *StreamService) Create(ctx context.Context, hubID, userID, name string, streamType int, isPrivate bool, categoryID *string) (*models.Stream, error) {
 	if !s.hubService.HasPermission(ctx, hubID, userID, models.PermManageStreams) {
 		return nil, apperror.Forbidden("you do not have permission to manage channels")
 	}
@@ -31,13 +31,14 @@ func (s *StreamService) Create(ctx context.Context, hubID, userID, name string, 
 	maxPos, _ := s.streamRepo.GetMaxPosition(ctx, hubID)
 
 	stream := &models.Stream{
-		ID:        uuid.New().String(),
-		HubID:     hubID,
-		Name:      name,
-		Type:      streamType,
-		Position:  maxPos + 1,
-		IsPrivate: isPrivate,
-		CreatedAt: time.Now(),
+		ID:         uuid.New().String(),
+		HubID:      hubID,
+		Name:       name,
+		Type:       streamType,
+		Position:   maxPos + 1,
+		IsPrivate:  isPrivate,
+		CategoryID: categoryID,
+		CreatedAt:  time.Now(),
 	}
 
 	if err := s.streamRepo.Create(ctx, stream); err != nil {

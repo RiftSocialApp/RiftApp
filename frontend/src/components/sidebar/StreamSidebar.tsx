@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { usePresenceStore } from '../../stores/presenceStore';
@@ -9,22 +9,22 @@ import SettingsModal from '../settings/SettingsModal';
 import HubSettingsModal from '../settings/HubSettingsModal';
 import VoicePanel from '../voice/VoicePanel';
 import StatusDot, { statusLabel } from '../shared/StatusDot';
+import CreateChannelModal from '../modals/CreateChannelModal';
+import CreateCategoryModal from '../modals/CreateCategoryModal';
 import { api } from '../../api/client';
-import type { User } from '../../types';
+import type { User, Stream } from '../../types';
 
 export default function StreamSidebar() {
   const streams = useStreamStore((s) => s.streams);
+  const categories = useStreamStore((s) => s.categories);
   const activeHubId = useHubStore((s) => s.activeHubId);
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
   const setActiveStream = useStreamStore((s) => s.setActiveStream);
-  const createStream = useStreamStore((s) => s.createStream);
   const hubs = useHubStore((s) => s.hubs);
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
   const streamUnreads = useStreamStore((s) => s.streamUnreads);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
-  const [newStreamName, setNewStreamName] = useState('');
-  const [showCreate, setShowCreate] = useState(false);
   const [showHubSettings, setShowHubSettings] = useState(false);
   const [showInvitePopover, setShowInvitePopover] = useState(false);
   const [inviteCode, setInviteCode] = useState<string | null>(null);
@@ -32,9 +32,33 @@ export default function StreamSidebar() {
   const [inviteCopied, setInviteCopied] = useState(false);
   const voice = useVoice();
 
+  // Header context menu
+  const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
+  const [createChannelFor, setCreateChannelFor] = useState<string | undefined>(undefined);
+  const [showCreateChannel, setShowCreateChannel] = useState(false);
+  const [showCreateCategory, setShowCreateCategory] = useState(false);
+
+  // Collapsible categories
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
   const activeHub = hubs.find((h) => h.id === activeHubId);
-  const textStreams = streams.filter((s) => s.type === 0);
-  const voiceStreams = streams.filter((s) => s.type === 1);
+
+  // Group streams by category
+  const { uncategorized, grouped } = useMemo(() => {
+    const uncategorized: Stream[] = [];
+    const grouped: Record<string, Stream[]> = {};
+    for (const cat of categories) {
+      grouped[cat.id] = [];
+    }
+    for (const s of streams) {
+      if (s.category_id && grouped[s.category_id]) {
+        grouped[s.category_id].push(s);
+      } else {
+        uncategorized.push(s);
+      }
+    }
+    return { uncategorized, grouped };
+  }, [streams, categories]);
 
   const handleGenerateInvite = async () => {
     if (!activeHubId) return;
@@ -62,12 +86,27 @@ export default function StreamSidebar() {
     }
   };
 
-  const handleCreate = async () => {
-    if (!newStreamName.trim() || !activeHubId) return;
-    await createStream(activeHubId, newStreamName.trim());
-    setNewStreamName('');
-    setShowCreate(false);
+  const toggleCollapse = (catId: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(catId)) next.delete(catId);
+      else next.add(catId);
+      return next;
+    });
   };
+
+  const handleHeaderContext = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setHeaderMenu({ x: e.clientX, y: e.clientY });
+  };
+
+  // Close header context menu on outside click
+  useEffect(() => {
+    if (!headerMenu) return;
+    const handler = () => setHeaderMenu(null);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, [headerMenu]);
 
   if (!activeHubId) {
     return (
@@ -91,8 +130,11 @@ export default function StreamSidebar() {
 
   return (
     <div className="w-60 flex-shrink-0 bg-riptide-surface flex flex-col">
-      {/* Hub header: settings on the left, invite on the right */}
-      <div className="h-12 flex items-center border-b border-riptide-border/60 flex-shrink-0">
+      {/* Hub header */}
+      <div
+        className="h-12 flex items-center border-b border-riptide-border/60 flex-shrink-0"
+        onContextMenu={handleHeaderContext}
+      >
         <button
           onClick={() => setShowHubSettings(true)}
           title="Hub settings"
@@ -107,7 +149,6 @@ export default function StreamSidebar() {
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
-        {/* Quick invite button */}
         <button
           onClick={handleInviteToggle}
           title="Invite people to this hub"
@@ -126,6 +167,7 @@ export default function StreamSidebar() {
           </svg>
         </button>
       </div>
+
       {showHubSettings && activeHub && (
         <HubSettingsModal hub={activeHub} onClose={() => setShowHubSettings(false)} />
       )}
@@ -154,113 +196,82 @@ export default function StreamSidebar() {
         </div>
       )}
 
-      {/* Streams */}
-      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-4">
-        {textStreams.length > 0 && (
-          <div>
-            <div className="section-label px-2 mb-1.5">
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-60">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              Text Streams
-            </div>
-            <div className="space-y-0.5">
-              {textStreams.map((stream) => {
-                const isActive = activeStreamId === stream.id;
-                const unread = streamUnreads[stream.id] || 0;
-                const hasUnread = unread > 0 && !isActive;
-                return (
-                  <button
-                    key={stream.id}
-                    onClick={() => setActiveStream(stream.id)}
-                    title={`#${stream.name}`}
-                    className={`channel-item ${isActive ? 'channel-item-active' : 'channel-item-idle'} ${hasUnread ? '!text-riptide-text font-semibold' : ''}`}
-                  >
-                    <span className={`text-lg leading-none ${isActive ? 'text-riptide-text-muted' : 'text-riptide-text-dim'}`}>#</span>
-                    <span className="truncate">{stream.name}</span>
-                    {hasUnread && (
-                      <span className="ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-riptide-accent text-[11px] font-bold text-white leading-none">
-                        {unread > 99 ? '99+' : unread}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+      {/* Header right-click context menu */}
+      {headerMenu && (
+        <HeaderContextMenu
+          x={headerMenu.x}
+          y={headerMenu.y}
+          onCreateChannel={() => { setCreateChannelFor(undefined); setShowCreateChannel(true); setHeaderMenu(null); }}
+          onCreateCategory={() => { setShowCreateCategory(true); setHeaderMenu(null); }}
+          onInvite={() => { handleInviteToggle(); setHeaderMenu(null); }}
+        />
+      )}
+
+      {/* Channels list */}
+      <div className="flex-1 overflow-y-auto py-3 px-2 space-y-1">
+        {/* Uncategorized channels */}
+        {uncategorized.length > 0 && (
+          <ChannelGroup
+            streams={uncategorized}
+            activeStreamId={activeStreamId}
+            streamUnreads={streamUnreads}
+            onSelect={setActiveStream}
+            voice={voice}
+          />
         )}
 
-        {voiceStreams.length > 0 && (
-          <div>
-            <div className="section-label px-2 mb-1.5">
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="opacity-60">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-              Voice Streams
-            </div>
-            <div className="space-y-0.5">
-              {voiceStreams.map((stream) => {
-                const isConnected = voice.streamId === stream.id && voice.connected;
-                return (
-                  <button
-                    key={stream.id}
-                    onClick={() => {
-                      if (isConnected) {
-                        voice.leave();
-                      } else {
-                        voice.join(stream.id);
-                      }
-                    }}
-                    title={isConnected ? `Leave ${stream.name}` : `Join ${stream.name}`}
-                    className={`channel-item ${isConnected ? 'channel-item-active !text-riptide-success' : 'channel-item-idle'}`}
+        {/* Categorized channels */}
+        {categories.map((cat) => {
+          const catStreams = grouped[cat.id] || [];
+          const isCollapsed = collapsed.has(cat.id);
+          return (
+            <div key={cat.id} className="mt-2">
+              <div className="flex items-center group">
+                <button
+                  onClick={() => toggleCollapse(cat.id)}
+                  className="flex items-center gap-0.5 flex-1 min-w-0 section-label px-1 mb-1 hover:text-riptide-text transition-colors"
+                >
+                  <svg
+                    width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`opacity-60 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                      className={`flex-shrink-0 ${isConnected ? 'text-riptide-success' : 'text-riptide-text-dim'}`}
-                    >
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                    </svg>
-                    <span className="truncate">{stream.name}</span>
-                    {isConnected && (
-                      <span className="ml-auto text-[10px] font-medium text-riptide-success flex-shrink-0">Connected</span>
-                    )}
-                  </button>
-                );
-              })}
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                  <span className="truncate uppercase">{cat.name}</span>
+                </button>
+                <button
+                  onClick={() => { setCreateChannelFor(cat.id); setShowCreateChannel(true); }}
+                  className="opacity-0 group-hover:opacity-100 text-riptide-text-dim hover:text-riptide-text transition-all p-0.5 rounded"
+                  title="Create Channel"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </button>
+              </div>
+              {!isCollapsed && (
+                <ChannelGroup
+                  streams={catStreams}
+                  activeStreamId={activeStreamId}
+                  streamUnreads={streamUnreads}
+                  onSelect={setActiveStream}
+                  voice={voice}
+                />
+              )}
             </div>
-          </div>
-        )}
+          );
+        })}
 
-        {/* Create stream */}
-        {showCreate ? (
-          <div className="px-1 animate-fade-in">
-            <input
-              type="text"
-              value={newStreamName}
-              onChange={(e) => setNewStreamName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleCreate();
-                if (e.key === 'Escape') { setShowCreate(false); setNewStreamName(''); }
-              }}
-              placeholder="stream-name"
-              className="settings-input text-[13px]"
-              autoFocus
-              maxLength={100}
-            />
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowCreate(true)}
-            title="Create a new text or voice stream"
-            className="channel-item channel-item-idle text-[13px] gap-1"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="opacity-60">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            <span>Create Stream</span>
-          </button>
-        )}
+        {/* Quick create button */}
+        <button
+          onClick={() => { setCreateChannelFor(undefined); setShowCreateChannel(true); }}
+          title="Create a new channel"
+          className="channel-item channel-item-idle text-[13px] gap-1 mt-2"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="opacity-60">
+            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span>Create Channel</span>
+        </button>
       </div>
 
       {/* Voice panel */}
@@ -280,11 +291,119 @@ export default function StreamSidebar() {
         onTogglePTT={voice.togglePTT}
       />
 
-      {/* User bar */}
       <UserBar user={user} logout={logout} />
+
+      {showCreateChannel && activeHubId && (
+        <CreateChannelModal hubId={activeHubId} categoryId={createChannelFor} onClose={() => setShowCreateChannel(false)} />
+      )}
+      {showCreateCategory && activeHubId && (
+        <CreateCategoryModal hubId={activeHubId} onClose={() => setShowCreateCategory(false)} />
+      )}
     </div>
   );
 }
+
+/* ───── Channel group (text + voice items) ───── */
+
+interface ChannelGroupProps {
+  streams: Stream[];
+  activeStreamId: string | null;
+  streamUnreads: Record<string, number>;
+  onSelect: (id: string) => Promise<void>;
+  voice: ReturnType<typeof useVoice>;
+}
+
+function ChannelGroup({ streams, activeStreamId, streamUnreads, onSelect, voice }: ChannelGroupProps) {
+  const textStreams = streams.filter((s) => s.type === 0);
+  const voiceStreams = streams.filter((s) => s.type === 1);
+
+  return (
+    <div className="space-y-0.5">
+      {textStreams.map((stream) => {
+        const isActive = activeStreamId === stream.id;
+        const unread = streamUnreads[stream.id] || 0;
+        const hasUnread = unread > 0 && !isActive;
+        return (
+          <button
+            key={stream.id}
+            onClick={() => onSelect(stream.id)}
+            title={`#${stream.name}`}
+            className={`channel-item ${isActive ? 'channel-item-active' : 'channel-item-idle'} ${hasUnread ? '!text-riptide-text font-semibold' : ''}`}
+          >
+            <span className={`text-lg leading-none ${isActive ? 'text-riptide-text-muted' : 'text-riptide-text-dim'}`}>#</span>
+            <span className="truncate">{stream.name}</span>
+            {hasUnread && (
+              <span className="ml-auto flex-shrink-0 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-riptide-accent text-[11px] font-bold text-white leading-none">
+                {unread > 99 ? '99+' : unread}
+              </span>
+            )}
+          </button>
+        );
+      })}
+      {voiceStreams.map((stream) => {
+        const isConnected = voice.streamId === stream.id && voice.connected;
+        return (
+          <button
+            key={stream.id}
+            onClick={() => {
+              if (isConnected) voice.leave();
+              else voice.join(stream.id);
+            }}
+            title={isConnected ? `Leave ${stream.name}` : `Join ${stream.name}`}
+            className={`channel-item ${isConnected ? 'channel-item-active !text-riptide-success' : 'channel-item-idle'}`}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+              className={`flex-shrink-0 ${isConnected ? 'text-riptide-success' : 'text-riptide-text-dim'}`}
+            >
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+            </svg>
+            <span className="truncate">{stream.name}</span>
+            {isConnected && (
+              <span className="ml-auto text-[10px] font-medium text-riptide-success flex-shrink-0">Connected</span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ───── Header Context Menu ───── */
+
+function HeaderContextMenu({ x, y, onCreateChannel, onCreateCategory, onInvite }: {
+  x: number; y: number;
+  onCreateChannel: () => void;
+  onCreateCategory: () => void;
+  onInvite: () => void;
+}) {
+  return (
+    <div
+      className="fixed z-[200] animate-scale-in"
+      style={{ left: x, top: y }}
+    >
+      <div className="bg-riptide-panel rounded-lg border border-riptide-border/50 shadow-modal py-1.5 min-w-[180px]">
+        <button onClick={onCreateChannel} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-riptide-accent hover:text-white transition-colors text-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
+          Create Channel
+        </button>
+        <button onClick={onCreateCategory} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-riptide-accent hover:text-white transition-colors text-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" /></svg>
+          Create Category
+        </button>
+        <div className="mx-2 my-1 border-t border-riptide-border/30" />
+        <button onClick={onInvite} className="w-full flex items-center gap-2 px-3 py-1.5 text-sm hover:bg-riptide-accent hover:text-white transition-colors text-left">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="8.5" cy="7" r="4" /><line x1="20" y1="8" x2="20" y2="14" /><line x1="23" y1="11" x2="17" y2="11" />
+          </svg>
+          Invite to Server
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ───── User Bar ───── */
 
 function UserBar({ user }: { user: User | null; logout: () => void }) {
   const [showSettings, setShowSettings] = useState(false);

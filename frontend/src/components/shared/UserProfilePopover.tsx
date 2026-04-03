@@ -100,23 +100,23 @@ export default function UserProfilePopover() {
       <div className="bg-riptide-surface rounded-xl border border-riptide-border/50 shadow-modal overflow-hidden">
         {/* Banner area */}
         <div className="h-16 relative" style={{ backgroundColor: accent + '40' }}>
-          <div
-            className="absolute -bottom-8 left-4 w-[72px] h-[72px] rounded-full border-[4px] border-riptide-surface flex items-center justify-center overflow-hidden"
-            style={{ backgroundColor: accent }}
-          >
-            {user.avatar_url ? (
-              <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
-            ) : (
-              <span className="text-xl font-bold text-white">
-                {(user.display_name || user.username).slice(0, 2).toUpperCase()}
-              </span>
-            )}
+          <div className="absolute -bottom-8 left-4">
+            <div
+              className="w-[72px] h-[72px] rounded-full border-[4px] border-riptide-surface flex items-center justify-center overflow-hidden"
+              style={{ backgroundColor: accent }}
+            >
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xl font-bold text-white">
+                  {(user.display_name || user.username).slice(0, 2).toUpperCase()}
+                </span>
+              )}
+            </div>
+            <div className="absolute -bottom-0.5 -right-0.5 border-[3px] border-riptide-surface rounded-full">
+              <StatusDot userId={user.id} fallbackStatus={user.status} size="lg" />
+            </div>
           </div>
-        </div>
-
-        {/* Status dot positioned on the avatar */}
-        <div className="absolute top-[60px] left-[60px] border-[3px] border-riptide-surface rounded-full">
-          <StatusDot userId={user.id} fallbackStatus={user.status} size="lg" />
         </div>
 
         {/* Body */}

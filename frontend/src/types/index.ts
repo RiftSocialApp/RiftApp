@@ -19,6 +19,14 @@ export interface Hub {
   created_at: string;
 }
 
+export interface Category {
+  id: string;
+  hub_id: string;
+  name: string;
+  position: number;
+  created_at: string;
+}
+
 export interface Stream {
   id: string;
   hub_id: string;
@@ -26,6 +34,7 @@ export interface Stream {
   type: number; // 0=text, 1=voice
   position: number;
   is_private: boolean;
+  category_id?: string | null;
   created_at: string;
 }
 

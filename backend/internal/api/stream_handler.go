@@ -22,15 +22,16 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	hubID := chi.URLParam(r, "hubID")
 	userID := middleware.GetUserID(r.Context())
 	var body struct {
-		Name      string `json:"name"`
-		Type      int    `json:"type"`
-		IsPrivate bool   `json:"is_private"`
+		Name       string  `json:"name"`
+		Type       int     `json:"type"`
+		IsPrivate  bool    `json:"is_private"`
+		CategoryID *string `json:"category_id"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	stream, err := h.svc.Create(r.Context(), hubID, userID, body.Name, body.Type, body.IsPrivate)
+	stream, err := h.svc.Create(r.Context(), hubID, userID, body.Name, body.Type, body.IsPrivate, body.CategoryID)
 	if err != nil {
 		writeAppError(w, err)
 		return

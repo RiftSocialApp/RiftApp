@@ -43,14 +43,23 @@ type Rank struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-type Stream struct {
+type Category struct {
 	ID        string    `json:"id"`
 	HubID     string    `json:"hub_id"`
 	Name      string    `json:"name"`
-	Type      int       `json:"type"` // 0=text, 1=voice
 	Position  int       `json:"position"`
-	IsPrivate bool      `json:"is_private"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Stream struct {
+	ID         string    `json:"id"`
+	HubID      string    `json:"hub_id"`
+	Name       string    `json:"name"`
+	Type       int       `json:"type"` // 0=text, 1=voice
+	Position   int       `json:"position"`
+	IsPrivate  bool      `json:"is_private"`
+	CategoryID *string   `json:"category_id"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Message struct {

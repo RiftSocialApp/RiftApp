@@ -19,18 +19,18 @@ func NewStreamRepo(db *pgxpool.Pool) *StreamRepo {
 
 func (r *StreamRepo) Create(ctx context.Context, stream *models.Stream) error {
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO streams (id, hub_id, name, type, position, is_private, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-		stream.ID, stream.HubID, stream.Name, stream.Type, stream.Position, stream.IsPrivate, stream.CreatedAt)
+		`INSERT INTO streams (id, hub_id, name, type, position, is_private, category_id, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		stream.ID, stream.HubID, stream.Name, stream.Type, stream.Position, stream.IsPrivate, stream.CategoryID, stream.CreatedAt)
 	return err
 }
 
 func (r *StreamRepo) GetByID(ctx context.Context, streamID string) (*models.Stream, error) {
 	var s models.Stream
 	err := r.db.QueryRow(ctx,
-		`SELECT id, hub_id, name, type, position, is_private, created_at
+		`SELECT id, hub_id, name, type, position, is_private, category_id, created_at
 		 FROM streams WHERE id = $1`, streamID,
-	).Scan(&s.ID, &s.HubID, &s.Name, &s.Type, &s.Position, &s.IsPrivate, &s.CreatedAt)
+	).Scan(&s.ID, &s.HubID, &s.Name, &s.Type, &s.Position, &s.IsPrivate, &s.CategoryID, &s.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +39,7 @@ func (r *StreamRepo) GetByID(ctx context.Context, streamID string) (*models.Stre
 
 func (r *StreamRepo) ListByHub(ctx context.Context, hubID string) ([]models.Stream, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT id, hub_id, name, type, position, is_private, created_at
+		`SELECT id, hub_id, name, type, position, is_private, category_id, created_at
 		 FROM streams WHERE hub_id = $1 ORDER BY position`, hubID)
 	if err != nil {
 		return nil, err
@@ -49,7 +49,7 @@ func (r *StreamRepo) ListByHub(ctx context.Context, hubID string) ([]models.Stre
 	var streams []models.Stream
 	for rows.Next() {
 		var s models.Stream
-		if err := rows.Scan(&s.ID, &s.HubID, &s.Name, &s.Type, &s.Position, &s.IsPrivate, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.HubID, &s.Name, &s.Type, &s.Position, &s.IsPrivate, &s.CategoryID, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		streams = append(streams, s)
