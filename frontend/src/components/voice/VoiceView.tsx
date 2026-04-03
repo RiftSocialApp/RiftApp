@@ -2,18 +2,29 @@ import { useEffect, useRef } from 'react';
 import { Track } from 'livekit-client';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useStreamStore } from '../../stores/streamStore';
-import { useVoice, type VoiceParticipant } from '../../hooks/useVoice';
+import { useVoiceStore, type VoiceParticipant } from '../../stores/voiceStore';
 import NotificationBell from '../notifications/NotificationBell';
 
 export default function VoiceView() {
-  const voice = useVoice();
+  const connected = useVoiceStore((s) => s.connected);
+  const connecting = useVoiceStore((s) => s.connecting);
+  const participants = useVoiceStore((s) => s.participants);
+  const isMuted = useVoiceStore((s) => s.isMuted);
+  const isDeafened = useVoiceStore((s) => s.isDeafened);
+  const isCameraOn = useVoiceStore((s) => s.isCameraOn);
+  const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
+  const toggleMute = useVoiceStore((s) => s.toggleMute);
+  const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
+  const toggleCamera = useVoiceStore((s) => s.toggleCamera);
+  const toggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
+  const leave = useVoiceStore((s) => s.leave);
+
   const viewingVoiceStreamId = useStreamStore((s) => s.viewingVoiceStreamId);
+  const setViewingVoice = useStreamStore((s) => s.setViewingVoice);
   const streams = useStreamStore((s) => s.streams);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
 
   const stream = streams.find((s) => s.id === viewingVoiceStreamId);
-  const { participants } = voice;
-
   const screenSharer = participants.find((p) => p.isScreenSharing);
 
   return (
@@ -26,7 +37,7 @@ export default function VoiceView() {
             <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
           </svg>
           <h3 className="font-semibold text-[15px] truncate">{stream?.name || 'Voice Channel'}</h3>
-          {voice.connected && (
+          {connected && (
             <span className="text-xs text-riptide-text-dim ml-2">
               {participants.length} participant{participants.length !== 1 ? 's' : ''}
             </span>
@@ -37,40 +48,46 @@ export default function VoiceView() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {!voice.connected ? (
+        {!connected && !connecting ? (
           <div className="flex-1 flex items-center justify-center">
             <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-full bg-riptide-surface flex items-center justify-center mx-auto mb-4">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riptide-text-dim">
+              <div className="w-20 h-20 rounded-full bg-riptide-surface/30 flex items-center justify-center mx-auto mb-4">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riptide-text-dim">
                   <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
                   <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
                   <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
                 </svg>
               </div>
-              <p className="text-riptide-text-dim text-sm">
-                {voice.connecting ? 'Connecting to voice…' : 'Not connected to this voice channel'}
-              </p>
+              <p className="text-riptide-text-dim text-sm">Not connected to this voice channel</p>
+            </div>
+          </div>
+        ) : connecting ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center animate-fade-in">
+              <div className="w-20 h-20 rounded-full bg-riptide-surface/30 flex items-center justify-center mx-auto mb-4 animate-pulse">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riptide-warning">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                </svg>
+              </div>
+              <p className="text-riptide-warning text-sm font-medium">Connecting…</p>
             </div>
           </div>
         ) : (
           <div className="flex-1 flex flex-col">
-            {/* If someone is screen sharing, show it prominently */}
             {screenSharer ? (
               <div className="flex-1 flex overflow-hidden">
-                {/* Screen share takes most space */}
                 <div className="flex-1 p-2 flex items-center justify-center bg-black/30 min-w-0">
                   <ScreenShareTile participant={screenSharer} hubMembers={hubMembers} />
                 </div>
-                {/* Participant strip on the right */}
-                <div className="w-56 flex-shrink-0 overflow-y-auto p-2 space-y-2">
+                <div className="w-60 flex-shrink-0 overflow-y-auto p-2 space-y-2 border-l border-white/5">
                   {participants.map((p) => (
                     <ParticipantTile key={p.identity} participant={p} hubMembers={hubMembers} compact />
                   ))}
                 </div>
               </div>
             ) : (
-              /* Normal grid view */
-              <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
+              <div className="flex-1 flex items-center justify-center p-6 overflow-auto">
                 <div className={`grid gap-3 w-full max-w-5xl ${getGridCols(participants.length)}`}>
                   {participants.map((p) => (
                     <ParticipantTile key={p.identity} participant={p} hubMembers={hubMembers} />
@@ -82,101 +99,123 @@ export default function VoiceView() {
         )}
       </div>
 
-      {/* Controls bar */}
-      {voice.connected && (
-        <div className="h-16 flex items-center justify-center gap-2 bg-[#13132a] border-t border-riptide-border/30 flex-shrink-0 px-4">
-          <ControlButton
-            active={!voice.isMuted}
-            danger={voice.isMuted}
-            onClick={voice.toggleMute}
-            title={voice.isMuted ? 'Unmute' : 'Mute'}
+      {/* Discord-style control bar */}
+      {connected && (
+        <div className="flex items-center justify-center gap-3 px-6 py-4 bg-[#111127] border-t border-white/5 flex-shrink-0">
+          <ControlBtn
+            onClick={toggleScreenShare}
+            active={isScreenSharing}
+            tooltip={isScreenSharing ? 'Stop Sharing' : 'Share Your Screen'}
           >
-            {voice.isMuted ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="1" y1="1" x2="23" y2="23" />
-                <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
-                <path d="M17 16.95A7 7 0 015 12m14 0a7 7 0 01-.11 1.23" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-                <path d="M19 10v2a7 7 0 01-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            )}
-          </ControlButton>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <rect x="2" y="3" width="20" height="14" rx="2" />
+              <line x1="8" y1="21" x2="16" y2="21" />
+              <line x1="12" y1="17" x2="12" y2="21" />
+              {isScreenSharing && <path d="M9 10l3-3 3 3M12 7v6" />}
+            </svg>
+          </ControlBtn>
 
-          <ControlButton
-            active={!voice.isDeafened}
-            danger={voice.isDeafened}
-            onClick={voice.toggleDeafen}
-            title={voice.isDeafened ? 'Undeafen' : 'Deafen'}
+          <ControlBtn
+            onClick={toggleCamera}
+            active={isCameraOn}
+            crossed={!isCameraOn}
+            tooltip={isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
           >
-            {voice.isDeafened ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="1" y1="1" x2="23" y2="23" />
-                <path d="M9 9a3 3 0 015-2.24M21 12a9 9 0 00-7.48-8.86" />
-                <path d="M3 12a9 9 0 008 8.94V18a3 3 0 01-3-3v-1" />
+            {isCameraOn ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" />
               </svg>
             ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 18v-6a9 9 0 0118 0v6" />
-                <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" />
-              </svg>
-            )}
-          </ControlButton>
-
-          <ControlButton
-            active={voice.isCameraOn}
-            onClick={voice.toggleCamera}
-            title={voice.isCameraOn ? 'Turn off camera' : 'Turn on camera'}
-          >
-            {voice.isCameraOn ? (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M23 7l-7 5 7 5V7z" /><rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-              </svg>
-            ) : (
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <path d="M16 16v1a2 2 0 01-2 2H3a2 2 0 01-2-2V7a2 2 0 012-2h2m5.66 0H14a2 2 0 012 2v3.34" />
                 <path d="M23 7l-7 5 7 5V7z" />
                 <line x1="1" y1="1" x2="23" y2="23" />
               </svg>
             )}
-          </ControlButton>
+          </ControlBtn>
 
-          <ControlButton
-            active={voice.isScreenSharing}
-            onClick={voice.toggleScreenShare}
-            title={voice.isScreenSharing ? 'Stop sharing' : 'Share your screen'}
-            highlight={voice.isScreenSharing}
+          <ControlBtn
+            onClick={toggleMute}
+            crossed={isMuted}
+            tooltip={isMuted ? 'Unmute' : 'Mute'}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-              <line x1="8" y1="21" x2="16" y2="21" />
-              <line x1="12" y1="17" x2="12" y2="21" />
-              {voice.isScreenSharing && <path d="M9 10l3-3 3 3M12 7v6" />}
-            </svg>
-          </ControlButton>
+            {isMuted ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
+                <path d="M17 16.95A7 7 0 015 12m14 0a7 7 0 01-.11 1.23" />
+                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+                <path d="M19 10v2a7 7 0 01-14 0v-2" />
+                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
+              </svg>
+            )}
+          </ControlBtn>
 
-          <div className="w-px h-8 bg-riptide-border/30 mx-1" />
+          <ControlBtn
+            onClick={toggleDeafen}
+            crossed={isDeafened}
+            tooltip={isDeafened ? 'Undeafen' : 'Deafen'}
+          >
+            {isDeafened ? (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M9 9a3 3 0 015-2.24M21 12a9 9 0 00-7.48-8.86" />
+                <path d="M3 12a9 9 0 008 8.94V18a3 3 0 01-3-3v-1" />
+              </svg>
+            ) : (
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M3 18v-6a9 9 0 0118 0v6" />
+                <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" />
+              </svg>
+            )}
+          </ControlBtn>
 
-          <ControlButton
+          <ControlBtn
+            onClick={() => { leave(); setViewingVoice(null); }}
             danger
-            onClick={() => { voice.leave(); useStreamStore.getState().setViewingVoice(null); }}
-            title="Disconnect"
+            tooltip="Disconnect"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M10.68 13.31a16 16 0 003.41 2.6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.73.8 2 2 0 011.72 2v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07 19.5 19.5 0 01-6-6 19.79 19.79 0 01-3.07-8.67A2 2 0 014.11 2h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L8.09 9.91" />
-              <line x1="23" y1="1" x2="1" y2="23" />
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 010-1.36C3.53 8.46 7.5 6.5 12 6.5s8.47 1.96 11.71 5.22c.19.19.29.44.29.71 0 .28-.1.52-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.1-.7-.28a11.27 11.27 0 00-2.67-1.85.996.996 0 01-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" />
             </svg>
-          </ControlButton>
+          </ControlBtn>
         </div>
       )}
     </div>
   );
 }
 
-/* ───── Video Tile for a Participant ───── */
+/* ───── Discord-style Control Button ───── */
+
+function ControlBtn({ children, onClick, tooltip, active, danger, crossed }: {
+  children: React.ReactNode;
+  onClick: () => void;
+  tooltip: string;
+  active?: boolean;
+  danger?: boolean;
+  crossed?: boolean;
+}) {
+  let cls = 'bg-[#2b2d42] hover:bg-[#3a3d56] text-[#b5bac1]';
+  if (danger) cls = 'bg-[#ed4245] hover:bg-[#c93b3e] text-white';
+  else if (active) cls = 'bg-[#4752c4] hover:bg-[#3c45a5] text-white';
+  else if (crossed) cls = 'bg-[#2b2d42] hover:bg-[#3a3d56] text-[#ed4245]';
+
+  return (
+    <button
+      onClick={onClick}
+      title={tooltip}
+      className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-150 active:scale-95 ${cls}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ───── Participant Tile ───── */
 
 function ParticipantTile({ participant, hubMembers, compact }: {
   participant: VoiceParticipant;
@@ -205,7 +244,7 @@ function ParticipantTile({ participant, hubMembers, compact }: {
         participant.isSpeaking
           ? 'ring-[3px] ring-riptide-success shadow-lg shadow-riptide-success/20'
           : 'ring-1 ring-white/10'
-      } ${compact ? 'aspect-video' : 'aspect-video'}`}
+      } aspect-video`}
       style={{ backgroundColor: getAvatarColor(participant.identity) }}
     >
       {hasVideo ? (
@@ -226,7 +265,6 @@ function ParticipantTile({ participant, hubMembers, compact }: {
         </div>
       )}
 
-      {/* Name + indicators overlay */}
       <div className="absolute bottom-0 left-0 right-0 p-2 flex items-end justify-between bg-gradient-to-t from-black/60 to-transparent">
         <span className={`text-xs font-medium truncate ${participant.isSpeaking ? 'text-riptide-success' : 'text-white'}`}>
           {displayName}
@@ -285,32 +323,6 @@ function ScreenShareTile({ participant, hubMembers }: {
   );
 }
 
-/* ───── Control Button ───── */
-
-function ControlButton({ children, onClick, title, active, danger, highlight }: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-  active?: boolean;
-  danger?: boolean;
-  highlight?: boolean;
-}) {
-  let bg = 'bg-[#2b2d42] hover:bg-[#3a3d56] text-white/80 hover:text-white';
-  if (danger) bg = 'bg-red-600/80 hover:bg-red-600 text-white';
-  else if (highlight) bg = 'bg-riptide-accent/80 hover:bg-riptide-accent text-white';
-  else if (active) bg = 'bg-[#2b2d42] hover:bg-[#3a3d56] text-white';
-
-  return (
-    <button
-      onClick={onClick}
-      title={title}
-      className={`w-12 h-12 rounded-full flex items-center justify-center transition-all duration-150 active:scale-95 ${bg}`}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* ───── Helpers ───── */
 
 function getGridCols(count: number): string {
@@ -327,6 +339,5 @@ function getAvatarColor(identity: string): string {
   for (let i = 0; i < identity.length; i++) {
     hash = identity.charCodeAt(i) + ((hash << 5) - hash);
   }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 30%, 18%)`;
+  return `hsl(${Math.abs(hash) % 360}, 30%, 18%)`;
 }

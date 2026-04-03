@@ -4,7 +4,7 @@ import { useStreamStore } from '../../stores/streamStore';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useAuthStore } from '../../stores/auth';
 import { useSelfProfileStore } from '../../stores/selfProfileStore';
-import { useVoice } from '../../hooks/useVoice';
+import { useVoiceStore } from '../../stores/voiceStore';
 import SettingsModal from '../settings/SettingsModal';
 import HubSettingsModal from '../settings/HubSettingsModal';
 import VoicePanel from '../voice/VoicePanel';
@@ -32,7 +32,7 @@ export default function StreamSidebar() {
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [inviteGenerating, setInviteGenerating] = useState(false);
   const [inviteCopied, setInviteCopied] = useState(false);
-  const voice = useVoice();
+  const voice = useVoiceStore();
 
   // Header context menu
   const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
@@ -231,6 +231,8 @@ export default function StreamSidebar() {
             onSelect={setActiveStream}
             onVoiceClick={handleVoiceClick}
             voice={voice}
+            voiceParticipants={voice.participants}
+            hubMembers={hubMembers}
           />
         )}
 
@@ -271,6 +273,8 @@ export default function StreamSidebar() {
                   onSelect={setActiveStream}
                   onVoiceClick={handleVoiceClick}
                   voice={voice}
+                  voiceParticipants={voice.participants}
+                  hubMembers={hubMembers}
                 />
               )}
             </div>
@@ -328,10 +332,12 @@ interface ChannelGroupProps {
   streamUnreads: Record<string, number>;
   onSelect: (id: string) => Promise<void>;
   onVoiceClick: (streamId: string) => void;
-  voice: ReturnType<typeof useVoice>;
+  voice: { streamId: string | null; connected: boolean };
+  voiceParticipants: import('../../stores/voiceStore').VoiceParticipant[];
+  hubMembers: Record<string, User>;
 }
 
-function ChannelGroup({ streams, activeStreamId, viewingVoiceStreamId, streamUnreads, onSelect, onVoiceClick, voice }: ChannelGroupProps) {
+function ChannelGroup({ streams, activeStreamId, viewingVoiceStreamId, streamUnreads, onSelect, onVoiceClick, voice, voiceParticipants, hubMembers }: ChannelGroupProps) {
   const textStreams = streams.filter((s) => s.type === 0);
   const voiceStreams = streams.filter((s) => s.type === 1);
 
@@ -361,24 +367,61 @@ function ChannelGroup({ streams, activeStreamId, viewingVoiceStreamId, streamUnr
       {voiceStreams.map((stream) => {
         const isConnected = voice.streamId === stream.id && voice.connected;
         const isViewing = viewingVoiceStreamId === stream.id;
+        const channelParticipants = isConnected ? voiceParticipants : [];
         return (
-          <button
-            key={stream.id}
-            onClick={() => onVoiceClick(stream.id)}
-            title={isConnected ? stream.name : `Join ${stream.name}`}
-            className={`channel-item ${isViewing ? 'channel-item-active !text-riptide-success' : isConnected ? '!text-riptide-success channel-item-idle' : 'channel-item-idle'}`}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-              className={`flex-shrink-0 ${isConnected ? 'text-riptide-success' : 'text-riptide-text-dim'}`}
+          <div key={stream.id}>
+            <button
+              onClick={() => onVoiceClick(stream.id)}
+              title={isConnected ? stream.name : `Join ${stream.name}`}
+              className={`channel-item ${isViewing ? 'channel-item-active !text-riptide-success' : isConnected ? '!text-riptide-success channel-item-idle' : 'channel-item-idle'}`}
             >
-              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-              <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-            </svg>
-            <span className="truncate">{stream.name}</span>
-            {isConnected && (
-              <span className="ml-auto text-[10px] font-medium text-riptide-success flex-shrink-0">Connected</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                className={`flex-shrink-0 ${isConnected ? 'text-riptide-success' : 'text-riptide-text-dim'}`}
+              >
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+              </svg>
+              <span className="truncate">{stream.name}</span>
+            </button>
+            {channelParticipants.length > 0 && (
+              <div className="ml-3 pl-3 border-l-2 border-riptide-border/30 space-y-0.5 mt-0.5 mb-1">
+                {channelParticipants.map((p) => {
+                  const member = hubMembers[p.identity];
+                  const name = member?.display_name || member?.username || p.identity;
+                  const avatarUrl = member?.avatar_url;
+                  return (
+                    <div key={p.identity} className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-riptide-surface-hover/50 transition-colors group">
+                      <div className={`w-6 h-6 rounded-full flex-shrink-0 overflow-hidden ${p.isSpeaking ? 'ring-2 ring-riptide-success ring-offset-1 ring-offset-riptide-surface' : ''}`}>
+                        {avatarUrl ? (
+                          <img src={avatarUrl} alt={name} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className={`w-full h-full flex items-center justify-center text-[9px] font-semibold ${
+                            p.isSpeaking ? 'bg-riptide-success text-white' : 'bg-riptide-panel text-riptide-text-muted'
+                          }`}>
+                            {name.slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`text-[13px] truncate flex-1 ${p.isSpeaking ? 'text-riptide-success font-medium' : 'text-riptide-text-muted'}`}>
+                        {name}
+                      </span>
+                      {p.isMuted && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-riptide-danger/70 flex-shrink-0">
+                          <line x1="1" y1="1" x2="23" y2="23" />
+                          <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
+                        </svg>
+                      )}
+                      {p.isScreenSharing && (
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-riptide-accent flex-shrink-0">
+                          <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="12" y1="17" x2="12" y2="21" />
+                        </svg>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             )}
-          </button>
+          </div>
         );
       })}
     </div>

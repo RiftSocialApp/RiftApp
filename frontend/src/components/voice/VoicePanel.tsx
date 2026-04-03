@@ -1,4 +1,4 @@
-import type { VoiceParticipant } from '../../hooks/useVoice';
+import type { VoiceParticipant } from '../../stores/voiceStore';
 import type { User } from '../../types';
 
 interface VoicePanelProps {
