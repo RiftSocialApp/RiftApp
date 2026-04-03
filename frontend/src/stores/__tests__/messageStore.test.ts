@@ -73,7 +73,7 @@ describe('messageStore', () => {
     useMessageStore.setState({ messages: [msg] });
 
     useMessageStore.getState().applyReactionAdd('m1', 'user1', '👍');
-    const reactions = useMessageStore.getState().messages[0].reactions;
+    const reactions = useMessageStore.getState().messages[0].reactions!;
     expect(reactions).toHaveLength(1);
     expect(reactions[0].emoji).toBe('👍');
     expect(reactions[0].count).toBe(1);
@@ -89,7 +89,7 @@ describe('messageStore', () => {
     useMessageStore.setState({ messages: [msg] });
 
     useMessageStore.getState().applyReactionAdd('m1', 'user2', '👍');
-    const reactions = useMessageStore.getState().messages[0].reactions;
+    const reactions = useMessageStore.getState().messages[0].reactions!;
     expect(reactions[0].count).toBe(2);
     expect(reactions[0].users).toContain('user2');
   });
@@ -103,7 +103,7 @@ describe('messageStore', () => {
     useMessageStore.setState({ messages: [msg] });
 
     useMessageStore.getState().applyReactionRemove('m1', 'user1', '👍');
-    const reactions = useMessageStore.getState().messages[0].reactions;
+    const reactions = useMessageStore.getState().messages[0].reactions!;
     expect(reactions[0].count).toBe(1);
     expect(reactions[0].users).not.toContain('user1');
   });
@@ -117,7 +117,7 @@ describe('messageStore', () => {
     useMessageStore.setState({ messages: [msg] });
 
     useMessageStore.getState().applyReactionRemove('m1', 'user1', '👍');
-    const reactions = useMessageStore.getState().messages[0].reactions;
+    const reactions = useMessageStore.getState().messages[0].reactions!;
     expect(reactions).toHaveLength(0);
   });
 

@@ -19,7 +19,7 @@ interface MessageState {
   applyReactionRemove: (messageId: string, userId: string, emoji: string, isDM?: boolean) => void;
 }
 
-export const useMessageStore = create<MessageState>((set, get) => ({
+export const useMessageStore = create<MessageState>((set) => ({
   messages: [],
   messagesLoading: false,
 
@@ -27,7 +27,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     set({ messagesLoading: true });
     try {
       const messages = await api.getMessages(streamId);
-      set((s) => {
+      set(() => {
         if (useStreamStore.getState().activeStreamId !== streamId) return { messagesLoading: false };
         return { messages, messagesLoading: false };
       });

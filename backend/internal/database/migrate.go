@@ -1,7 +1,6 @@
 package database
 
 import (
-	"database/sql"
 	"embed"
 	"fmt"
 
@@ -27,12 +26,4 @@ func Migrate(pool *pgxpool.Pool) error {
 		return fmt.Errorf("goose up: %w", err)
 	}
 	return nil
-}
-
-func MigrateWithDB(db *sql.DB) error {
-	goose.SetBaseFS(embedMigrations)
-	if err := goose.SetDialect("postgres"); err != nil {
-		return fmt.Errorf("goose set dialect: %w", err)
-	}
-	return goose.Up(db, "migrations")
 }

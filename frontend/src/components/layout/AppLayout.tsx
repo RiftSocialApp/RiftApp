@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import HubSidebar from '../sidebar/HubSidebar';
 import StreamSidebar from '../sidebar/StreamSidebar';
 import DMSidebar from '../sidebar/DMSidebar';
@@ -13,7 +13,6 @@ export default function AppLayout() {
   const loadHubs = useHubStore((s) => s.loadHubs);
   const activeConversationId = useDMStore((s) => s.activeConversationId);
   const params = useParams<{ hubId?: string; streamId?: string; conversationId?: string }>();
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadHubs();
