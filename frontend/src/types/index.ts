@@ -119,6 +119,24 @@ export interface AuthResponse {
   user: User;
 }
 
+export interface Friendship {
+  user_id: string;
+  friend_id: string;
+  status: number; // 0=pending, 1=accepted
+  created_at: string;
+  updated_at: string;
+  user?: User;
+}
+
+export interface Block {
+  blocker_id: string;
+  blocked_id: string;
+  created_at: string;
+  user?: User;
+}
+
+export type RelationshipType = 'none' | 'friends' | 'pending_incoming' | 'pending_outgoing' | 'blocked' | 'blocked_by';
+
 // WebSocket event types
 export interface WSEvent {
   op: string;

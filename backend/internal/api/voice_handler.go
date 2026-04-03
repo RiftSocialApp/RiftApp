@@ -10,15 +10,17 @@ import (
 	"github.com/riptide-cloud/riptide/internal/config"
 	"github.com/riptide-cloud/riptide/internal/middleware"
 	"github.com/riptide-cloud/riptide/internal/service"
+	"github.com/riptide-cloud/riptide/internal/ws"
 )
 
 type VoiceHandler struct {
 	cfg    *config.Config
 	hubSvc *service.HubService
+	hub    *ws.Hub
 }
 
-func NewVoiceHandler(cfg *config.Config, hubSvc *service.HubService) *VoiceHandler {
-	return &VoiceHandler{cfg: cfg, hubSvc: hubSvc}
+func NewVoiceHandler(cfg *config.Config, hubSvc *service.HubService, hub *ws.Hub) *VoiceHandler {
+	return &VoiceHandler{cfg: cfg, hubSvc: hubSvc, hub: hub}
 }
 
 func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
@@ -66,4 +68,18 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 		"url":   publicURL,
 		"room":  roomName,
 	})
+}
+
+func (h *VoiceHandler) States(w http.ResponseWriter, r *http.Request) {
+	hubID := chi.URLParam(r, "hubID")
+	if hubID == "" {
+		writeError(w, http.StatusBadRequest, "hubID is required")
+		return
+	}
+
+	states := h.hub.GetVoiceStates(hubID)
+	if states == nil {
+		states = make(map[string][]string)
+	}
+	writeJSON(w, http.StatusOK, states)
 }

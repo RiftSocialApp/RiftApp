@@ -3,6 +3,9 @@ import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useAuthStore } from '../../stores/auth';
 import { useDMStore } from '../../stores/dmStore';
+import { api } from '../../api/client';
+import { useFriendStore } from '../../stores/friendStore';
+import type { RelationshipType } from '../../types';
 
 const MENU_WIDTH = 200;
 const MENU_GAP = 4;
@@ -19,6 +22,8 @@ export default function UserContextMenu() {
   const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState({ top: 0, left: 0 });
   const [copied, setCopied] = useState(false);
+  const [relationship, setRelationship] = useState<RelationshipType>('none');
+  const [relLoading, setRelLoading] = useState(false);
 
   const computePosition = useCallback(() => {
     if (!menuRef.current) return;
@@ -44,6 +49,10 @@ export default function UserContextMenu() {
   useEffect(() => {
     if (user) {
       setCopied(false);
+      setRelationship('none');
+      if (currentUser && user.id !== currentUser.id) {
+        api.getRelationship(user.id).then((r) => setRelationship(r.relationship)).catch(() => {});
+      }
       requestAnimationFrame(() => {
         computePosition();
         requestAnimationFrame(() => setVisible(true));
@@ -51,7 +60,7 @@ export default function UserContextMenu() {
     } else {
       setVisible(false);
     }
-  }, [user, computePosition]);
+  }, [user, computePosition, currentUser]);
 
   useEffect(() => {
     if (!user) return;
@@ -104,6 +113,56 @@ export default function UserContextMenu() {
     setTimeout(() => close(), 600);
   };
 
+  const handleAddFriend = async () => {
+    setRelLoading(true);
+    try {
+      await useFriendStore.getState().sendRequest(user.id);
+      setRelationship('pending_outgoing');
+    } catch { /* ignore */ }
+    setRelLoading(false);
+    close();
+  };
+
+  const handleRemoveFriend = async () => {
+    setRelLoading(true);
+    try {
+      await useFriendStore.getState().removeFriend(user.id);
+      setRelationship('none');
+    } catch { /* ignore */ }
+    setRelLoading(false);
+    close();
+  };
+
+  const handleAcceptFriend = async () => {
+    setRelLoading(true);
+    try {
+      await useFriendStore.getState().acceptRequest(user.id);
+      setRelationship('friends');
+    } catch { /* ignore */ }
+    setRelLoading(false);
+    close();
+  };
+
+  const handleBlock = async () => {
+    setRelLoading(true);
+    try {
+      await useFriendStore.getState().blockUser(user.id);
+      setRelationship('blocked');
+    } catch { /* ignore */ }
+    setRelLoading(false);
+    close();
+  };
+
+  const handleUnblock = async () => {
+    setRelLoading(true);
+    try {
+      await useFriendStore.getState().unblockUser(user.id);
+      setRelationship('none');
+    } catch { /* ignore */ }
+    setRelLoading(false);
+    close();
+  };
+
   return (
     <div
       ref={menuRef}
@@ -119,34 +178,68 @@ export default function UserContextMenu() {
       }}
     >
       <div className="bg-riptide-panel rounded-lg border border-riptide-border/50 shadow-modal py-1.5 overflow-hidden">
-        {/* Profile */}
-        <MenuItem
-          icon={<ProfileIcon />}
-          label="Profile"
-          onClick={handleProfile}
-        />
+        <MenuItem icon={<ProfileIcon />} label="Profile" onClick={handleProfile} />
 
-        {/* Mention */}
         {!isSelf && (
+          <MenuItem icon={<AtIcon />} label="Mention" onClick={handleMention} />
+        )}
+
+        {!isSelf && (
+          <MenuItem icon={<MessageIcon />} label="Message" onClick={handleMessage} />
+        )}
+
+        {!isSelf && <Separator />}
+
+        {!isSelf && relationship === 'none' && (
           <MenuItem
-            icon={<AtIcon />}
-            label="Mention"
-            onClick={handleMention}
+            icon={<AddFriendIcon />}
+            label={relLoading ? 'Sending...' : 'Add Friend'}
+            onClick={handleAddFriend}
+          />
+        )}
+        {!isSelf && relationship === 'pending_incoming' && (
+          <MenuItem
+            icon={<AcceptIcon />}
+            label={relLoading ? 'Accepting...' : 'Accept Friend Request'}
+            onClick={handleAcceptFriend}
+          />
+        )}
+        {!isSelf && relationship === 'pending_outgoing' && (
+          <MenuItem
+            icon={<AddFriendIcon />}
+            label="Request Pending"
+            onClick={() => close()}
+          />
+        )}
+        {!isSelf && relationship === 'friends' && (
+          <MenuItem
+            icon={<RemoveFriendIcon />}
+            label={relLoading ? 'Removing...' : 'Remove Friend'}
+            onClick={handleRemoveFriend}
+            danger
           />
         )}
 
-        {/* Message */}
-        {!isSelf && (
+        {!isSelf && <Separator />}
+
+        {!isSelf && relationship !== 'blocked' && (
           <MenuItem
-            icon={<MessageIcon />}
-            label="Message"
-            onClick={handleMessage}
+            icon={<BlockIcon />}
+            label={relLoading ? 'Blocking...' : 'Block'}
+            onClick={handleBlock}
+            danger
+          />
+        )}
+        {!isSelf && relationship === 'blocked' && (
+          <MenuItem
+            icon={<BlockIcon />}
+            label={relLoading ? 'Unblocking...' : 'Unblock'}
+            onClick={handleUnblock}
           />
         )}
 
         <Separator />
 
-        {/* Copy User ID */}
         <MenuItem
           icon={<CopyIcon />}
           label={copied ? 'Copied!' : 'Copy User ID'}
@@ -208,6 +301,40 @@ function CopyIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
       <rect x="9" y="9" width="13" height="13" rx="2" />
       <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function AddFriendIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
+    </svg>
+  );
+}
+
+function RemoveFriendIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+      <line x1="17" y1="11" x2="23" y2="11" />
+    </svg>
+  );
+}
+
+function AcceptIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function BlockIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
     </svg>
   );
 }

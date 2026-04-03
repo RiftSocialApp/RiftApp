@@ -5,7 +5,13 @@ import { useMessageStore } from '../stores/messageStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useDMStore } from '../stores/dmStore';
+import { useFriendStore } from '../stores/friendStore';
 import type { Message, Notification, Conversation, WSEvent } from '../types';
+
+const applyVoiceState = useStreamStore.getState().applyVoiceState;
+const handleFriendRequest = useFriendStore.getState().handleFriendRequest;
+const handleFriendAccept = useFriendStore.getState().handleFriendAccept;
+const handleFriendRemove = useFriendStore.getState().handleFriendRemove;
 
 const HEARTBEAT_INTERVAL = 30000;
 const TYPING_EXPIRE_MS = 3000;
@@ -24,6 +30,10 @@ const notifAudio = (() => {
 })();
 
 let globalSend: (op: string, d?: unknown) => void = () => {};
+
+export function wsSend(op: string, d?: unknown) {
+  globalSend(op, d);
+}
 
 export function useWsSend() {
   return globalSend;
@@ -178,6 +188,26 @@ export function useWebSocket() {
             } else if (dmState.dmMessages.some((m) => m.id === message_id)) {
               dmState.applyReactionRemove(message_id, user_id, emoji);
             }
+            break;
+          }
+          case 'voice_state_update': {
+            const { stream_id, user_id, action } = evt.d as { stream_id: string; user_id: string; action: 'join' | 'leave' };
+            applyVoiceState(stream_id, user_id, action);
+            break;
+          }
+          case 'friend_request': {
+            const { user_id } = evt.d as { user_id: string };
+            handleFriendRequest(user_id);
+            break;
+          }
+          case 'friend_accept': {
+            const { user_id } = evt.d as { user_id: string };
+            handleFriendAccept(user_id);
+            break;
+          }
+          case 'friend_remove': {
+            const { user_id } = evt.d as { user_id: string };
+            handleFriendRemove(user_id);
             break;
           }
         }

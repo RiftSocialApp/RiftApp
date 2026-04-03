@@ -66,12 +66,15 @@ func main() {
 
 	// Services
 	catRepo := repository.NewCategoryRepo(db)
+	friendRepo := repository.NewFriendshipRepo(db)
+	blockRepo := repository.NewBlockRepo(db)
 	notifSvc := service.NewNotificationService(notifRepo, wsHub)
 	hubSvc := service.NewHubService(hubRepo, streamRepo, inviteRepo, notifRepo)
 	streamSvc := service.NewStreamService(streamRepo, hubSvc)
 	catSvc := service.NewCategoryService(catRepo, hubSvc)
 	msgSvc := service.NewMessageService(msgRepo, streamRepo, hubSvc, notifSvc, wsHub)
 	dmSvc := service.NewDMService(dmRepo, msgRepo, notifSvc, wsHub)
+	friendSvc := service.NewFriendService(friendRepo, blockRepo, wsHub)
 
 	// Upload handler (MinIO/S3)
 	uploadH, err := api.NewUploadHandler(cfg, db)
@@ -89,6 +92,7 @@ func main() {
 		MsgService:      msgSvc,
 		DMService:       dmSvc,
 		NotifService:    notifSvc,
+		FriendService:   friendSvc,
 		WSHub:           wsHub,
 		Config:          cfg,
 		UploadHandler:   uploadH,

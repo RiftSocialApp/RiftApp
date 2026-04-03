@@ -27,6 +27,7 @@ type RouterDeps struct {
 	MsgService      *service.MessageService
 	DMService       *service.DMService
 	NotifService    *service.NotificationService
+	FriendService   *service.FriendService
 	WSHub           *ws.Hub
 	Config          *config.Config
 	UploadHandler   *UploadHandler
@@ -54,9 +55,10 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	catH := NewCategoryHandler(deps.CategoryService)
 	msgH := NewMessageHandler(deps.MsgService)
 	wsH := NewWSHandler(deps.WSHub, deps.AuthService, deps.Config.AllowedOrigins)
-	voiceH := NewVoiceHandler(deps.Config, deps.HubService)
+	voiceH := NewVoiceHandler(deps.Config, deps.HubService, deps.WSHub)
 	notifH := NewNotifHandler(deps.NotifService)
 	dmH := NewDMHandler(deps.DMService)
+	friendH := NewFriendHandler(deps.FriendService)
 
 	r.Get("/ws", wsH.Handle)
 
@@ -116,6 +118,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Delete("/api/messages/{messageID}/reactions/{emoji}", msgH.RemoveReaction)
 
 		r.Get("/api/voice/token", voiceH.Token)
+		r.Get("/api/hubs/{hubID}/voice-states", voiceH.States)
 
 		if deps.UploadHandler != nil {
 			r.Post("/api/upload", deps.UploadHandler.Upload)
@@ -124,6 +127,20 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Get("/api/notifications", notifH.List)
 		r.Patch("/api/notifications/{notifID}/read", notifH.MarkRead)
 		r.Post("/api/notifications/read-all", notifH.MarkAllRead)
+
+		r.Get("/api/friends", friendH.List)
+		r.Post("/api/friends/request", friendH.SendRequest)
+		r.Get("/api/friends/pending/incoming", friendH.PendingIncoming)
+		r.Get("/api/friends/pending/outgoing", friendH.PendingOutgoing)
+		r.Get("/api/friends/pending/count", friendH.CountPending)
+		r.Post("/api/friends/{userID}/accept", friendH.Accept)
+		r.Post("/api/friends/{userID}/reject", friendH.Reject)
+		r.Post("/api/friends/{userID}/cancel", friendH.Cancel)
+		r.Delete("/api/friends/{userID}", friendH.Remove)
+		r.Get("/api/relationships/{userID}", friendH.Relationship)
+		r.Post("/api/blocks", friendH.Block)
+		r.Delete("/api/blocks/{userID}", friendH.Unblock)
+		r.Get("/api/blocks", friendH.ListBlocked)
 
 		r.Get("/api/dms", dmH.List)
 		r.Post("/api/dms", dmH.CreateOrOpen)

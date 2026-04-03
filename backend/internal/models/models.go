@@ -110,9 +110,17 @@ type DirectMessage struct {
 type Friendship struct {
 	UserID    string    `json:"user_id"`
 	FriendID  string    `json:"friend_id"`
-	Status    int       `json:"status"` // 0=pending, 1=accepted, 2=blocked
+	Status    int       `json:"status"` // 0=pending, 1=accepted
 	CreatedAt time.Time `json:"created_at"`
-	Friend    *User     `json:"friend,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+	User      *User     `json:"user,omitempty"`
+}
+
+type Block struct {
+	BlockerID string    `json:"blocker_id"`
+	BlockedID string    `json:"blocked_id"`
+	CreatedAt time.Time `json:"created_at"`
+	User      *User     `json:"user,omitempty"`
 }
 
 type HubInvite struct {

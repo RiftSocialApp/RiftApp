@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useDMStore } from '../../stores/dmStore';
 import { usePresenceStore } from '../../stores/presenceStore';
+import { useFriendStore } from '../../stores/friendStore';
 import { api } from '../../api/client';
 import type { User } from '../../types';
 import StatusDot from '../shared/StatusDot';
@@ -12,6 +13,8 @@ export default function DMSidebar() {
   const loadConversations = useDMStore((s) => s.loadConversations);
   const ackDM = useDMStore((s) => s.ackDM);
   const presence = usePresenceStore((s) => s.presence);
+  const pendingCount = useFriendStore((s) => s.pendingCount);
+  const loadPendingCount = useFriendStore((s) => s.loadPendingCount);
 
   // New-DM search state
   const [showSearch, setShowSearch] = useState(false);
@@ -24,7 +27,8 @@ export default function DMSidebar() {
 
   useEffect(() => {
     loadConversations();
-  }, [loadConversations]);
+    loadPendingCount();
+  }, [loadConversations, loadPendingCount]);
 
   const handleSearchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +145,12 @@ export default function DMSidebar() {
       {/* Navigation items */}
       <div className="px-2 pt-2 pb-1 space-y-0.5">
         <button
-          className="w-full flex items-center gap-3 px-2.5 py-2 rounded-md text-riptide-text-muted hover:bg-riptide-surface-hover/50 hover:text-riptide-text transition-colors"
+          onClick={() => useDMStore.getState().clearActive()}
+          className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors ${
+            !activeConversationId
+              ? 'bg-riptide-surface-hover text-riptide-text'
+              : 'text-riptide-text-muted hover:bg-riptide-surface-hover/50 hover:text-riptide-text'
+          }`}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
@@ -150,7 +159,11 @@ export default function DMSidebar() {
             <line x1="22" y1="11" x2="16" y2="11" />
           </svg>
           <span className="text-sm font-medium">Friends</span>
-          <span className="ml-auto text-[10px] text-riptide-text-dim bg-riptide-bg/60 px-1.5 py-0.5 rounded font-medium">Soon</span>
+          {pendingCount > 0 && (
+            <span className="ml-auto min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-riptide-danger text-white text-[10px] font-bold leading-none">
+              {pendingCount > 99 ? '99+' : pendingCount}
+            </span>
+          )}
         </button>
       </div>
 

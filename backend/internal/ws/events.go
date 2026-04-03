@@ -28,6 +28,10 @@ const (
 	OpNotificationCreate = "notification_create"
 	OpDMMessageCreate    = "dm_message_create"
 	OpDMConversationCreate = "dm_conversation_create"
+	OpVoiceStateUpdate     = "voice_state_update"
+	OpFriendRequest        = "friend_request"
+	OpFriendAccept         = "friend_accept"
+	OpFriendRemove         = "friend_remove"
 )
 
 type SubscribeData struct {
@@ -55,6 +59,17 @@ type PresenceData struct {
 
 type SetStatusData struct {
 	Status int `json:"status"`
+}
+
+type VoiceStateData struct {
+	StreamID string `json:"stream_id"`
+	UserID   string `json:"user_id"`
+	Action   string `json:"action"` // "join" or "leave"
+}
+
+type VoiceStateClientData struct {
+	StreamID string `json:"stream_id"`
+	Action   string `json:"action"`
 }
 
 func NewEvent(op string, data interface{}) []byte {

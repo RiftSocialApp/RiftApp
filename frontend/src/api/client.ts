@@ -1,4 +1,4 @@
-import type { AuthResponse, Hub, HubInvite, Stream, Category, Message, User, Attachment, Notification, Conversation } from '../types';
+import type { AuthResponse, Hub, HubInvite, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -153,7 +153,25 @@ class ApiClient {
   getDMReadStates() { return this.request<import('../types').DMReadState[]>('/dms/read-states'); }
 
   searchUser(username: string) { return this.request<User>(`/users/search?q=${encodeURIComponent(username)}`); }
+
+  // Friends
+  listFriends() { return this.request<Friendship[]>('/friends'); }
+  sendFriendRequest(userId: string) { return this.request('/friends/request', { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
+  acceptFriendRequest(userId: string) { return this.request(`/friends/${userId}/accept`, { method: 'POST' }); }
+  rejectFriendRequest(userId: string) { return this.request(`/friends/${userId}/reject`, { method: 'POST' }); }
+  cancelFriendRequest(userId: string) { return this.request(`/friends/${userId}/cancel`, { method: 'POST' }); }
+  removeFriend(userId: string) { return this.request(`/friends/${userId}`, { method: 'DELETE' }); }
+  pendingIncoming() { return this.request<Friendship[]>('/friends/pending/incoming'); }
+  pendingOutgoing() { return this.request<Friendship[]>('/friends/pending/outgoing'); }
+  pendingCount() { return this.request<{ count: number }>('/friends/pending/count'); }
+  getRelationship(userId: string) { return this.request<{ relationship: RelationshipType }>(`/relationships/${userId}`); }
+
+  // Blocks
+  blockUser(userId: string) { return this.request('/blocks', { method: 'POST', body: JSON.stringify({ user_id: userId }) }); }
+  unblockUser(userId: string) { return this.request(`/blocks/${userId}`, { method: 'DELETE' }); }
+  listBlocked() { return this.request<Block[]>('/blocks'); }
   getVoiceToken(streamId: string) { return this.request<{ token: string; url: string; room: string }>(`/voice/token?streamID=${streamId}`); }
+  getVoiceStates(hubId: string) { return this.request<Record<string, string[]>>(`/hubs/${hubId}/voice-states`); }
 
   async uploadFile(file: File): Promise<Attachment> {
     const formData = new FormData();

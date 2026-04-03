@@ -11,6 +11,7 @@ import {
   ConnectionState,
 } from 'livekit-client';
 import { api } from '../api/client';
+import { wsSend } from '../hooks/useWebSocket';
 
 export interface VoiceParticipant {
   identity: string;
@@ -194,6 +195,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       room.on(RoomEvent.LocalTrackUnpublished, syncParticipants);
       room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
         if (state === ConnectionState.Disconnected && roomRef === room) {
+          const currentSid = useVoiceStore.getState().streamId;
+          if (currentSid) wsSend('voice_state_update', { stream_id: currentSid, action: 'leave' });
           roomRef = null;
           detachAllRoomMedia(room);
           room.removeAllListeners();
@@ -232,6 +235,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         isScreenSharing: false,
         participants: buildParticipants(room),
       });
+      wsSend('voice_state_update', { stream_id: sid, action: 'join' });
       playJoinSound();
     } catch (err) {
       console.error('Failed to join voice channel:', err);
@@ -245,8 +249,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
 
   leave: async () => {
     const room = roomRef;
+    const sid = get().streamId;
     if (!room) { resetState(); return; }
     roomRef = null;
+    if (sid) wsSend('voice_state_update', { stream_id: sid, action: 'leave' });
     playLeaveSound();
     await destroyRoom(room);
     resetState();

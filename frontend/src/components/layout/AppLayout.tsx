@@ -6,6 +6,7 @@ import DMSidebar from '../sidebar/DMSidebar';
 import MemberList from '../sidebar/MemberList';
 import ChatPanel from '../chat/ChatPanel';
 import VoiceView from '../voice/VoiceView';
+import FriendsPage from '../friends/FriendsPage';
 import UserProfilePopover from '../shared/UserProfilePopover';
 import SelfProfilePopover from '../shared/SelfProfilePopover';
 import UserContextMenu from '../shared/UserContextMenu';
@@ -47,7 +48,13 @@ export default function AppLayout() {
     <div className="h-screen flex overflow-hidden">
       <HubSidebar />
       {!activeHubId ? <DMSidebar /> : <StreamSidebar />}
-      {viewingVoiceStreamId ? <VoiceView /> : <ChatPanel />}
+      {!activeHubId && !activeConversationId ? (
+        <FriendsPage />
+      ) : viewingVoiceStreamId ? (
+        <VoiceView />
+      ) : (
+        <ChatPanel />
+      )}
       {activeHubId && !activeConversationId && !viewingVoiceStreamId && <MemberList />}
       <UserProfilePopover />
       <SelfProfilePopover />

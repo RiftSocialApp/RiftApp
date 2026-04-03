@@ -9,6 +9,7 @@ interface StreamState {
   viewingVoiceStreamId: string | null;
   streamUnreads: Record<string, number>;
   lastReadMessageIds: Record<string, string>;
+  voiceMembers: Record<string, string[]>; // streamId -> userIds currently in voice
 
   loadStreams: (hubId: string) => Promise<void>;
   loadCategories: (hubId: string) => Promise<void>;
@@ -21,6 +22,8 @@ interface StreamState {
   ackStream: (streamId: string) => Promise<void>;
   incrementUnread: (streamId: string) => void;
   clearStreams: () => void;
+  loadVoiceStates: (hubId: string) => Promise<void>;
+  applyVoiceState: (streamId: string, userId: string, action: 'join' | 'leave') => void;
 }
 
 export const useStreamStore = create<StreamState>((set, get) => ({
@@ -30,15 +33,17 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   viewingVoiceStreamId: null,
   streamUnreads: {},
   lastReadMessageIds: {},
+  voiceMembers: {},
 
   loadStreams: async (hubId) => {
-    const [streams, categories] = await Promise.all([
+    const [streams, categories, voiceStates] = await Promise.all([
       api.getStreams(hubId),
       api.getCategories(hubId),
+      api.getVoiceStates(hubId).catch(() => ({} as Record<string, string[]>)),
     ]);
     const { useHubStore } = await import('./hubStore');
     if (useHubStore.getState().activeHubId !== hubId) return;
-    set({ streams, categories });
+    set({ streams, categories, voiceMembers: voiceStates });
 
     const textStream = streams.find((s) => s.type === 0);
     if (textStream) {
@@ -126,6 +131,32 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   },
 
   clearStreams: () => {
-    set({ streams: [], categories: [], activeStreamId: null, viewingVoiceStreamId: null, streamUnreads: {}, lastReadMessageIds: {} });
+    set({ streams: [], categories: [], activeStreamId: null, viewingVoiceStreamId: null, streamUnreads: {}, lastReadMessageIds: {}, voiceMembers: {} });
+  },
+
+  loadVoiceStates: async (hubId) => {
+    try {
+      const states = await api.getVoiceStates(hubId);
+      set({ voiceMembers: states });
+    } catch { /* Voice states unavailable */ }
+  },
+
+  applyVoiceState: (streamId, userId, action) => {
+    set((s) => {
+      const current = s.voiceMembers[streamId] || [];
+      if (action === 'join') {
+        if (current.includes(userId)) return s;
+        return { voiceMembers: { ...s.voiceMembers, [streamId]: [...current, userId] } };
+      } else {
+        const filtered = current.filter((id) => id !== userId);
+        const next = { ...s.voiceMembers };
+        if (filtered.length === 0) {
+          delete next[streamId];
+        } else {
+          next[streamId] = filtered;
+        }
+        return { voiceMembers: next };
+      }
+    });
   },
 }));
