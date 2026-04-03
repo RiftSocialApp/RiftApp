@@ -1,9 +1,9 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useAuthStore } from '../../stores/auth';
-import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
+import { useSelfProfileStore } from '../../stores/selfProfileStore';
 import { useVoice } from '../../hooks/useVoice';
 import SettingsModal from '../settings/SettingsModal';
 import HubSettingsModal from '../settings/HubSettingsModal';
@@ -289,13 +289,17 @@ export default function StreamSidebar() {
 function UserBar({ user }: { user: User | null; logout: () => void }) {
   const [showSettings, setShowSettings] = useState(false);
   const liveStatus = usePresenceStore((s) => user ? s.presence[user.id] : undefined);
-  const openProfile = useProfilePopoverStore((s) => s.open);
+  const openSelfProfile = useSelfProfileStore((s) => s.open);
 
   const handleAvatarClick = useCallback((e: React.MouseEvent) => {
-    if (user) {
-      openProfile(user, (e.currentTarget as HTMLElement).getBoundingClientRect());
-    }
-  }, [user, openProfile]);
+    openSelfProfile((e.currentTarget as HTMLElement).getBoundingClientRect());
+  }, [openSelfProfile]);
+
+  useEffect(() => {
+    const handler = () => setShowSettings(true);
+    document.addEventListener('open-settings', handler);
+    return () => document.removeEventListener('open-settings', handler);
+  }, []);
 
   if (!user) return null;
 

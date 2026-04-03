@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
+import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
 import StatusDot, { statusLabel } from '../shared/StatusDot';
 import type { User } from '../../types';
 
@@ -8,13 +9,19 @@ function UserRow({ user }: { user: User }) {
   const status = usePresenceStore((s) => s.presence[user.id]) ?? user.status;
   const isOffline = status === 0;
   const openProfile = useProfilePopoverStore((s) => s.open);
+  const openContextMenu = useUserContextMenuStore((s) => s.open);
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     openProfile(user, (e.currentTarget as HTMLElement).getBoundingClientRect());
   }, [user, openProfile]);
 
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    openContextMenu(user, e.clientX, e.clientY);
+  }, [user, openContextMenu]);
+
   return (
-    <div onClick={handleClick} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-riptide-surface/60 transition-colors group cursor-pointer ${isOffline ? 'opacity-40' : ''}`}>
+    <div onClick={handleClick} onContextMenu={handleContextMenu} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md hover:bg-riptide-surface/60 transition-colors group cursor-pointer ${isOffline ? 'opacity-40' : ''}`}>
       <div className="relative flex-shrink-0">
         {user.avatar_url ? (
           <img src={user.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />

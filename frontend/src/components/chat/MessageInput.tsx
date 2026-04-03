@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useMessageStore } from '../../stores/messageStore';
 import { api } from '../../api/client';
 import type { Attachment } from '../../types';
@@ -30,6 +30,21 @@ export default function MessageInput({ streamName, onTyping, onTypingStop, isDMM
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingRef = useRef(0);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const username = (e as CustomEvent<string>).detail;
+      if (username) {
+        setContent((prev) => {
+          const mention = `@${username} `;
+          return prev.endsWith(' ') || prev === '' ? prev + mention : prev + ' ' + mention;
+        });
+        textareaRef.current?.focus();
+      }
+    };
+    document.addEventListener('insert-mention', handler);
+    return () => document.removeEventListener('insert-mention', handler);
+  }, []);
 
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const newFiles: PendingFile[] = [];

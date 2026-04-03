@@ -3,6 +3,7 @@ import type { Message } from '../../types';
 import { useMessageStore } from '../../stores/messageStore';
 import { useAuthStore } from '../../stores/auth';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
+import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '😮', '🙏'];
 
@@ -122,12 +123,20 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn }: Me
   );
   const pickerRef = useRef<HTMLDivElement>(null);
   const openProfile = useProfilePopoverStore((s) => s.open);
+  const openContextMenu = useUserContextMenuStore((s) => s.open);
 
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
     if (author) {
       openProfile(author, (e.currentTarget as HTMLElement).getBoundingClientRect());
     }
   }, [author, openProfile]);
+
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    if (author) {
+      e.preventDefault();
+      openContextMenu(author, e.clientX, e.clientY);
+    }
+  }, [author, openContextMenu]);
 
   useEffect(() => {
     if (!pickerOpen) return;
@@ -199,13 +208,14 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn }: Me
           {/* Avatar */}
           <div
             onClick={handleProfileClick}
+            onContextMenu={handleContextMenu}
             className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition-opacity`}
           >
             {authorName.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 mb-0.5">
-              <span onClick={handleProfileClick} className={`font-semibold text-[15px] cursor-pointer hover:underline ${isOwn ? 'text-riptide-accent-hover' : color}`}>
+              <span onClick={handleProfileClick} onContextMenu={handleContextMenu} className={`font-semibold text-[15px] cursor-pointer hover:underline ${isOwn ? 'text-riptide-accent-hover' : color}`}>
                 {authorName}
               </span>
               <span className="text-[11px] text-riptide-text-dim/80 select-none">
