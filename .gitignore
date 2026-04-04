@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+frontend/node_modules/
+package-lock.json
 vendor/
 
 # Build output
@@ -21,3 +23,6 @@ Thumbs.db
 # Docker volumes
 pgdata/
 minio_data/
+
+# Cursor
+.cursor/
