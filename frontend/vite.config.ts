@@ -1,7 +1,13 @@
-/// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+
+const vendorChunks: Record<string, string[]> = {
+  'vendor-react': ['react', 'react-dom'],
+  'vendor-motion': ['framer-motion'],
+  'vendor-livekit': ['livekit-client'],
+  'vendor-misc': ['zustand', 'date-fns'],
+};
 
 export default defineConfig({
   plugins: [react()],
@@ -18,11 +24,12 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-motion': ['framer-motion'],
-          'vendor-livekit': ['livekit-client'],
-          'vendor-misc': ['zustand', 'date-fns'],
+        manualChunks(id: string) {
+          for (const [chunk, deps] of Object.entries(vendorChunks)) {
+            if (deps.some((dep) => id.includes(`/node_modules/${dep}/`))) {
+              return chunk;
+            }
+          }
         },
       },
     },
