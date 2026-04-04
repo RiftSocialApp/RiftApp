@@ -5,11 +5,14 @@ on:
     branches: [main]
     paths: [frontend/**]
   pull_request:
+    branches: [main]
     paths: [frontend/**]
   workflow_dispatch:
 
 jobs:
   build-and-deploy:
+    # Manual runs only build on main (dispatch from other branches is a no-op).
+    if: github.event_name != 'workflow_dispatch' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: Production
     permissions:
