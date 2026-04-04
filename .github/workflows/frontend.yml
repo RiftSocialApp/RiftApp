@@ -12,6 +12,8 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     environment: Production
+    permissions:
+      contents: read
     defaults:
       run:
         working-directory: frontend
@@ -29,13 +31,24 @@ jobs:
           VITE_API_URL: ${{ vars.VITE_API_URL }}
           VITE_WS_URL: ${{ vars.VITE_WS_URL }}
 
+      # Wrangler runs with workingDirectory: frontend — deploy path must be `dist`, not `frontend/dist`.
+      - name: Verify build output for Pages deploy
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        working-directory: frontend
+        run: |
+          test -d dist || { echo "::error::frontend/dist is missing after build"; exit 1; }
+          test -n "${{ vars.CF_PAGES_PROJECT }}" || { echo "::error::Set GitHub variable CF_PAGES_PROJECT (Pages project name) on the Production environment or repository"; exit 1; }
+
       - name: Deploy to Cloudflare Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: pages
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages deploy frontend/dist --project-name=${{ vars.CF_PAGES_PROJECT }}
+          workingDirectory: frontend
+          packageManager: npm
+          command: pages deploy dist --project-name="${{ vars.CF_PAGES_PROJECT }}"
 
       - name: Discord notification (success)
         if: success() && github.event_name == 'push'
