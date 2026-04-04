@@ -10,9 +10,11 @@ interface NotificationState {
   addNotification: (notif: Notification) => void;
   markNotifRead: (notifId: string) => Promise<void>;
   markAllNotifsRead: () => Promise<void>;
+  /** Mark all unread notifications tied to a text channel as read (e.g. after opening #channel). */
+  markStreamNotificationsRead: (streamId: string) => Promise<void>;
 }
 
-export const useNotificationStore = create<NotificationState>((set) => ({
+export const useNotificationStore = create<NotificationState>((set, get) => ({
   notifications: [],
   unreadCount: 0,
 
@@ -32,9 +34,10 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   addNotification: (notif) => {
     set((s) => {
       if (s.notifications.some((n) => n.id === notif.id)) return s;
+      const notifications = [notif, ...s.notifications];
       return {
-        notifications: [notif, ...s.notifications],
-        unreadCount: s.unreadCount + (notif.read ? 0 : 1),
+        notifications,
+        unreadCount: notifications.filter((n) => !n.read).length,
       };
     });
   },
@@ -42,13 +45,38 @@ export const useNotificationStore = create<NotificationState>((set) => ({
   markNotifRead: async (notifId) => {
     try {
       await api.markNotificationRead(notifId);
-      set((s) => ({
-        notifications: s.notifications.map((n) =>
+      set((s) => {
+        const notifications = s.notifications.map((n) =>
           n.id === notifId ? { ...n, read: true } : n
-        ),
-        unreadCount: Math.max(0, s.unreadCount - 1),
-      }));
+        );
+        return {
+          notifications,
+          unreadCount: notifications.filter((n) => !n.read).length,
+        };
+      });
     } catch {}
+  },
+
+  markStreamNotificationsRead: async (streamId) => {
+    const ids = get()
+      .notifications.filter((n) => !n.read && n.stream_id === streamId)
+      .map((n) => n.id);
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    try {
+      await Promise.all(ids.map((id) => api.markNotificationRead(id)));
+    } catch {
+      return;
+    }
+    set((s) => {
+      const notifications = s.notifications.map((n) =>
+        idSet.has(n.id) ? { ...n, read: true } : n
+      );
+      return {
+        notifications,
+        unreadCount: notifications.filter((n) => !n.read).length,
+      };
+    });
   },
 
   markAllNotifsRead: async () => {

@@ -89,6 +89,11 @@
     @apply absolute left-0 w-1 bg-white rounded-r-full transition-all duration-300 ease-out;
   }
 
+  /* Discord-style quiet unread (non-mention) — small capsule on the rail edge */
+  .hub-unread-smidge {
+    @apply absolute left-0 top-1/2 z-[8] w-1 h-[10px] -translate-y-1/2 rounded-r-full bg-white pointer-events-none;
+  }
+
   /* Channel item styling */
   .channel-item {
     @apply w-full text-left px-2 py-1.5 rounded-md text-[15px] flex items-center gap-1.5 transition-all duration-150 cursor-pointer;

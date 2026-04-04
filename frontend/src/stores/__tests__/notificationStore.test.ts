@@ -15,7 +15,7 @@ const mockedApi = vi.mocked(api);
 
 describe('notificationStore', () => {
   beforeEach(() => {
-    useNotificationStore.setState({ notifications: [] });
+    useNotificationStore.setState({ notifications: [], unreadCount: 0 });
     vi.clearAllMocks();
   });
 

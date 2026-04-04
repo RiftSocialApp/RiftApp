@@ -8,8 +8,6 @@ import { useWsSend } from '../../hooks/useWebSocket';
 import MessageInput from './MessageInput';
 import MessageItem from './MessageItem';
 import TypingIndicator from './TypingIndicator';
-import NotificationBell from '../notifications/NotificationBell';
-
 export default function ChatPanel() {
   const messages = useMessageStore((s) => s.messages);
   const messagesLoading = useMessageStore((s) => s.messagesLoading);
@@ -140,7 +138,6 @@ export default function ChatPanel() {
             </>
           )}
         </div>
-        <NotificationBell />
       </div>
 
       {/* Messages */}

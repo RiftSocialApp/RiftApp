@@ -14,16 +14,19 @@ import { useWebSocket } from '../../hooks/useWebSocket';
 import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useDMStore } from '../../stores/dmStore';
+import { useNotificationStore } from '../../stores/notificationStore';
 
 export default function AppLayout() {
   useWebSocket();
   const loadHubs = useHubStore((s) => s.loadHubs);
+  const loadNotifications = useNotificationStore((s) => s.loadNotifications);
   const activeConversationId = useDMStore((s) => s.activeConversationId);
   const params = useParams<{ hubId?: string; streamId?: string; conversationId?: string }>();
 
   useEffect(() => {
     loadHubs();
-  }, [loadHubs]);
+    loadNotifications();
+  }, [loadHubs, loadNotifications]);
 
   useEffect(() => {
     if (params.hubId) {

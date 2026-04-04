@@ -3,8 +3,6 @@ import { Track } from 'livekit-client';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useVoiceStore, type VoiceParticipant } from '../../stores/voiceStore';
-import NotificationBell from '../notifications/NotificationBell';
-
 export default function VoiceView() {
   const connected = useVoiceStore((s) => s.connected);
   const connecting = useVoiceStore((s) => s.connecting);
@@ -43,7 +41,6 @@ export default function VoiceView() {
             </span>
           )}
         </div>
-        <NotificationBell />
       </div>
 
       {/* Main content */}

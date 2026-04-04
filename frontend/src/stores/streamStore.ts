@@ -9,6 +9,8 @@ interface StreamState {
   viewingVoiceStreamId: string | null;
   streamUnreads: Record<string, number>;
   lastReadMessageIds: Record<string, string>;
+  /** stream_id → hub_id for cross-hub unread indicators */
+  streamHubMap: Record<string, string>;
   voiceMembers: Record<string, string[]>; // streamId -> userIds currently in voice
 
   loadStreams: (hubId: string) => Promise<void>;
@@ -33,6 +35,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   viewingVoiceStreamId: null,
   streamUnreads: {},
   lastReadMessageIds: {},
+  streamHubMap: {},
   voiceMembers: {},
 
   loadStreams: async (hubId) => {
@@ -43,7 +46,13 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     ]);
     const { useHubStore } = await import('./hubStore');
     if (useHubStore.getState().activeHubId !== hubId) return;
-    set({ streams, categories, voiceMembers: voiceStates });
+    set((s) => {
+      const streamHubMap = { ...s.streamHubMap };
+      for (const st of streams) {
+        streamHubMap[st.id] = hubId;
+      }
+      return { streams, categories, voiceMembers: voiceStates, streamHubMap };
+    });
 
     const textStream = streams.find((s) => s.type === 0);
     if (textStream) {
@@ -58,11 +67,13 @@ export const useStreamStore = create<StreamState>((set, get) => ({
 
   setActiveStream: async (streamId) => {
     const { useMessageStore } = await import('./messageStore');
+    const { useNotificationStore } = await import('./notificationStore');
 
     set({ activeStreamId: streamId, viewingVoiceStreamId: null });
     useMessageStore.getState().clearMessages();
     await useMessageStore.getState().loadMessages(streamId);
     await get().ackStream(streamId);
+    await useNotificationStore.getState().markStreamNotificationsRead(streamId);
   },
 
   setViewingVoice: (streamId) => {
@@ -94,15 +105,17 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       const states = await api.getReadStates(hubId);
       const { useHubStore } = await import('./hubStore');
       if (useHubStore.getState().activeHubId !== hubId) return;
-      const unreads: Record<string, number> = {};
-      const lastRead: Record<string, string> = {};
-      for (const rs of states) {
-        unreads[rs.stream_id] = rs.unread_count;
-        if (rs.last_read_message_id) {
-          lastRead[rs.stream_id] = rs.last_read_message_id;
+      set((s) => {
+        const streamUnreads = { ...s.streamUnreads };
+        const lastReadMessageIds = { ...s.lastReadMessageIds };
+        for (const rs of states) {
+          streamUnreads[rs.stream_id] = rs.unread_count;
+          if (rs.last_read_message_id) {
+            lastReadMessageIds[rs.stream_id] = rs.last_read_message_id;
+          }
         }
-      }
-      set({ streamUnreads: unreads, lastReadMessageIds: lastRead });
+        return { streamUnreads, lastReadMessageIds };
+      });
     } catch {}
   },
 
@@ -122,16 +135,28 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   },
 
   incrementUnread: (streamId) => {
-    set((s) => ({
-      streamUnreads: {
-        ...s.streamUnreads,
-        [streamId]: (s.streamUnreads[streamId] || 0) + 1,
-      },
-    }));
+    set((s) => {
+      const st = s.streams.find((x) => x.id === streamId);
+      const streamHubMap =
+        st != null ? { ...s.streamHubMap, [streamId]: st.hub_id } : s.streamHubMap;
+      return {
+        streamHubMap,
+        streamUnreads: {
+          ...s.streamUnreads,
+          [streamId]: (s.streamUnreads[streamId] || 0) + 1,
+        },
+      };
+    });
   },
 
   clearStreams: () => {
-    set({ streams: [], categories: [], activeStreamId: null, viewingVoiceStreamId: null, streamUnreads: {}, lastReadMessageIds: {}, voiceMembers: {} });
+    set({
+      streams: [],
+      categories: [],
+      activeStreamId: null,
+      viewingVoiceStreamId: null,
+      voiceMembers: {},
+    });
   },
 
   loadVoiceStates: async (hubId) => {

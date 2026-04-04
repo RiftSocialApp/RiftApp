@@ -4,9 +4,43 @@ import { useHubStore } from '../../stores/hubStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useMessageStore } from '../../stores/messageStore';
+import { useNotificationStore } from '../../stores/notificationStore';
 import { api } from '../../api/client';
-import type { Hub } from '../../types';
+import type { Hub, Notification } from '../../types';
 import InviteToServerModal from '../modals/InviteToServerModal';
+
+function hubMentionCount(notifications: Notification[], hubId: string) {
+  return notifications.filter(
+    (n) => !n.read && n.hub_id === hubId && n.type === 'mention'
+  ).length;
+}
+
+/** Quiet activity: channel unreads (when not viewing that hub) or non-mention notifications (invites, etc.). */
+function hubHasQuietUnread(
+  hubId: string,
+  activeHubId: string | null,
+  notifications: Notification[],
+  streamUnreads: Record<string, number>,
+  streamHubMap: Record<string, string>
+) {
+  const notifQuiet = notifications.some(
+    (n) => !n.read && n.hub_id === hubId && n.type !== 'mention'
+  );
+  if (activeHubId === hubId) {
+    return notifQuiet;
+  }
+  return (
+    notifQuiet ||
+    Object.entries(streamUnreads).some(
+      ([sid, c]) => (c ?? 0) > 0 && streamHubMap[sid] === hubId
+    )
+  );
+}
+
+function formatMentionBadge(n: number) {
+  if (n <= 0) return '';
+  return n > 9 ? '9+' : String(n);
+}
 
 function extractInviteCode(input: string): string {
   const trimmed = input.trim();
@@ -31,6 +65,11 @@ export default function HubSidebar() {
   const [dmHovered, setDmHovered] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hub: Hub } | null>(null);
   const [inviteHub, setInviteHub] = useState<Hub | null>(null);
+
+  const notifications = useNotificationStore((s) => s.notifications);
+  const streamUnreads = useStreamStore((s) => s.streamUnreads);
+  const streamHubMap = useStreamStore((s) => s.streamHubMap);
+  const dmTotalUnread = useDMStore((s) => s.dmTotalUnread);
 
   const isDMMode = !activeHubId;
 
@@ -95,12 +134,20 @@ export default function HubSidebar() {
         />
         <button
           onClick={handleDMClick}
-          className={`hub-icon ${isDMMode ? 'hub-icon-active shadow-glow-sm' : 'hub-icon-idle'}`}
+          className={`hub-icon relative ${isDMMode ? 'hub-icon-active shadow-glow-sm' : 'hub-icon-idle'}`}
           title="Direct Messages"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
           </svg>
+          {dmTotalUnread > 0 && (
+            <span
+              className="absolute -bottom-1 -right-1 z-20 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-[11px] font-bold text-white border-2 border-riptide-bg leading-none"
+              aria-label={`${dmTotalUnread} unread direct messages`}
+            >
+              {formatMentionBadge(dmTotalUnread)}
+            </span>
+          )}
         </button>
         {dmHovered && (
           <div className="absolute left-[68px] z-50 px-3 py-1.5 rounded-lg bg-riptide-panel text-sm text-riptide-text shadow-elevation-high font-medium whitespace-nowrap animate-fade-in pointer-events-none">
@@ -116,6 +163,14 @@ export default function HubSidebar() {
       {hubs.map((hub) => {
         const isActive = activeHubId === hub.id;
         const isHovered = hoveredId === hub.id;
+        const mentions = hubMentionCount(notifications, hub.id);
+        const quietUnread = hubHasQuietUnread(
+          hub.id,
+          activeHubId,
+          notifications,
+          streamUnreads,
+          streamHubMap
+        );
 
         return (
           <div
@@ -135,12 +190,14 @@ export default function HubSidebar() {
               }`}
             />
 
+            {quietUnread && <div className="hub-unread-smidge" aria-hidden />}
+
             {/* Hub icon with Discord-style morph */}
             <button
               onClick={() => setActiveHub(hub.id)}
               onContextMenu={(e) => { e.preventDefault(); setContextMenu({ x: e.clientX, y: e.clientY, hub }); }}
               title={hub.name}
-              className={`hub-icon ${isActive ? 'hub-icon-active shadow-glow-sm' : 'hub-icon-idle'}`}
+              className={`hub-icon relative ${isActive ? 'hub-icon-active shadow-glow-sm' : 'hub-icon-idle'}`}
             >
               {hub.icon_url ? (
                 <img
@@ -150,6 +207,14 @@ export default function HubSidebar() {
                 />
               ) : (
                 hub.name.slice(0, 2).toUpperCase()
+              )}
+              {mentions > 0 && (
+                <span
+                  className="absolute -bottom-1 -right-1 z-20 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-[11px] font-bold text-white border-2 border-riptide-bg leading-none"
+                  aria-label={`${mentions} mentions`}
+                >
+                  {formatMentionBadge(mentions)}
+                </span>
               )}
             </button>
 
