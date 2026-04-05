@@ -252,9 +252,10 @@ interface MessageItemProps {
   isDM?: boolean;
   /** Active hub (for message link in context menu). */
   hubId?: string | null;
+  isPreview?: boolean;
 }
 
-const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM = false, hubId = null }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM = false, hubId = null, isPreview = false }: MessageItemProps) {
   const author = message.author;
   const authorName = author?.display_name || 'Unknown';
   const toggleReaction = useMessageStore((s) => s.toggleReaction);
@@ -298,13 +299,15 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   const pickerRef = useRef<HTMLDivElement>(null);
   const openProfile = useProfilePopoverStore((s) => s.open);
   const openContextMenu = useUserContextMenuStore((s) => s.open);
+  const interactionsDisabled = isPreview;
 
   const handleMentionClick = useCallback((username: string, rect: DOMRect) => {
+    if (interactionsDisabled) return;
     const user = Object.values(hubMembers).find(
       (u) => u.username.toLowerCase() === username.toLowerCase(),
     );
     if (user) openProfile(user, rect);
-  }, [hubMembers, openProfile]);
+  }, [hubMembers, interactionsDisabled, openProfile]);
 
   const hubEmojis = useEmojiStore((s) => (activeHubId ? s.hubEmojis[activeHubId] : undefined));
 
@@ -332,23 +335,26 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   }, [message.content, currentUsername]);
 
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
+    if (interactionsDisabled) return;
     if (author) {
       openProfile(author, (e.currentTarget as HTMLElement).getBoundingClientRect());
     }
-  }, [author, openProfile]);
+  }, [author, interactionsDisabled, openProfile]);
 
   const handleUserContextMenu = useCallback(
     (e: React.MouseEvent) => {
+      if (interactionsDisabled) return;
       e.stopPropagation();
       if (author) {
         e.preventDefault();
         openContextMenu(author, e.clientX, e.clientY);
       }
     },
-    [author, openContextMenu],
+    [author, interactionsDisabled, openContextMenu],
   );
 
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
+    if (interactionsDisabled) return;
     e.preventDefault();
     // Detect if the right-click target is a media element
     const target = e.target as HTMLElement;
@@ -363,7 +369,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       if (video?.src) mediaUrl = video.src;
     }
     setMessageMenu({ x: e.clientX, y: e.clientY, mediaUrl });
-  }, []);
+  }, [interactionsDisabled]);
 
   useEffect(() => {
     if (!editing) {
@@ -412,6 +418,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   }, [pickerOpen]);
 
   const handleToggle = (emoji: string, emojiId?: string) => {
+    if (interactionsDisabled) return;
     toggleReaction(message.id, emoji, emojiId);
     setPickerOpen(false);
   };
@@ -495,80 +502,84 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
         </div>
       </div>
     ) : (
-      <>
+      <div className={interactionsDisabled ? 'pointer-events-none' : undefined}>
         <div className="text-[15px] leading-[1.375rem] text-riftapp-text/[0.90]">{renderedContent}</div>
         <Attachments message={message} />
         {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} />}
         {reactions.length > 0 && (
           <ReactionPills reactions={reactions} currentUserId={currentUserId} onToggle={handleToggle} />
         )}
-      </>
+      </div>
     );
 
   return (
     <div
-      onContextMenu={handleMessageContextMenu}
-      className={`group relative py-0.5 -mx-4 px-4 transition-colors duration-100 ${
-        mentionsSelf
-          ? 'bg-riftapp-mention-highlight-bg border-l-[3px] border-riftapp-mention-highlight-border hover:bg-riftapp-mention-highlight-hover'
-          : 'hover:bg-riftapp-surface/20'
-      } ${
-        showHeader ? 'mt-[17px]' : ''
-      }`}
+      onContextMenu={interactionsDisabled ? undefined : handleMessageContextMenu}
+      className={isPreview
+        ? 'relative rounded-xl'
+        : `group relative py-0.5 -mx-4 px-4 transition-colors duration-100 ${
+            mentionsSelf
+              ? 'bg-riftapp-mention-highlight-bg border-l-[3px] border-riftapp-mention-highlight-border hover:bg-riftapp-mention-highlight-hover'
+              : 'hover:bg-riftapp-surface/20'
+          } ${
+            showHeader ? 'mt-[17px]' : ''
+          }`}
     >
 
 
       {/* Hover action bar */}
-      <div className="absolute -top-3 right-4 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out z-10">
-        <div className="flex items-center bg-riftapp-surface border border-riftapp-border/60 rounded-lg shadow-elevation-low">
-          <button
-            onClick={() => setPickerOpen((v) => !v)}
-            className="px-2 py-1 text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-surface-hover rounded-lg transition-colors duration-100"
-            title="Add Reaction"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-              <line x1="9" y1="9" x2="9.01" y2="9" />
-              <line x1="15" y1="9" x2="15.01" y2="9" />
-            </svg>
-          </button>
-          {canDelete && (
+      {!isPreview && (
+        <div className="absolute -top-3 right-4 opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 ease-out z-10">
+          <div className="flex items-center bg-riftapp-surface border border-riftapp-border/60 rounded-lg shadow-elevation-low">
             <button
-              type="button"
-              onClick={(e) => handleDeleteClick(e)}
-              disabled={deleting}
-              className="px-2 py-1 text-riftapp-text-dim hover:text-riftapp-danger hover:bg-riftapp-danger/10 rounded-lg transition-colors duration-100 disabled:opacity-50 border-l border-riftapp-border/40"
-              title={isOwn ? 'Delete message' : 'Delete message (moderator)'}
+              onClick={() => setPickerOpen((v) => !v)}
+              className="px-2 py-1 text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-surface-hover rounded-lg transition-colors duration-100"
+              title="Add Reaction"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="3 6 5 6 21 6" />
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                <line x1="10" y1="11" x2="10" y2="17" />
-                <line x1="14" y1="11" x2="14" y2="17" />
+                <circle cx="12" cy="12" r="10" />
+                <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                <line x1="9" y1="9" x2="9.01" y2="9" />
+                <line x1="15" y1="9" x2="15.01" y2="9" />
               </svg>
             </button>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={(e) => handleDeleteClick(e)}
+                disabled={deleting}
+                className="px-2 py-1 text-riftapp-text-dim hover:text-riftapp-danger hover:bg-riftapp-danger/10 rounded-lg transition-colors duration-100 disabled:opacity-50 border-l border-riftapp-border/40"
+                title={isOwn ? 'Delete message' : 'Delete message (moderator)'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6" />
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                  <line x1="10" y1="11" x2="10" y2="17" />
+                  <line x1="14" y1="11" x2="14" y2="17" />
+                </svg>
+              </button>
+            )}
+          </div>
+          {/* Emoji picker */}
+          {pickerOpen && (
+            <div ref={pickerRef} className="absolute right-0 top-full mt-1 z-50">
+              <EmojiPicker
+                hubId={activeHubId}
+                onSelect={handlePickerSelect}
+                onClose={() => setPickerOpen(false)}
+              />
+            </div>
           )}
         </div>
-        {/* Emoji picker */}
-        {pickerOpen && (
-          <div ref={pickerRef} className="absolute right-0 top-full mt-1 z-50">
-            <EmojiPicker
-              hubId={activeHubId}
-              onSelect={handlePickerSelect}
-              onClose={() => setPickerOpen(false)}
-            />
-          </div>
-        )}
-      </div>
+      )}
 
       {showHeader ? (
         <div className="flex gap-3">
           {/* Avatar */}
           <div
-            onClick={handleProfileClick}
-            onContextMenu={handleUserContextMenu}
-            className="w-10 h-10 rounded-full flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
+            onClick={interactionsDisabled ? undefined : handleProfileClick}
+            onContextMenu={interactionsDisabled ? undefined : handleUserContextMenu}
+            className={`w-10 h-10 rounded-full flex-shrink-0 mt-0.5 overflow-hidden ${interactionsDisabled ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}`}
           >
             {author?.avatar_url ? (
               <img src={publicAssetUrl(author.avatar_url)} alt={authorName} className="w-full h-full object-cover" />
@@ -580,7 +591,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 mb-0.5">
-              <span onClick={handleProfileClick} onContextMenu={handleUserContextMenu} className={`font-semibold text-[15px] cursor-pointer hover:underline ${isOwn ? 'text-riftapp-accent-hover' : color}`}>
+              <span onClick={interactionsDisabled ? undefined : handleProfileClick} onContextMenu={interactionsDisabled ? undefined : handleUserContextMenu} className={`font-semibold text-[15px] ${interactionsDisabled ? '' : 'cursor-pointer hover:underline'} ${isOwn ? 'text-riftapp-accent-hover' : color}`}>
                 {authorName}
               </span>
               <span className="text-[11px] text-riftapp-text-dim/80 select-none">
@@ -597,7 +608,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
         <div className="pl-[52px]">{contentBlock}</div>
       )}
 
-      {messageMenu && (
+      {!isPreview && messageMenu && (
         <MessageContextMenu
           message={message}
           x={messageMenu.x}
