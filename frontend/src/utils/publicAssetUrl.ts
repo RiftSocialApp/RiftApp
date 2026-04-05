@@ -13,7 +13,7 @@ export function publicAssetUrl(raw: string | undefined | null): string {
     // ── Relative paths ──────────────────────────────────────────────
     if (trimmed.startsWith('/')) {
       if (trimmed.startsWith('/api/s3/')) return trimmed;
-      if (trimmed.startsWith('/s3/')) {
+      if (trimmed.startsWith('/s3/') && looksLikeS3Path(trimmed)) {
         return proxyMode ? `/api${trimmed}` : trimmed;
       }
       return trimmed;
@@ -23,8 +23,7 @@ export function publicAssetUrl(raw: string | undefined | null): string {
     const u = new URL(trimmed);
     const pathAndQuery = `${u.pathname}${u.search}${u.hash}`;
 
-    // Path already contains /s3/ — definitely a storage URL.
-    if (pathAndQuery.startsWith('/s3/')) {
+    if (pathAndQuery.startsWith('/s3/') && looksLikeS3Path(pathAndQuery)) {
       return proxyMode ? `/api${pathAndQuery}` : trimmed;
     }
 
@@ -40,7 +39,15 @@ export function publicAssetUrl(raw: string | undefined | null): string {
   }
 }
 
-/** Detect hosts that are clearly internal MinIO / S3 endpoints, not public CDNs. */
+// /s3/{bucket}/{object} where bucket is a single word (not "avatars", "icons", etc.)
+// This filters out Discord CDN paths that were incorrectly prefixed with /s3 by migration 009.
+const S3_BUCKET = (import.meta.env.VITE_S3_BUCKET as string | undefined)?.trim() || 'riftapp';
+function looksLikeS3Path(p: string): boolean {
+  const afterS3 = p.slice('/s3/'.length);
+  return afterS3.startsWith(`${S3_BUCKET}/`);
+}
+
+
 function isInternalStorageHost(u: URL): boolean {
   const h = u.hostname;
   if (h === 'minio' || h === 'localhost' || h === '127.0.0.1') return true;
