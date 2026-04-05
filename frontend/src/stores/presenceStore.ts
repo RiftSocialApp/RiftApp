@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { User } from '../types';
 import { api } from '../api/client';
+import { normalizeUser, normalizeUsers } from '../utils/entityAssets';
 
 interface PresenceState {
   presence: Record<string, number>;
@@ -10,6 +11,7 @@ interface PresenceState {
   setPresence: (userId: string, status: number) => void;
   setBulkPresence: (entries: Record<string, number>) => void;
   loadPresenceForHub: (hubId: string) => Promise<void>;
+  mergeUser: (user: User) => void;
 
   addTyper: (streamId: string, userId: string) => void;
   removeTyper: (streamId: string, userId: string) => void;
@@ -36,7 +38,7 @@ export const usePresenceStore = create<PresenceState>((set) => ({
 
   loadPresenceForHub: async (hubId) => {
     try {
-      const members = await api.getHubMembers(hubId);
+      const members = normalizeUsers(await api.getHubMembers(hubId));
       const entries: Record<string, number> = {};
       const memberMap: Record<string, User> = {};
       for (const m of members) {
@@ -48,6 +50,18 @@ export const usePresenceStore = create<PresenceState>((set) => ({
         hubMembers: memberMap,
       }));
     } catch {}
+  },
+
+  mergeUser: (user) => {
+    const nextUser = normalizeUser(user);
+    set((s) => ({
+      presence: s.presence[nextUser.id] === nextUser.status
+        ? s.presence
+        : { ...s.presence, [nextUser.id]: nextUser.status },
+      hubMembers: s.hubMembers[nextUser.id]
+        ? { ...s.hubMembers, [nextUser.id]: { ...s.hubMembers[nextUser.id], ...nextUser } }
+        : s.hubMembers,
+    }));
   },
 
   addTyper: (streamId, userId) => {

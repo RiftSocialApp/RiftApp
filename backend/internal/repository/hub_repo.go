@@ -26,8 +26,8 @@ func (r *HubRepo) Create(ctx context.Context, hub *models.Hub, ownerRole string)
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx,
-		`INSERT INTO hubs (id, name, owner_id, created_at) VALUES ($1, $2, $3, $4)`,
-		hub.ID, hub.Name, hub.OwnerID, hub.CreatedAt)
+		`INSERT INTO hubs (id, name, owner_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5)`,
+		hub.ID, hub.Name, hub.OwnerID, hub.CreatedAt, hub.UpdatedAt)
 	if err != nil {
 		return err
 	}
@@ -52,8 +52,8 @@ func (r *HubRepo) CreateDefaultStream(ctx context.Context, streamID, hubID strin
 func (r *HubRepo) GetByID(ctx context.Context, hubID string) (*models.Hub, error) {
 	var hub models.Hub
 	err := r.db.QueryRow(ctx,
-		`SELECT id, name, owner_id, icon_url, banner_url, created_at FROM hubs WHERE id = $1`, hubID,
-	).Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt)
+		`SELECT id, name, owner_id, icon_url, banner_url, created_at, updated_at FROM hubs WHERE id = $1`, hubID,
+	).Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt, &hub.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (r *HubRepo) GetByID(ctx context.Context, hubID string) (*models.Hub, error
 
 func (r *HubRepo) ListByUser(ctx context.Context, userID string) ([]models.Hub, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT h.id, h.name, h.owner_id, h.icon_url, h.banner_url, h.created_at
+		`SELECT h.id, h.name, h.owner_id, h.icon_url, h.banner_url, h.created_at, h.updated_at
 		 FROM hubs h JOIN hub_members hm ON h.id = hm.hub_id
 		 WHERE hm.user_id = $1
 		 ORDER BY h.created_at`, userID)
@@ -74,7 +74,7 @@ func (r *HubRepo) ListByUser(ctx context.Context, userID string) ([]models.Hub, 
 	var hubs []models.Hub
 	for rows.Next() {
 		var hub models.Hub
-		if err := rows.Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt); err != nil {
+		if err := rows.Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt, &hub.UpdatedAt); err != nil {
 			return nil, err
 		}
 		hubs = append(hubs, hub)
@@ -109,6 +109,7 @@ func (r *HubRepo) Update(ctx context.Context, hubID string, name *string, iconUR
 	if len(setClauses) == 0 {
 		return r.GetByID(ctx, hubID)
 	}
+	setClauses = append(setClauses, "updated_at = now()")
 
 	query := "UPDATE hubs SET "
 	for i, c := range setClauses {
@@ -117,10 +118,10 @@ func (r *HubRepo) Update(ctx context.Context, hubID string, name *string, iconUR
 		}
 		query += c
 	}
-	query += " WHERE id = $1 RETURNING id, name, owner_id, icon_url, banner_url, created_at"
+	query += " WHERE id = $1 RETURNING id, name, owner_id, icon_url, banner_url, created_at, updated_at"
 
 	var hub models.Hub
-	err := r.db.QueryRow(ctx, query, args...).Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt)
+	err := r.db.QueryRow(ctx, query, args...).Scan(&hub.ID, &hub.Name, &hub.OwnerID, &hub.IconURL, &hub.BannerURL, &hub.CreatedAt, &hub.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

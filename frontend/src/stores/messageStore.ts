@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { Message } from '../types';
+import type { Message, User } from '../types';
 import { api } from '../api/client';
 import { useStreamStore } from './streamStore';
+import { normalizeMessage, normalizeMessages, normalizeUser } from '../utils/entityAssets';
 
 /** In-flight load id so stale responses never overwrite the active channel. */
 let loadMessagesRequestId = 0;
@@ -60,6 +61,7 @@ interface MessageState {
   removeStreamCache: (streamId: string) => void;
   /** Drop all cached streams + visible messages (logout). */
   clearSessionCaches: () => void;
+  patchUser: (user: User) => void;
 
   toggleReaction: (messageId: string, emoji: string, emojiId?: string) => Promise<void>;
   applyReactionAdd: (messageId: string, userId: string, emoji: string, isDM?: boolean, emojiId?: string, fileUrl?: string) => void;
@@ -126,7 +128,7 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     });
 
     try {
-      const fetched = await api.getMessages(streamId);
+      const fetched = normalizeMessages(await api.getMessages(streamId));
       if (!activeOk()) return;
       const merged = mergeMessageLists(cachedEntry?.messages, fetched);
       set((s) => ({
@@ -155,29 +157,30 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   addMessage: (message) => {
+    const nextMessage = normalizeMessage(message);
     const activeStreamId = useStreamStore.getState().activeStreamId;
-    const sid = message.stream_id;
+    const sid = nextMessage.stream_id;
     if (!sid) return;
 
     const prev = get().streamMessagesCache[sid]?.messages ?? [];
-    if (prev.some((m) => m.id === message.id)) {
-      if (sid === activeStreamId && !get().messages.some((m) => m.id === message.id)) {
+    if (prev.some((m) => m.id === nextMessage.id)) {
+      if (sid === activeStreamId && !get().messages.some((m) => m.id === nextMessage.id)) {
         set((s) => ({
-          messages: sortMessagesAsc([...s.messages, message]).slice(-MAX_MESSAGES_PER_STREAM),
+          messages: sortMessagesAsc([...s.messages, nextMessage]).slice(-MAX_MESSAGES_PER_STREAM),
         }));
       }
       return;
     }
 
     set((s) => {
-      const merged = trimMessages([...prev, message]);
+      const merged = trimMessages([...prev, nextMessage]);
       const streamMessagesCache = pruneStreamCaches({
         ...s.streamMessagesCache,
         [sid]: { messages: merged, updatedAt: Date.now() },
       });
       if (sid === activeStreamId) {
         return {
-          messages: sortMessagesAsc([...s.messages, message]).slice(-MAX_MESSAGES_PER_STREAM),
+          messages: sortMessagesAsc([...s.messages, nextMessage]).slice(-MAX_MESSAGES_PER_STREAM),
           streamMessagesCache,
         };
       }
@@ -190,10 +193,11 @@ export const useMessageStore = create<MessageState>((set, get) => ({
   },
 
   updateMessage: (message) => {
+    const nextMessage = normalizeMessage(message);
     set((s) => {
-      const streamMessagesCache = patchCachedMessage(s.streamMessagesCache, message.id, () => message);
+      const streamMessagesCache = patchCachedMessage(s.streamMessagesCache, nextMessage.id, () => nextMessage);
       return {
-        messages: s.messages.map((m) => (m.id === message.id ? message : m)),
+        messages: s.messages.map((m) => (m.id === nextMessage.id ? nextMessage : m)),
         streamMessagesCache,
       };
     });
@@ -236,6 +240,26 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       messagesLoading: false,
       streamMessagesCache: {},
     }),
+
+  patchUser: (user) => {
+    const nextUser = normalizeUser(user);
+    const patchAuthor = (message: Message) => {
+      if (message.author?.id !== nextUser.id) return message;
+      return { ...message, author: { ...message.author, ...nextUser } };
+    };
+    set((s) => ({
+      messages: s.messages.map(patchAuthor),
+      streamMessagesCache: Object.fromEntries(
+        Object.entries(s.streamMessagesCache).map(([streamId, entry]) => [
+          streamId,
+          {
+            messages: entry.messages.map(patchAuthor),
+            updatedAt: entry.updatedAt,
+          },
+        ]),
+      ),
+    }));
+  },
 
   toggleReaction: async (messageId, emoji, emojiId) => {
     await api.addReaction(messageId, emoji, emojiId);

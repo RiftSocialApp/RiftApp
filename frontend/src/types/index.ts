@@ -36,6 +36,7 @@ export interface Hub {
   icon_url?: string;
   banner_url?: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Category {

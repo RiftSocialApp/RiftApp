@@ -33,6 +33,8 @@ const (
 	OpFriendAccept         = "friend_accept"
 	OpFriendRemove         = "friend_remove"
 	OpSoundboardPlay       = "soundboard_play"
+	OpHubUpdate            = "hub_update"
+	OpUserUpdate           = "user_update"
 )
 
 type SubscribeData struct {

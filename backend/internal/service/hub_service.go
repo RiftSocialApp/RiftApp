@@ -51,6 +51,7 @@ func (s *HubService) Create(ctx context.Context, userID, name string) (*models.H
 		Name:      name,
 		OwnerID:   userID,
 		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := s.hubRepo.Create(ctx, hub, models.RoleOwner); err != nil {

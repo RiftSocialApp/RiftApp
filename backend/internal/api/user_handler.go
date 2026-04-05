@@ -9,15 +9,17 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
 	"github.com/riftapp-cloud/riftapp/internal/user"
+	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
 
 // UserHandler handles user profile endpoints.
 type UserHandler struct {
 	service *user.Service
+	hub     *ws.Hub
 }
 
-func NewUserHandler(service *user.Service) *UserHandler {
-	return &UserHandler{service: service}
+func NewUserHandler(service *user.Service, hub *ws.Hub) *UserHandler {
+	return &UserHandler{service: service, hub: hub}
 }
 
 // GetMe returns the authenticated user's full profile.
@@ -56,6 +58,11 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, status, err.Error())
 		return
+	}
+	if h.hub != nil {
+		publicUser := *updated
+		publicUser.Email = nil
+		h.hub.BroadcastUserUpdate(userID, ws.NewEvent(ws.OpUserUpdate, publicUser))
 	}
 
 	writeData(w, http.StatusOK, updated)

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { Friendship, Block } from '../types';
+import type { Friendship, Block, User } from '../types';
 import { api } from '../api/client';
+import { normalizeBlock, normalizeFriendship, normalizeUser } from '../utils/entityAssets';
 
 interface FriendState {
   friends: Friendship[];
@@ -24,6 +25,7 @@ interface FriendState {
   handleFriendRequest: (userId: string) => void;
   handleFriendAccept: (userId: string) => void;
   handleFriendRemove: (userId: string) => void;
+  patchUser: (user: User) => void;
 }
 
 export const useFriendStore = create<FriendState>((set, get) => ({
@@ -37,7 +39,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   loadFriends: async () => {
     set({ loading: true });
     try {
-      const friends = await api.listFriends();
+      const friends = (await api.listFriends()).map(normalizeFriendship);
       set({ friends });
     } finally {
       set({ loading: false });
@@ -49,11 +51,15 @@ export const useFriendStore = create<FriendState>((set, get) => ({
       api.pendingIncoming(),
       api.pendingOutgoing(),
     ]);
-    set({ pendingIncoming: incoming, pendingOutgoing: outgoing, pendingCount: incoming.length });
+    set({
+      pendingIncoming: incoming.map(normalizeFriendship),
+      pendingOutgoing: outgoing.map(normalizeFriendship),
+      pendingCount: incoming.length,
+    });
   },
 
   loadBlocked: async () => {
-    const blocked = await api.listBlocked();
+    const blocked = (await api.listBlocked()).map(normalizeBlock);
     set({ blocked });
   },
 
@@ -124,6 +130,24 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   handleFriendRemove: (userId) => {
     set((s) => ({
       friends: s.friends.filter((f) => f.user?.id !== userId),
+    }));
+  },
+
+  patchUser: (user) => {
+    const nextUser = normalizeUser(user);
+    const patchFriendship = (friendship: Friendship) =>
+      friendship.user?.id === nextUser.id
+        ? { ...friendship, user: { ...friendship.user, ...nextUser } }
+        : friendship;
+    const patchBlock = (block: Block) =>
+      block.user?.id === nextUser.id
+        ? { ...block, user: { ...block.user, ...nextUser } }
+        : block;
+    set((s) => ({
+      friends: s.friends.map(patchFriendship),
+      pendingIncoming: s.pendingIncoming.map(patchFriendship),
+      pendingOutgoing: s.pendingOutgoing.map(patchFriendship),
+      blocked: s.blocked.map(patchBlock),
     }));
   },
 }));

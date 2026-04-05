@@ -9,6 +9,7 @@ import ConfirmModal from '../modals/ConfirmModal';
 import StatusDot from '../shared/StatusDot';
 import type { Hub, User, HubEmoji, HubSticker, HubSound, HubRole } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { normalizeUsers } from '../../utils/entityAssets';
 import {
   hasPermission,
   PermViewStreams,
@@ -605,7 +606,7 @@ function MembersTab({ hub }: { hub: Hub }) {
 
     Promise.all([api.getHubMembers(hub.id), api.getRoles(hub.id)])
       .then(([memberData, roleData]) => {
-        if (!cancelled) setMembers(memberData);
+        if (!cancelled) setMembers(normalizeUsers(memberData));
         if (!cancelled) setRoles(roleData);
       })
       .catch((err) => {
@@ -625,7 +626,7 @@ function MembersTab({ hub }: { hub: Hub }) {
       if (nextRoleId) await api.assignRole(hub.id, member.id, nextRoleId);
       else await api.removeRole(hub.id, member.id);
       const data = await api.getHubMembers(hub.id);
-      setMembers(data);
+      setMembers(normalizeUsers(data));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update role');
     } finally {

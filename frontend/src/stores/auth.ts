@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { HUBS_SESSION_STORAGE_KEY } from './hubStore';
 import { useStreamStore } from './streamStore';
 import { useMessageStore } from './messageStore';
+import { normalizeUser } from '../utils/entityAssets';
 
 interface AuthState {
   user: User | null;
@@ -28,12 +29,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (username, password) => {
     const res = await api.login(username, password);
+    const user = normalizeUser(res.user);
     api.setToken(res.access_token);
     api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riftapp_token', res.access_token);
     localStorage.setItem('riftapp_refresh', res.refresh_token);
     set({
-      user: res.user,
+      user,
       token: res.access_token,
       refreshToken: res.refresh_token,
       isAuthenticated: true,
@@ -42,12 +44,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (username, password, email) => {
     const res = await api.register(username, password, email);
+    const user = normalizeUser(res.user);
     api.setToken(res.access_token);
     api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riftapp_token', res.access_token);
     localStorage.setItem('riftapp_refresh', res.refresh_token);
     set({
-      user: res.user,
+      user,
       token: res.access_token,
       refreshToken: res.refresh_token,
       isAuthenticated: true,
@@ -87,18 +90,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     api.setToken(token);
     api.setRefreshToken(refresh);
     try {
-      const user = await api.getMe();
+      const user = normalizeUser(await api.getMe());
       set({ user, token, refreshToken: refresh, isAuthenticated: true, isLoading: false });
     } catch {
       if (refresh) {
         try {
           const res = await api.refreshToken(refresh);
+          const user = normalizeUser(res.user);
           api.setToken(res.access_token);
           api.setRefreshToken(res.refresh_token);
           localStorage.setItem('riftapp_token', res.access_token);
           localStorage.setItem('riftapp_refresh', res.refresh_token);
           set({
-            user: res.user,
+            user,
             token: res.access_token,
             refreshToken: res.refresh_token,
             isAuthenticated: true,
@@ -112,5 +116,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
   },
 
-  setUser: (user) => set({ user }),
+  setUser: (user) => set((s) => ({
+    user: normalizeUser(
+      s.user?.id === user.id && user.email == null
+        ? { ...s.user, ...user }
+        : user,
+    ),
+  })),
 }));

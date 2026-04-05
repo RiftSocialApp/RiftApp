@@ -6,6 +6,7 @@ import { api } from '../../api/client';
 import StatusDot, { statusLabel } from '../shared/StatusDot';
 import type { User, Friendship, Block } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { normalizeUser } from '../../utils/entityAssets';
 
 type Tab = 'online' | 'all' | 'pending' | 'blocked' | 'add';
 
@@ -233,7 +234,7 @@ function AddFriend() {
     setFoundUser(null);
     try {
       const user = await api.searchUser(q);
-      setFoundUser(user);
+      setFoundUser(normalizeUser(user));
       setStatus('idle');
     } catch {
       setStatus('error');

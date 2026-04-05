@@ -9,6 +9,7 @@ import { statusColor, statusLabel } from '../shared/StatusDot';
 import { useVoiceStore } from '../../stores/voiceStore';
 import type { NoiseSuppressionMode } from '../../stores/voiceStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { stripAssetVersion } from '../../utils/entityAssets';
 
 type Tab = 'profile' | 'account' | 'voice';
 
@@ -214,10 +215,11 @@ function ProfileTab({
   user: NonNullable<ReturnType<typeof useAuthStore.getState>['user']>;
   setUser: (u: typeof user) => void;
 }) {
+  const savedAvatarUrl = stripAssetVersion(user.avatar_url);
   const [username, setUsername] = useState(user.username);
   const [displayName, setDisplayName] = useState(user.display_name);
   const [bio, setBio] = useState(user.bio ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(user.avatar_url ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(savedAvatarUrl);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -253,7 +255,7 @@ function ProfileTab({
     username !== user.username ||
     displayName !== user.display_name ||
     bio !== (user.bio ?? '') ||
-    avatarUrl !== (user.avatar_url ?? '');
+    avatarUrl !== savedAvatarUrl;
 
   const handleSave = async () => {
     setError(null);
@@ -264,11 +266,13 @@ function ProfileTab({
     if (username !== user.username) patch.username = username;
     if (displayName !== user.display_name) patch.display_name = displayName;
     if (bio !== (user.bio ?? '')) patch.bio = bio;
-    if (avatarUrl !== (user.avatar_url ?? '')) patch.avatar_url = avatarUrl;
+    if (avatarUrl !== savedAvatarUrl) patch.avatar_url = avatarUrl;
 
     try {
       const updated = await api.updateMe(patch);
       setUser(updated);
+      setAvatarUrl(stripAssetVersion(updated.avatar_url));
+      setAvatarPreview(null);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 2000);
     } catch (err: unknown) {

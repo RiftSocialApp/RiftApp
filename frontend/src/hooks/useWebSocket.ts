@@ -6,7 +6,10 @@ import { usePresenceStore } from '../stores/presenceStore';
 import { useNotificationStore } from '../stores/notificationStore';
 import { useDMStore } from '../stores/dmStore';
 import { useFriendStore } from '../stores/friendStore';
-import type { Message, Notification, Conversation, WSEvent } from '../types';
+import { useHubStore } from '../stores/hubStore';
+import { useVoiceStore } from '../stores/voiceStore';
+import type { Message, Notification, Conversation, Hub, User, WSEvent } from '../types';
+import { publicAssetUrl } from '../utils/publicAssetUrl';
 
 const HEARTBEAT_INTERVAL = 30000;
 const TYPING_EXPIRE_MS = 3000;
@@ -199,14 +202,41 @@ export function useWebSocket() {
             useFriendStore.getState().handleFriendRemove(user_id);
             break;
           }
+          case 'hub_update': {
+            useHubStore.getState().applyHubUpdate(evt.d as Hub);
+            break;
+          }
+          case 'user_update': {
+            const user = evt.d as User;
+            const authState = useAuthStore.getState();
+            if (authState.user?.id === user.id) {
+              authState.setUser(user);
+            }
+            usePresenceStore.getState().mergeUser(user);
+            useMessageStore.getState().patchUser(user);
+            useDMStore.getState().patchUser(user);
+            useFriendStore.getState().patchUser(user);
+            useNotificationStore.getState().patchUser(user);
+            break;
+          }
           case 'soundboard_play': {
-            const { file_url } = evt.d as { sound_id: string; name: string; file_url: string; user_id: string };
+            const { stream_id, file_url, user_id } = evt.d as { stream_id: string; sound_id: string; name: string; file_url: string; user_id: string };
+            const voiceState = useVoiceStore.getState();
+            if (!voiceState.connected || voiceState.streamId !== stream_id) {
+              break;
+            }
+
+            voiceState.triggerSoundboardSpeaking(user_id, 1600);
+
             // Play the sound locally for this user (all voice channel users receive this event)
             try {
-              // file_url is an S3 path like /s3/bucket/key — route through API proxy
-              const url = file_url.startsWith('/s3/') ? `/api${file_url}` : file_url;
+              const url = publicAssetUrl(file_url);
               const audio = new Audio(url);
               audio.volume = 0.5;
+              audio.addEventListener('loadedmetadata', () => {
+                if (!Number.isFinite(audio.duration) || audio.duration <= 0) return;
+                useVoiceStore.getState().triggerSoundboardSpeaking(user_id, audio.duration * 1000);
+              }, { once: true });
               audio.play().catch(() => {});
             } catch { /* Audio not available */ }
             break;

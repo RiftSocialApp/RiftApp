@@ -143,10 +143,11 @@ func (h *VoiceHandler) PlaySound(w http.ResponseWriter, r *http.Request) {
 
 	// Broadcast soundboard_play event to all users in the voice channel
 	evt := ws.NewEvent(ws.OpSoundboardPlay, map[string]string{
-		"sound_id": sound.ID,
-		"name":     sound.Name,
-		"file_url": sound.FileURL,
-		"user_id":  userID,
+		"stream_id": streamID,
+		"sound_id":  sound.ID,
+		"name":      sound.Name,
+		"file_url":  sound.FileURL,
+		"user_id":   userID,
 	})
 	h.hub.BroadcastToVoiceChannel(streamID, evt)
 

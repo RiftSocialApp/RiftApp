@@ -8,16 +8,18 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
+	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
 
 type HubHandler struct {
 	svc       *service.HubService
 	notifSvc  *service.NotificationService
 	notifRepo *repository.NotificationRepo
+	hub       *ws.Hub
 }
 
-func NewHubHandler(svc *service.HubService, notifSvc *service.NotificationService, notifRepo *repository.NotificationRepo) *HubHandler {
-	return &HubHandler{svc: svc, notifSvc: notifSvc, notifRepo: notifRepo}
+func NewHubHandler(svc *service.HubService, notifSvc *service.NotificationService, notifRepo *repository.NotificationRepo, hub *ws.Hub) *HubHandler {
+	return &HubHandler{svc: svc, notifSvc: notifSvc, notifRepo: notifRepo, hub: hub}
 }
 
 func (h *HubHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +86,9 @@ func (h *HubHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeAppError(w, err)
 		return
+	}
+	if h.hub != nil {
+		h.hub.BroadcastToHubMembers(hub.ID, ws.NewEvent(ws.OpHubUpdate, hub))
 	}
 	writeData(w, http.StatusOK, hub)
 }

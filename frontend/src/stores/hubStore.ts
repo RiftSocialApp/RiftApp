@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Hub } from '../types';
 import { api } from '../api/client';
+import { normalizeHub, normalizeHubs } from '../utils/entityAssets';
 
 /** Session-scoped hub list for instant paint after refresh (revalidated against API). */
 export const HUBS_SESSION_STORAGE_KEY = 'riftapp.session.hubs.v1';
@@ -18,8 +19,17 @@ interface HubState {
   loadHubPermissions: (hubId: string) => Promise<void>;
   createHub: (name: string) => Promise<Hub>;
   updateHub: (hubId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => Promise<Hub>;
+  applyHubUpdate: (hub: Hub) => void;
   deleteHub: (hubId: string) => Promise<void>;
   clearActive: () => void;
+}
+
+function persistHubs(hubs: Hub[]) {
+  try {
+    sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
+  } catch {
+    /* quota / private mode */
+  }
 }
 
 export const useHubStore = create<HubState>((set, get) => ({
@@ -34,7 +44,7 @@ export const useHubStore = create<HubState>((set, get) => ({
       if (raw) {
         const parsed = JSON.parse(raw) as { hubs?: unknown };
         if (Array.isArray(parsed.hubs) && parsed.hubs.length > 0) {
-          set({ hubs: parsed.hubs as Hub[] });
+          set({ hubs: normalizeHubs(parsed.hubs as Hub[]) });
         }
       }
     } catch {
@@ -42,15 +52,11 @@ export const useHubStore = create<HubState>((set, get) => ({
     }
 
     try {
-      const hubs = await api.getHubs();
+      const hubs = normalizeHubs(await api.getHubs());
       if (myId !== loadHubsRequestId) return;
       if (!Array.isArray(hubs)) return;
       set({ hubs });
-      try {
-        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
-      } catch {
-        /* quota / private mode */
-      }
+      persistHubs(hubs);
     } catch {
       if (myId !== loadHubsRequestId) return;
       // Never wipe the server list on transient errors / rate limits.
@@ -97,27 +103,35 @@ export const useHubStore = create<HubState>((set, get) => ({
   },
 
   createHub: async (name) => {
-    const hub = await api.createHub(name);
+    const hub = normalizeHub(await api.createHub(name));
     set((s) => {
       const hubs = [...s.hubs, hub];
-      try {
-        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
-      } catch { /* ignore */ }
+      persistHubs(hubs);
       return { hubs };
     });
     return hub;
   },
 
   updateHub: async (hubId, data) => {
-    const hub = await api.updateHub(hubId, data);
+    const hub = normalizeHub(await api.updateHub(hubId, data));
     set((s) => {
       const hubs = s.hubs.map((h) => (h.id === hubId ? hub : h));
-      try {
-        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
-      } catch { /* ignore */ }
+      persistHubs(hubs);
       return { hubs };
     });
     return hub;
+  },
+
+  applyHubUpdate: (hub) => {
+    const nextHub = normalizeHub(hub);
+    set((s) => {
+      const exists = s.hubs.some((item) => item.id === nextHub.id);
+      const hubs = exists
+        ? s.hubs.map((item) => (item.id === nextHub.id ? nextHub : item))
+        : [...s.hubs, nextHub];
+      persistHubs(hubs);
+      return { hubs };
+    });
   },
 
   deleteHub: async (hubId) => {
@@ -163,9 +177,7 @@ export const useHubStore = create<HubState>((set, get) => ({
     set((s) => {
       const hubs = s.hubs.filter((h) => h.id !== hubId);
       const activeHubId = s.activeHubId === hubId ? hubs[0]?.id ?? null : s.activeHubId;
-      try {
-        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
-      } catch { /* ignore */ }
+      persistHubs(hubs);
       return { hubs, activeHubId };
     });
 

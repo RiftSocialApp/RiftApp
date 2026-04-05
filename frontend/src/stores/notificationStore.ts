@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { Notification } from '../types';
+import type { Notification, User } from '../types';
 import { api } from '../api/client';
+import { normalizeNotification, normalizeUser } from '../utils/entityAssets';
 
 interface NotificationState {
   notifications: Notification[];
@@ -12,6 +13,7 @@ interface NotificationState {
   markAllNotifsRead: () => Promise<void>;
   /** Mark all unread notifications tied to a text channel as read (e.g. after opening #channel). */
   markStreamNotificationsRead: (streamId: string) => Promise<void>;
+  patchUser: (user: User) => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set, get) => ({
@@ -20,7 +22,7 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
 
   loadNotifications: async () => {
     try {
-      const fetched = await api.getNotifications();
+      const fetched = (await api.getNotifications()).map(normalizeNotification);
       set((s) => {
         const fetchedIds = new Set(fetched.map((n) => n.id));
         const wsOnly = s.notifications.filter((n) => !fetchedIds.has(n.id));
@@ -32,9 +34,10 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
   },
 
   addNotification: (notif) => {
+    const nextNotification = normalizeNotification(notif);
     set((s) => {
-      if (s.notifications.some((n) => n.id === notif.id)) return s;
-      const notifications = [notif, ...s.notifications];
+      if (s.notifications.some((n) => n.id === nextNotification.id)) return s;
+      const notifications = [nextNotification, ...s.notifications];
       return {
         notifications,
         unreadCount: notifications.filter((n) => !n.read).length,
@@ -87,5 +90,17 @@ export const useNotificationStore = create<NotificationState>((set, get) => ({
         unreadCount: 0,
       }));
     } catch {}
+  },
+
+  patchUser: (user) => {
+    const nextUser = normalizeUser(user);
+    set((s) => ({
+      notifications: s.notifications.map((notification) =>
+        notification.actor?.id === nextUser.id
+          ? { ...notification, actor: { ...notification.actor, ...nextUser } }
+          : notification,
+      ),
+      unreadCount: s.unreadCount,
+    }));
   },
 }));

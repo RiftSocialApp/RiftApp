@@ -107,6 +107,7 @@ interface VoiceStore {
   setStreamAttenuationStrength: (strength: number) => void;
   setNoiseSuppressionMode: (mode: NoiseSuppressionMode) => Promise<void>;
   toggleNoiseSuppression: () => Promise<void>;
+  triggerSoundboardSpeaking: (identity: string, durationMs: number) => void;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
@@ -128,12 +129,52 @@ let joiningLock = false;
 let pttModeRef = false;
 let wasMutedBeforeDeafen = false;
 let screenShareNoticeTimer: number | null = null;
+let transientSpeakingExpiry = new Map<string, number>();
+let transientSpeakingTimers = new Map<string, number>();
 
 function clearScreenShareNoticeTimer() {
   if (screenShareNoticeTimer != null) {
     window.clearTimeout(screenShareNoticeTimer);
     screenShareNoticeTimer = null;
   }
+}
+
+function isTransientSpeaking(identity: string): boolean {
+  const expiresAt = transientSpeakingExpiry.get(identity);
+  if (expiresAt == null) return false;
+  if (expiresAt <= Date.now()) {
+    transientSpeakingExpiry.delete(identity);
+    return false;
+  }
+  return true;
+}
+
+function clearTransientSpeaking() {
+  transientSpeakingTimers.forEach((timer) => window.clearTimeout(timer));
+  transientSpeakingTimers.clear();
+  transientSpeakingExpiry.clear();
+}
+
+function pulseTransientSpeaking(identity: string, durationMs: number) {
+  const clampedMs = Math.min(8000, Math.max(450, Math.round(durationMs)));
+  const expiresAt = Date.now() + clampedMs;
+  transientSpeakingExpiry.set(identity, expiresAt);
+
+  const prevTimer = transientSpeakingTimers.get(identity);
+  if (prevTimer != null) {
+    window.clearTimeout(prevTimer);
+  }
+
+  transientSpeakingTimers.set(identity, window.setTimeout(() => {
+    transientSpeakingTimers.delete(identity);
+    const currentExpiry = transientSpeakingExpiry.get(identity);
+    if (currentExpiry != null && currentExpiry <= Date.now()) {
+      transientSpeakingExpiry.delete(identity);
+    }
+    syncParticipants();
+  }, clampedMs + 24));
+
+  syncParticipants();
 }
 
 function setScreenShareNotice(notice: ScreenShareNotice | null) {
@@ -245,7 +286,7 @@ function buildParticipants(room: Room): VoiceParticipant[] {
   if (room.state !== ConnectionState.Connected) return [];
   const toVP = (p: Participant): VoiceParticipant => ({
     identity: p.identity,
-    isSpeaking: p.isSpeaking,
+    isSpeaking: p.isSpeaking || isTransientSpeaking(p.identity),
     isMuted: !p.isMicrophoneEnabled,
     isCameraOn: p.isCameraEnabled,
     isScreenSharing: p.isScreenShareEnabled,
@@ -307,6 +348,7 @@ function reapplyAllRemoteVoiceVolumes() {
 
 function resetState() {
   clearScreenShareNoticeTimer();
+  clearTransientSpeaking();
   useVoiceStore.setState({
     connected: false,
     connecting: false,
@@ -637,6 +679,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   toggleNoiseSuppression: async () => {
     const cur = get().noiseSuppressionMode;
     await get().setNoiseSuppressionMode(cur === 'off' ? 'krisp' : 'off');
+  },
+
+  triggerSoundboardSpeaking: (identity, durationMs) => {
+    pulseTransientSpeaking(identity, durationMs);
   },
 }));
 

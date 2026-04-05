@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { Message, Conversation } from '../types';
+import type { Message, Conversation, User } from '../types';
 import { api } from '../api/client';
+import { normalizeConversation, normalizeMessage, normalizeMessages, normalizeUser } from '../utils/entityAssets';
 
 const sumDmUnreads = (conversations: Conversation[]) =>
   conversations.reduce((acc, c) => acc + (c.unread_count ?? 0), 0);
@@ -25,6 +26,7 @@ interface DMState {
   addConversation: (conv: Conversation) => void;
   ackDM: (convId: string) => Promise<void>;
   readStates: () => Promise<void>;
+  patchUser: (user: User) => void;
 
   applyReactionAdd: (messageId: string, userId: string, emoji: string) => void;
   applyReactionRemove: (messageId: string, userId: string, emoji: string) => void;
@@ -43,8 +45,9 @@ export const useDMStore = create<DMState>((set, get) => ({
         api.getDMs(),
         api.getDMReadStates().catch(() => []),
       ]);
+      const normalized = conversations.map(normalizeConversation);
       const stateMap = new Map(dmStates.map((s) => [s.conversation_id, s.unread_count]));
-      const merged = conversations.map((c) => ({
+      const merged = normalized.map((c) => ({
         ...c,
         unread_count: stateMap.get(c.id) ?? 0,
       }));
@@ -53,7 +56,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   openDM: async (recipientId) => {
-    const conv = await api.createOrOpenDM(recipientId);
+    const conv = normalizeConversation(await api.createOrOpenDM(recipientId));
     set((s) => {
       const exists = s.conversations.some((c) => c.id === conv.id);
       return {
@@ -83,7 +86,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   loadDMMessages: async (convId) => {
     set({ dmMessagesLoading: true });
     try {
-      const fetched = await api.getDMMessages(convId);
+      const fetched = normalizeMessages(await api.getDMMessages(convId));
       set((s) => {
         if (s.activeConversationId !== convId) return { dmMessagesLoading: false };
         const fetchedIds = new Set(fetched.map((m) => m.id));
@@ -106,20 +109,21 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   addDMMessage: (message) => {
+    const nextMessage = normalizeMessage(message);
     set((s) => {
-      const convExists = s.conversations.some((c) => c.id === message.conversation_id);
+      const convExists = s.conversations.some((c) => c.id === nextMessage.conversation_id);
       if (!convExists) {
         void get().loadConversations();
       }
 
-      const isActive = message.conversation_id === s.activeConversationId;
+      const isActive = nextMessage.conversation_id === s.activeConversationId;
 
       const conversations = s.conversations.map((c) => {
-        if (c.id !== message.conversation_id) return c;
+        if (c.id !== nextMessage.conversation_id) return c;
         return {
           ...c,
-          last_message: message,
-          updated_at: message.created_at,
+          last_message: nextMessage,
+          updated_at: nextMessage.created_at,
           unread_count: isActive ? 0 : (c.unread_count ?? 0) + 1,
         };
       }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
@@ -129,10 +133,10 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (!isActive) {
         return { conversations, dmTotalUnread };
       }
-      if (s.dmMessages.some((m) => m.id === message.id)) {
+      if (s.dmMessages.some((m) => m.id === nextMessage.id)) {
         return { conversations, dmTotalUnread };
       }
-      return { dmMessages: [...s.dmMessages, message], conversations, dmTotalUnread };
+      return { dmMessages: [...s.dmMessages, nextMessage], conversations, dmTotalUnread };
     });
   },
 
@@ -148,16 +152,17 @@ export const useDMStore = create<DMState>((set, get) => ({
   },
 
   editDMMessage: async (messageId, content) => {
-    const msg = await api.editMessage(messageId, content);
+    const msg = normalizeMessage(await api.editMessage(messageId, content));
     set((s) => ({
       dmMessages: s.dmMessages.map((m) => (m.id === messageId ? msg : m)),
     }));
   },
 
   addConversation: (conv) => {
+    const nextConversation = normalizeConversation(conv);
     set((s) => {
-      if (s.conversations.some((c) => c.id === conv.id)) return s;
-      const conversations = [{ ...conv, unread_count: 0 }, ...s.conversations];
+      if (s.conversations.some((c) => c.id === nextConversation.id)) return s;
+      const conversations = [{ ...nextConversation, unread_count: 0 }, ...s.conversations];
       return { conversations, dmTotalUnread: sumDmUnreads(conversations) };
     });
   },
@@ -189,6 +194,24 @@ export const useDMStore = create<DMState>((set, get) => ({
         return { conversations, dmTotalUnread: sumDmUnreads(conversations) };
       });
     } catch {}
+  },
+
+  patchUser: (user) => {
+    const nextUser = normalizeUser(user);
+    const patchMessage = (message: Message) => {
+      if (message.author?.id !== nextUser.id) return message;
+      return { ...message, author: { ...message.author, ...nextUser } };
+    };
+    set((s) => ({
+      conversations: s.conversations.map((conversation) => ({
+        ...conversation,
+        recipient: conversation.recipient.id === nextUser.id
+          ? { ...conversation.recipient, ...nextUser }
+          : conversation.recipient,
+        last_message: conversation.last_message ? patchMessage(conversation.last_message) : conversation.last_message,
+      })),
+      dmMessages: s.dmMessages.map(patchMessage),
+    }));
   },
 
   applyReactionAdd: (messageId, userId, emoji) => {

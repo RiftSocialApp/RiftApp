@@ -5,6 +5,7 @@ import { useFriendStore } from '../../stores/friendStore';
 import { api } from '../../api/client';
 import type { User } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { normalizeUser } from '../../utils/entityAssets';
 import StatusDot from '../shared/StatusDot';
 
 export default function DMSidebar() {
@@ -40,7 +41,7 @@ export default function DMSidebar() {
     setSearching(true);
     try {
       const user = await api.searchUser(q);
-      setSearchResult(user);
+      setSearchResult(normalizeUser(user));
     } catch {
       setSearchError('User not found.');
     } finally {

@@ -202,6 +202,86 @@ func (h *Hub) SendToUser(userID string, data []byte) {
 	h.mu.RUnlock()
 }
 
+func (h *Hub) BroadcastToHubMembers(hubID string, data []byte) {
+	if h.db == nil {
+		return
+	}
+	ctx := context.Background()
+
+	rows, err := h.db.Query(ctx, `SELECT user_id FROM hub_members WHERE hub_id = $1`, hubID)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+
+	userIDs := make([]string, 0)
+	for rows.Next() {
+		var userID string
+		if err := rows.Scan(&userID); err != nil {
+			continue
+		}
+		userIDs = append(userIDs, userID)
+	}
+	h.sendToUsers(userIDs, data)
+}
+
+func (h *Hub) BroadcastUserUpdate(userID string, data []byte) {
+	if h.db == nil {
+		return
+	}
+	ctx := context.Background()
+	recipients := map[string]struct{}{userID: {}}
+
+	rows, err := h.db.Query(ctx,
+		`SELECT DISTINCT hm2.user_id
+		 FROM hub_members hm1
+		 JOIN hub_members hm2 ON hm1.hub_id = hm2.hub_id
+		 WHERE hm1.user_id = $1`, userID)
+	if err == nil {
+		for rows.Next() {
+			var recipientID string
+			if err := rows.Scan(&recipientID); err != nil {
+				continue
+			}
+			recipients[recipientID] = struct{}{}
+		}
+		rows.Close()
+	}
+
+	rows, err = h.db.Query(ctx,
+		`SELECT CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END
+		 FROM friendships f
+		 WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 1`, userID)
+	if err == nil {
+		for rows.Next() {
+			var recipientID string
+			if err := rows.Scan(&recipientID); err != nil {
+				continue
+			}
+			recipients[recipientID] = struct{}{}
+		}
+		rows.Close()
+	}
+
+	userIDs := make([]string, 0, len(recipients))
+	for recipientID := range recipients {
+		userIDs = append(userIDs, recipientID)
+	}
+	h.sendToUsers(userIDs, data)
+}
+
+func (h *Hub) sendToUsers(userIDs []string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, userID := range userIDs {
+		if sessions, ok := h.clients[userID]; ok {
+			for _, client := range sessions {
+				client.Send(data)
+			}
+		}
+	}
+}
+
 func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 	switch evt.Op {
 	case OpHeartbeat:

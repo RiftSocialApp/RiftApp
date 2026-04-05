@@ -52,8 +52,8 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	}))
 
 	authH := NewAuthHandler(deps.AuthService)
-	userH := NewUserHandler(deps.UserService)
-	hubH := NewHubHandler(deps.HubService, deps.NotifService, deps.NotifRepo)
+	userH := NewUserHandler(deps.UserService, deps.WSHub)
+	hubH := NewHubHandler(deps.HubService, deps.NotifService, deps.NotifRepo, deps.WSHub)
 	customH := NewHubCustomizationHandler(deps.HubCustomizationService)
 	rankH := NewRankHandler(deps.RankService)
 	streamH := NewStreamHandler(deps.StreamService)
