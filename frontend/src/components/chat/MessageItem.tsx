@@ -557,7 +557,7 @@ function ImageThumb({
         });
       }}
       className="relative block rounded-xl border border-riftapp-border/40 overflow-hidden bg-riftapp-bg/40
-        hover:brightness-110 hover:shadow-elevation-md transition-all duration-200 cursor-zoom-in text-left group/thumb"
+        hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md transition-all duration-200 cursor-pointer text-left group/thumb"
     >
       {/* Skeleton placeholder */}
       {!loaded && (
@@ -602,7 +602,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
       role="dialog"
       aria-modal="true"
       aria-label="Image preview"
-      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/88 animate-fade-in"
+      className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm animate-fade-in"
       onClick={onClose}
     >
       {/* Top bar */}
@@ -663,7 +663,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
         className={`select-none rounded-lg shadow-2xl transition-transform duration-200
           ${zoom
             ? 'max-w-none max-h-none cursor-zoom-out scale-150'
-            : 'max-w-[min(96vw,calc(100vw-2rem))] max-h-[min(88dvh,88vh)] w-auto h-auto object-contain cursor-zoom-in'
+            : 'max-w-[min(96vw,calc(100vw-2rem))] max-h-[min(88dvh,88vh)] w-auto h-auto object-contain cursor-default'
           }`}
         draggable={false}
       />
@@ -744,7 +744,7 @@ function ImageGrid({
             type="button"
             onClick={() => onOpen(idx)}
             className="relative rounded-xl overflow-hidden border border-riftapp-border/40 bg-riftapp-bg/40
-              hover:brightness-110 hover:shadow-elevation-md transition-all duration-200 cursor-zoom-in"
+              hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md transition-all duration-200 cursor-pointer"
             style={{ aspectRatio: '4/3' }}
           >
             <img
