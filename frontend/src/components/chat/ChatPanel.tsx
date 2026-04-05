@@ -1,5 +1,4 @@
 import { useRef, useEffect, useLayoutEffect, useMemo, useCallback, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useStreamStore } from '../../stores/streamStore';
 import { useHubStore } from '../../stores/hubStore';
 import { useMessageStore } from '../../stores/messageStore';
@@ -73,19 +72,21 @@ export default function ChatPanel() {
   const [showNewMsgBanner, setShowNewMsgBanner] = useState(false);
 
   // --- Per-channel scroll position cache ---
-  const scrollCacheRef = useRef<Record<string, { scrollTop: number; scrollHeight: number }>>({}); 
+  const scrollCacheRef = useRef<Record<string, { scrollTop: number; scrollHeight: number }>>({});
   const pendingRestoreRef = useRef<{ scrollTop: number; scrollHeight: number } | null>(null);
+  const needsScrollToBottomRef = useRef(true);
 
   const channelKey = isDMMode
     ? `dm-${activeConversationId}`
     : `${activeHubId}-${activeStreamId}`;
   const channelKeyRef = useRef(channelKey);
 
-  const saveScrollPos = useCallback(() => {
+  const saveScrollPos = useCallback((source: string) => {
     const el = scrollContainerRef.current;
     const key = channelKeyRef.current;
     if (!el || !key) return;
     scrollCacheRef.current[key] = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+    console.log(`[SCROLL] SAVE (${source}) key=${key} scrollTop=${el.scrollTop} scrollHeight=${el.scrollHeight} el=`, el);
   }, []);
 
   const handleScroll = useCallback(() => {
@@ -94,47 +95,54 @@ export default function ChatPanel() {
     const distBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
     wasNearBottomRef.current = distBottom < NEAR_BOTTOM_THRESHOLD;
     if (wasNearBottomRef.current) setShowNewMsgBanner(false);
-    saveScrollPos();
+    saveScrollPos('onScroll');
   }, [saveScrollPos]);
 
   const scrollToBottom = useCallback(() => {
+    console.log('[SCROLL] scrollToBottom() called, bottomRef=', bottomRef.current);
+    console.trace('[SCROLL] scrollToBottom trace');
     bottomRef.current?.scrollIntoView({ behavior: 'auto' });
     setShowNewMsgBanner(false);
     wasNearBottomRef.current = true;
-    saveScrollPos();
+    saveScrollPos('scrollToBottom');
   }, [saveScrollPos]);
 
   const hasScrolledToUnread = useRef(false);
-  const justSwitchedRef = useRef(false);
 
-  useEffect(() => {
-    // Save departing channel scroll position
+  // Channel/server switch — useLayoutEffect so refs update BEFORE paint
+  useLayoutEffect(() => {
     const prevKey = channelKeyRef.current;
     const el = scrollContainerRef.current;
+    console.log(`[SCROLL] === SWITCH layoutEffect === hub=${activeHubId} stream=${activeStreamId} conv=${activeConversationId}`);
+    console.log(`[SCROLL] prevKey=${prevKey} el=`, el, `scrollTop=${el?.scrollTop} scrollHeight=${el?.scrollHeight}`);
+
+    // Save departing channel scroll position
     if (prevKey && el) {
       scrollCacheRef.current[prevKey] = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+      console.log(`[SCROLL] SAVE (switch-depart) key=${prevKey} scrollTop=${el.scrollTop} scrollHeight=${el.scrollHeight}`);
     }
 
-    // Prepare for the new channel
     const newKey = isDMMode ? `dm-${activeConversationId}` : `${activeHubId}-${activeStreamId}`;
     channelKeyRef.current = newKey;
 
     const saved = scrollCacheRef.current[newKey];
+    console.log(`[SCROLL] newKey=${newKey} hasSaved=${!!saved}`, saved);
+    console.log(`[SCROLL] Full cache keys:`, Object.keys(scrollCacheRef.current));
 
     hasScrolledToUnread.current = false;
     prevMessageCountRef.current = 0;
     setShowNewMsgBanner(false);
 
     if (saved) {
-      // We have a saved position — schedule restore after render
       pendingRestoreRef.current = saved;
-      wasNearBottomRef.current = false; // prevent auto-scroll from overriding
-      justSwitchedRef.current = false;
+      needsScrollToBottomRef.current = false;
+      wasNearBottomRef.current = false;
+      console.log(`[SCROLL] -> pendingRestore SET, needsBottom=false`);
     } else {
-      // Never visited — will scroll to bottom
       pendingRestoreRef.current = null;
+      needsScrollToBottomRef.current = true;
       wasNearBottomRef.current = true;
-      justSwitchedRef.current = true;
+      console.log(`[SCROLL] -> pendingRestore NULL, needsBottom=true`);
     }
   }, [activeStreamId, activeConversationId, activeHubId, isDMMode]);
 
@@ -148,28 +156,49 @@ export default function ChatPanel() {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, [activeStreamId, isDMMode]);
 
+  // Main scroll positioning — fires after channel-switch layoutEffect (declaration order)
   useLayoutEffect(() => {
-    if (isLoading) return;
-
-    const el = scrollContainerRef.current;
-    const bottomEl = bottomRef.current;
-
-    // 1) Restore saved scroll position after messages render
-    if (pendingRestoreRef.current && el) {
-      const saved = pendingRestoreRef.current;
-      pendingRestoreRef.current = null;
-      // Adjust for height difference (messages may differ from when we saved)
-      const delta = el.scrollHeight - saved.scrollHeight;
-      el.scrollTop = saved.scrollTop + delta;
-      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-      wasNearBottomRef.current = dist < NEAR_BOTTOM_THRESHOLD;
-      prevMessageCountRef.current = displayMessages.length;
-      hasScrolledToUnread.current = true; // skip unread scroll — position restored
+    console.log(`[SCROLL] === POSITION layoutEffect === isLoading=${isLoading} msgCount=${displayMessages.length} pendingRestore=${!!pendingRestoreRef.current} needsBottom=${needsScrollToBottomRef.current} stream=${activeStreamId} conv=${activeConversationId}`);
+    if (isLoading) {
+      console.log('[SCROLL] -> skipped (isLoading)');
       return;
     }
 
-    // 2) Scroll to unread divider on first load of a channel (no saved pos)
+    const el = scrollContainerRef.current;
+    const bottomEl = bottomRef.current;
+    console.log(`[SCROLL] el=`, el, `scrollTop=${el?.scrollTop} scrollHeight=${el?.scrollHeight} clientHeight=${el?.clientHeight}`);
+    console.log(`[SCROLL] bottomEl=`, bottomEl, `unreadEl=`, unreadRef.current);
+
+    // 1) Restore saved scroll position
+    if (pendingRestoreRef.current && el) {
+      const saved = pendingRestoreRef.current;
+      pendingRestoreRef.current = null;
+      const delta = el.scrollHeight - saved.scrollHeight;
+      const newScrollTop = saved.scrollTop + delta;
+      console.log(`[SCROLL] RESTORE key=${channelKeyRef.current} savedTop=${saved.scrollTop} savedHeight=${saved.scrollHeight} curHeight=${el.scrollHeight} delta=${delta} -> newScrollTop=${newScrollTop}`);
+      el.scrollTop = newScrollTop;
+      console.log(`[SCROLL] RESTORE applied: actual scrollTop=${el.scrollTop}`);
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      wasNearBottomRef.current = dist < NEAR_BOTTOM_THRESHOLD;
+      prevMessageCountRef.current = displayMessages.length;
+      hasScrolledToUnread.current = true;
+      return;
+    }
+
+    // 2) First-time channel visit — scroll to bottom
+    if (needsScrollToBottomRef.current && bottomEl && displayMessages.length > 0) {
+      needsScrollToBottomRef.current = false;
+      console.log('[SCROLL] -> scrollIntoView(bottom) [first visit]');
+      bottomEl.scrollIntoView({ behavior: 'auto' });
+      wasNearBottomRef.current = true;
+      prevMessageCountRef.current = displayMessages.length;
+      hasScrolledToUnread.current = true;
+      return;
+    }
+
+    // 3) Scroll to unread divider on first load (no saved pos)
     if (!hasScrolledToUnread.current && unreadRef.current) {
+      console.log('[SCROLL] -> scrollIntoView(unread)');
       unreadRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
       hasScrolledToUnread.current = true;
       prevMessageCountRef.current = displayMessages.length;
@@ -181,31 +210,26 @@ export default function ChatPanel() {
     }
 
     if (!el || !bottomEl) {
+      console.log('[SCROLL] -> skipped (no el or bottomEl)');
       prevMessageCountRef.current = displayMessages.length;
       return;
     }
 
+    // 4) New messages while viewing a channel
     const grew = displayMessages.length > prevMessageCountRef.current;
+    console.log(`[SCROLL] grew=${grew} prevCount=${prevMessageCountRef.current} wasNearBottom=${wasNearBottomRef.current}`);
     prevMessageCountRef.current = displayMessages.length;
 
-    if (!grew) {
-      justSwitchedRef.current = false;
-      return;
-    }
-
-    // 3) New messages arrived
-    if (justSwitchedRef.current || wasNearBottomRef.current) {
-      // First visit (no saved pos) or user was at bottom — jump to bottom
-      justSwitchedRef.current = false;
+    if (grew && wasNearBottomRef.current) {
+      console.log('[SCROLL] -> scrollIntoView(bottom) [new msg, near bottom]');
       bottomEl.scrollIntoView({ behavior: 'auto' });
-      wasNearBottomRef.current = true;
-      setShowNewMsgBanner(false);
-    } else {
-      // User scrolled up — don't move, show banner
-      justSwitchedRef.current = false;
+    } else if (grew) {
+      console.log('[SCROLL] -> showing new msg banner');
       setShowNewMsgBanner(true);
+    } else {
+      console.log('[SCROLL] -> no action');
     }
-  }, [displayMessages.length, isLoading, firstUnreadIndex]);
+  }, [activeStreamId, activeConversationId, displayMessages.length, isLoading, firstUnreadIndex]);
 
   // Ack DM conversation when it becomes active and messages have loaded
   useEffect(() => {
@@ -214,44 +238,12 @@ export default function ChatPanel() {
     }
   }, [isDMMode, activeConversationId, isLoading, dmMessages.length, ackDM]);
 
-  // Empty state — no stream and no DM selected
-  if (!activeStreamId && !activeConversationId) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-riftapp-bg">
-        <div className="text-center animate-fade-in max-w-sm px-6">
-          <div className="w-16 h-16 rounded-3xl bg-riftapp-surface flex items-center justify-center mx-auto mb-5">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riftapp-text-dim">
-              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-          </div>
-          <h2 className="text-xl font-bold text-riftapp-text mb-1 tracking-tight">Welcome to RiftApp</h2>
-          <p className="text-riftapp-text-dim text-sm mb-6">Here's how to get started:</p>
-          <ol className="text-left space-y-3 text-sm">
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
-              <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Create a Hub</span> — click <span className="font-bold text-riftapp-success">+</span> in the left rail to start a new community.</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
-              <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Invite people</span> — click the person+ icon in the hub header to generate an invite code.</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
-              <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Join an existing hub</span> — click the arrow icon in the left rail and enter an invite code.</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
-              <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Send a DM</span> — click the chat bubble icon, then press <span className="font-bold text-riftapp-accent">+</span> to message someone.</span>
-            </li>
-          </ol>
-        </div>
-      </div>
-    );
-  }
+  const showWelcome = !activeStreamId && !activeConversationId;
 
   return (
     <div className="flex-1 flex flex-col bg-riftapp-bg min-w-0">
       {/* Header */}
+      {!showWelcome && (
       <div className="h-12 flex items-center px-4 border-b border-riftapp-border/60 flex-shrink-0 shadow-[0_1px_0_rgba(0,0,0,0.2)]">
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {isDMMode ? (
@@ -267,10 +259,42 @@ export default function ChatPanel() {
           )}
         </div>
       </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden relative">
-        {showNewMsgBanner && (
+        {showWelcome && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-riftapp-bg">
+            <div className="text-center animate-fade-in max-w-sm px-6">
+              <div className="w-16 h-16 rounded-3xl bg-riftapp-surface flex items-center justify-center mx-auto mb-5">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riftapp-text-dim">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                </svg>
+              </div>
+              <h2 className="text-xl font-bold text-riftapp-text mb-1 tracking-tight">Welcome to RiftApp</h2>
+              <p className="text-riftapp-text-dim text-sm mb-6">Here's how to get started:</p>
+              <ol className="text-left space-y-3 text-sm">
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">1</span>
+                  <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Create a Hub</span> — click <span className="font-bold text-riftapp-success">+</span> in the left rail to start a new community.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">2</span>
+                  <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Invite people</span> — click the person+ icon in the hub header to generate an invite code.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">3</span>
+                  <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Join an existing hub</span> — click the arrow icon in the left rail and enter an invite code.</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <span className="w-6 h-6 rounded-full bg-riftapp-accent/20 text-riftapp-accent text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">4</span>
+                  <span className="text-riftapp-text-muted"><span className="text-riftapp-text font-medium">Send a DM</span> — click the chat bubble icon, then press <span className="font-bold text-riftapp-accent">+</span> to message someone.</span>
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
+        {!showWelcome && showNewMsgBanner && (
           <button
             onClick={scrollToBottom}
             className="absolute top-0 inset-x-0 z-20 flex items-center justify-center gap-1.5 py-1 bg-riftapp-accent text-white text-xs font-semibold cursor-pointer hover:brightness-110 transition shadow-md"
@@ -280,15 +304,6 @@ export default function ChatPanel() {
           </button>
         )}
         <div ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto">
-        <AnimatePresence mode="wait">
-        <motion.div
-          key={activeStreamId || activeConversationId || 'empty'}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="h-full"
-        >
         {isLoading ? (
           <div className="px-4 py-4 space-y-4 animate-fade-in">
             {[...Array(6)].map((_, i) => (
@@ -368,13 +383,12 @@ export default function ChatPanel() {
             <div ref={bottomRef} />
           </div>
         )}
-        </motion.div>
-        </AnimatePresence>
         </div>
       </div>
 
       {/* Typing indicator + Input */}
-      {activeStreamId && <TypingIndicator streamId={activeStreamId} />}
+      {!showWelcome && activeStreamId && <TypingIndicator streamId={activeStreamId} />}
+      {!showWelcome && (
       <MessageInput
         streamName={isDMMode ? (activeConversation?.recipient?.display_name || '') : (activeStream?.name || '')}
         onTyping={isDMMode ? undefined : onTyping}
@@ -383,6 +397,7 @@ export default function ChatPanel() {
         onSendDM={isDMMode ? sendDMMessage : undefined}
         replyScopeKey={activeStreamId || activeConversationId || ''}
       />
+      )}
     </div>
   );
 }
