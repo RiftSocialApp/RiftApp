@@ -622,20 +622,263 @@ function LinkPreview({ url }: { url: string }) {
   );
 }
 
-/* ─── Inline video player ────────────────────────────────────────────── */
+/* ─── Discord-style video player ─────────────────────────────────────── */
+function fmtTime(s: number): string {
+  if (!isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const sec = Math.floor(s % 60);
+  return `${m}:${sec.toString().padStart(2, '0')}`;
+}
+
 function VideoPlayer({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+
+  const [started, setStarted] = useState(false);
+  const [playing, setPlaying] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [showControls, setShowControls] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [volume, setVolume] = useState(1);
+  const [dragging, setDragging] = useState(false);
+
+  const controlsVisible = showControls || hovered || dragging;
+
+  // Auto-hide controls after inactivity
+  const scheduleHide = useCallback(() => {
+    clearTimeout(hideTimer.current);
+    if (playing) {
+      hideTimer.current = setTimeout(() => setShowControls(false), 2500);
+    }
+  }, [playing]);
+
+  const togglePlay = useCallback(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (!started) setStarted(true);
+    if (v.paused) {
+      v.play();
+    } else {
+      v.pause();
+    }
+  }, [started]);
+
+  const handleTimeUpdate = useCallback(() => {
+    const v = videoRef.current;
+    if (v && !dragging) setCurrentTime(v.currentTime);
+  }, [dragging]);
+
+  const handleSeek = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const v = videoRef.current;
+    if (!v || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    v.currentTime = ratio * duration;
+    setCurrentTime(v.currentTime);
+  }, [duration]);
+
+  const handleSeekDrag = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    handleSeek(e);
+  }, [dragging, handleSeek]);
+
+  const handleVolumeChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const v = videoRef.current;
+    const val = parseFloat(e.target.value);
+    setVolume(val);
+    if (v) v.volume = val;
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      document.exitFullscreen();
+    } else {
+      el.requestFullscreen();
+    }
+  }, []);
+
+  // Keyboard controls
+  useEffect(() => {
+    if (!started) return;
+    const handler = (e: KeyboardEvent) => {
+      const el = containerRef.current;
+      if (!el || !el.contains(document.activeElement) && document.activeElement !== el) return;
+      if (e.key === ' ' || e.key === 'k') {
+        e.preventDefault();
+        togglePlay();
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [started, togglePlay]);
+
+  // Sync play/pause state
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    const onPlay = () => { setPlaying(true); setShowControls(true); scheduleHide(); };
+    const onPause = () => { setPlaying(false); setShowControls(true); clearTimeout(hideTimer.current); };
+    const onEnded = () => { setPlaying(false); setShowControls(true); };
+    const onMeta = () => setDuration(v.duration);
+    v.addEventListener('play', onPlay);
+    v.addEventListener('pause', onPause);
+    v.addEventListener('ended', onEnded);
+    v.addEventListener('loadedmetadata', onMeta);
+    return () => {
+      v.removeEventListener('play', onPlay);
+      v.removeEventListener('pause', onPause);
+      v.removeEventListener('ended', onEnded);
+      v.removeEventListener('loadedmetadata', onMeta);
+    };
+  }, [scheduleHide]);
+
+  const progress = duration ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className="mt-1 max-w-[420px] rounded-xl overflow-hidden border border-riftapp-border/40 bg-black">
+    <div
+      ref={containerRef}
+      className="mt-1 max-w-[420px] rounded-xl overflow-hidden border border-riftapp-border/40 bg-black relative select-none group/video"
+      tabIndex={0}
+      onMouseEnter={() => { setHovered(true); setShowControls(true); }}
+      onMouseLeave={() => { setHovered(false); scheduleHide(); }}
+      onMouseMove={() => { setShowControls(true); scheduleHide(); }}
+    >
       <video
+        ref={videoRef}
         src={src}
-        controls
         preload="metadata"
         playsInline
-        className="w-full max-h-[300px] object-contain rounded-xl"
+        onTimeUpdate={handleTimeUpdate}
+        onClick={togglePlay}
+        className="w-full max-h-[300px] object-contain cursor-pointer block"
       >
         <track kind="captions" />
-        Your browser does not support the video tag.
       </video>
+
+      {/* ── Dark hover overlay (before playing) ─────────────────────── */}
+      {!started && (
+        <div
+          className="absolute inset-0 bg-black/20 group-hover/video:bg-black/40 transition-colors duration-200 cursor-pointer"
+          onClick={togglePlay}
+        />
+      )}
+
+      {/* ── Centered play button (before playing or paused) ──────────── */}
+      {!playing && (
+        <button
+          type="button"
+          onClick={togglePlay}
+          className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10
+            w-14 h-14 rounded-full bg-black/60 flex items-center justify-center
+            hover:bg-black/75 hover:scale-110 active:scale-95
+            transition-all duration-200 cursor-pointer ${started ? 'opacity-0 group-hover/video:opacity-100' : 'opacity-100'}`}
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="white" className="ml-1">
+            <polygon points="6,4 20,12 6,20" />
+          </svg>
+        </button>
+      )}
+
+      {/* ── Bottom controls overlay ─────────────────────────────────── */}
+      {started && (
+        <div
+          className={`absolute bottom-0 left-0 right-0 z-10 transition-opacity duration-200 ${
+            controlsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        >
+          {/* Gradient fade */}
+          <div className="h-16 bg-gradient-to-t from-black/80 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 px-2.5 pb-2 flex flex-col gap-1">
+            {/* Progress bar */}
+            <div
+              className="h-3 flex items-center cursor-pointer group/bar"
+              onClick={handleSeek}
+              onMouseDown={() => setDragging(true)}
+              onMouseMove={handleSeekDrag}
+              onMouseUp={() => setDragging(false)}
+              onMouseLeave={() => setDragging(false)}
+            >
+              <div className="w-full h-[3px] group-hover/bar:h-[5px] transition-all duration-100 bg-white/25 rounded-full relative">
+                <div
+                  className="absolute inset-y-0 left-0 bg-riftapp-accent rounded-full"
+                  style={{ width: `${progress}%` }}
+                />
+                <div
+                  className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-white shadow opacity-0 group-hover/bar:opacity-100 transition-opacity"
+                  style={{ left: `calc(${progress}% - 6px)` }}
+                />
+              </div>
+            </div>
+
+            {/* Controls row */}
+            <div className="flex items-center gap-2">
+              {/* Play / Pause */}
+              <button type="button" onClick={togglePlay} className="text-white/90 hover:text-white transition-colors p-0.5">
+                {playing ? (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="5" y="4" width="5" height="16" rx="1" />
+                    <rect x="14" y="4" width="5" height="16" rx="1" />
+                  </svg>
+                ) : (
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <polygon points="6,4 20,12 6,20" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Time */}
+              <span className="text-[11px] text-white/70 tabular-nums whitespace-nowrap">
+                {fmtTime(currentTime)} / {fmtTime(duration)}
+              </span>
+
+              <div className="flex-1" />
+
+              {/* Volume */}
+              <div className="flex items-center gap-1 group/vol">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const v = videoRef.current;
+                    if (!v) return;
+                    v.muted = !v.muted;
+                    setVolume(v.muted ? 0 : v.volume || 1);
+                  }}
+                  className="text-white/70 hover:text-white transition-colors p-0.5"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="none" />
+                    {volume > 0 && <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />}
+                    {volume > 0.5 && <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />}
+                  </svg>
+                </button>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={volume}
+                  onChange={handleVolumeChange}
+                  className="w-0 group-hover/vol:w-16 transition-all duration-150 accent-riftapp-accent h-1 cursor-pointer opacity-0 group-hover/vol:opacity-100"
+                />
+              </div>
+
+              {/* Fullscreen */}
+              <button type="button" onClick={toggleFullscreen} className="text-white/70 hover:text-white transition-colors p-0.5">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <polyline points="15 3 21 3 21 9" />
+                  <polyline points="9 21 3 21 3 15" />
+                  <line x1="21" y1="3" x2="14" y2="10" />
+                  <line x1="3" y1="21" x2="10" y2="14" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
