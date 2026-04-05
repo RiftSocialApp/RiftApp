@@ -129,15 +129,40 @@ func (h *Hub) setPresence(userID string, status int) {
 			`UPDATE users SET status = $2, updated_at = now() WHERE id = $1`, userID, status)
 	}
 
+	recipients := make(map[string]struct{})
+
 	rows, err := h.db.Query(ctx,
 		`SELECT DISTINCT hm2.user_id
 		 FROM hub_members hm1
 		 JOIN hub_members hm2 ON hm1.hub_id = hm2.hub_id
 		WHERE hm1.user_id = $1 AND hm2.user_id != $1`, userID)
-	if err != nil {
-		return
+	if err == nil {
+		for rows.Next() {
+			var coMemberID string
+			if err := rows.Scan(&coMemberID); err != nil {
+				continue
+			}
+			recipients[coMemberID] = struct{}{}
+		}
+		rows.Close()
 	}
-	defer rows.Close()
+
+	rows2, err := h.db.Query(ctx,
+		`SELECT CASE WHEN f.user_id = $1 THEN f.friend_id ELSE f.user_id END
+		 FROM friendships f
+		 WHERE (f.user_id = $1 OR f.friend_id = $1) AND f.status = 1`, userID)
+	if err == nil {
+		for rows2.Next() {
+			var friendID string
+			if err := rows2.Scan(&friendID); err != nil {
+				continue
+			}
+			if friendID != userID {
+				recipients[friendID] = struct{}{}
+			}
+		}
+		rows2.Close()
+	}
 
 	evt := NewEvent(OpPresenceUpdate, PresenceData{
 		UserID: userID,
@@ -145,12 +170,8 @@ func (h *Hub) setPresence(userID string, status int) {
 	})
 
 	h.mu.RLock()
-	for rows.Next() {
-		var coMemberID string
-		if err := rows.Scan(&coMemberID); err != nil {
-			continue
-		}
-		if sessions, ok := h.clients[coMemberID]; ok {
+	for rid := range recipients {
+		if sessions, ok := h.clients[rid]; ok {
 			for _, client := range sessions {
 				client.Send(evt)
 			}

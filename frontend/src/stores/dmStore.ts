@@ -98,11 +98,17 @@ export const useDMStore = create<DMState>((set, get) => ({
   sendDMMessage: async (content, attachmentIds) => {
     const convId = get().activeConversationId;
     if (!convId) return;
-    await api.sendDMMessage(convId, content, attachmentIds);
+    const msg = await api.sendDMMessage(convId, content, attachmentIds);
+    get().addDMMessage(msg);
   },
 
   addDMMessage: (message) => {
     set((s) => {
+      const convExists = s.conversations.some((c) => c.id === message.conversation_id);
+      if (!convExists) {
+        void get().loadConversations();
+      }
+
       const isActive = message.conversation_id === s.activeConversationId;
 
       const conversations = s.conversations.map((c) => {

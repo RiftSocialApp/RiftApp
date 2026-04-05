@@ -22,9 +22,10 @@ export const usePresenceStore = create<PresenceState>((set) => ({
   typers: {},
 
   setPresence: (userId, status) => {
-    set((s) => ({
-      presence: { ...s.presence, [userId]: status },
-    }));
+    set((s) => {
+      if (s.presence[userId] === status) return s;
+      return { presence: { ...s.presence, [userId]: status } };
+    });
   },
 
   setBulkPresence: (entries) => {

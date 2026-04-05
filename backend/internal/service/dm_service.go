@@ -171,6 +171,8 @@ func (s *DMService) SendMessage(ctx context.Context, convID, userID string, inpu
 	msg.Author = author
 
 	evt := ws.NewEvent(ws.OpDMMessageCreate, msg)
+	// Sender: apply immediately in their UI (and other tabs/devices).
+	s.hub.SendToUser(userID, evt)
 	others, _ := s.dmRepo.GetOtherMembers(ctx, convID, userID)
 	for _, uid := range others {
 		s.hub.SendToUser(uid, evt)

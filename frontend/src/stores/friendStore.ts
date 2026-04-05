@@ -114,7 +114,7 @@ export const useFriendStore = create<FriendState>((set, get) => ({
   },
 
   handleFriendRequest: (_userId) => {
-    get().loadPending();
+    void get().loadPending();
   },
 
   handleFriendAccept: (_userId) => {

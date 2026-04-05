@@ -19,7 +19,7 @@ interface MessageState {
   applyReactionRemove: (messageId: string, userId: string, emoji: string, isDM?: boolean) => void;
 }
 
-export const useMessageStore = create<MessageState>((set) => ({
+export const useMessageStore = create<MessageState>((set, get) => ({
   messages: [],
   messagesLoading: false,
 
@@ -39,7 +39,8 @@ export const useMessageStore = create<MessageState>((set) => ({
   sendMessage: async (content, attachmentIds) => {
     const streamId = useStreamStore.getState().activeStreamId;
     if (!streamId) return;
-    await api.sendMessage(streamId, content, attachmentIds);
+    const msg = await api.sendMessage(streamId, content, attachmentIds);
+    get().addMessage(msg);
   },
 
   addMessage: (message) => {

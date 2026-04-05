@@ -15,6 +15,7 @@ import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useNotificationStore } from '../../stores/notificationStore';
+import { useFriendStore } from '../../stores/friendStore';
 
 export default function AppLayout() {
   useWebSocket();
@@ -27,6 +28,27 @@ export default function AppLayout() {
     loadHubs();
     loadNotifications();
   }, [loadHubs, loadNotifications]);
+
+  // Keep DM list, friend requests, and notifications fresh when returning to the tab.
+  useEffect(() => {
+    let t: number;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        useDMStore.getState().loadConversations();
+        useFriendStore.getState().loadPendingCount();
+        useNotificationStore.getState().loadNotifications();
+      }, 250);
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, []);
 
   useEffect(() => {
     if (params.hubId) {

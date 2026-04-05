@@ -8,11 +8,6 @@ import { useDMStore } from '../stores/dmStore';
 import { useFriendStore } from '../stores/friendStore';
 import type { Message, Notification, Conversation, WSEvent } from '../types';
 
-const applyVoiceState = useStreamStore.getState().applyVoiceState;
-const handleFriendRequest = useFriendStore.getState().handleFriendRequest;
-const handleFriendAccept = useFriendStore.getState().handleFriendAccept;
-const handleFriendRemove = useFriendStore.getState().handleFriendRemove;
-
 const HEARTBEAT_INTERVAL = 30000;
 const TYPING_EXPIRE_MS = 3000;
 const RECONNECT_BASE_DELAY = 1000;
@@ -45,16 +40,6 @@ export function useWebSocket() {
   const typingTimersRef = useRef<Map<string, number>>(new Map());
   const token = useAuthStore((s) => s.token);
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
-  const addMessage = useMessageStore((s) => s.addMessage);
-  const updateMessage = useMessageStore((s) => s.updateMessage);
-  const removeMessage = useMessageStore((s) => s.removeMessage);
-  const addTyper = usePresenceStore((s) => s.addTyper);
-  const removeTyper = usePresenceStore((s) => s.removeTyper);
-  const setPresence = usePresenceStore((s) => s.setPresence);
-  const addNotification = useNotificationStore((s) => s.addNotification);
-  const addDMMessage = useDMStore((s) => s.addDMMessage);
-  const addConversation = useDMStore((s) => s.addConversation);
-  const ackDM = useDMStore((s) => s.ackDM);
   const prevStreamRef = useRef<string | null>(null);
 
   const send = useCallback((op: string, d?: unknown) => {
@@ -104,19 +89,19 @@ export function useWebSocket() {
         const evt: WSEvent = JSON.parse(event.data);
         switch (evt.op) {
           case 'message_create':
-            addMessage(evt.d as Message);
+            useMessageStore.getState().addMessage(evt.d as Message);
             break;
           case 'message_update':
-            updateMessage(evt.d as Message);
+            useMessageStore.getState().updateMessage(evt.d as Message);
             break;
           case 'message_delete': {
             const { id } = evt.d as { id: string };
-            removeMessage(id);
+            useMessageStore.getState().removeMessage(id);
             break;
           }
           case 'typing_start': {
             const { user_id, stream_id } = evt.d as { user_id: string; stream_id: string };
-            addTyper(stream_id, user_id);
+            usePresenceStore.getState().addTyper(stream_id, user_id);
 
             // Clear any existing timer for this user+stream, set auto-expiry
             const key = `${stream_id}:${user_id}`;
@@ -125,7 +110,7 @@ export function useWebSocket() {
             typingTimersRef.current.set(
               key,
               window.setTimeout(() => {
-                removeTyper(stream_id, user_id);
+                usePresenceStore.getState().removeTyper(stream_id, user_id);
                 typingTimersRef.current.delete(key);
               }, TYPING_EXPIRE_MS),
             );
@@ -133,7 +118,7 @@ export function useWebSocket() {
           }
           case 'typing_stop': {
             const { user_id, stream_id } = evt.d as { user_id: string; stream_id: string };
-            removeTyper(stream_id, user_id);
+            usePresenceStore.getState().removeTyper(stream_id, user_id);
             const key = `${stream_id}:${user_id}`;
             const timer = typingTimersRef.current.get(key);
             if (timer) {
@@ -144,28 +129,28 @@ export function useWebSocket() {
           }
           case 'presence_update': {
             const { user_id, status } = evt.d as { user_id: string; status: number };
-            setPresence(user_id, status);
+            usePresenceStore.getState().setPresence(user_id, status);
             break;
           }
           case 'notification_create': {
             const notif = evt.d as Notification;
-            addNotification(notif);
+            useNotificationStore.getState().addNotification(notif);
             // Play notification sound
             notifAudio?.play().catch(() => {});
             break;
           }
           case 'dm_message_create': {
             const dmMsg = evt.d as Message;
-            addDMMessage(dmMsg);
+            useDMStore.getState().addDMMessage(dmMsg);
             // Auto-ack if this conversation is currently active (user can see the message)
             const activeConvId = useDMStore.getState().activeConversationId;
             if (dmMsg.conversation_id && dmMsg.conversation_id === activeConvId) {
-              ackDM(dmMsg.conversation_id);
+              useDMStore.getState().ackDM(dmMsg.conversation_id);
             }
             break;
           }
           case 'dm_conversation_create': {
-            addConversation(evt.d as Conversation);
+            useDMStore.getState().addConversation(evt.d as Conversation);
             break;
           }
           case 'reaction_add': {
@@ -192,22 +177,22 @@ export function useWebSocket() {
           }
           case 'voice_state_update': {
             const { stream_id, user_id, action } = evt.d as { stream_id: string; user_id: string; action: 'join' | 'leave' };
-            applyVoiceState(stream_id, user_id, action);
+            useStreamStore.getState().applyVoiceState(stream_id, user_id, action);
             break;
           }
           case 'friend_request': {
             const { user_id } = evt.d as { user_id: string };
-            handleFriendRequest(user_id);
+            useFriendStore.getState().handleFriendRequest(user_id);
             break;
           }
           case 'friend_accept': {
             const { user_id } = evt.d as { user_id: string };
-            handleFriendAccept(user_id);
+            useFriendStore.getState().handleFriendAccept(user_id);
             break;
           }
           case 'friend_remove': {
             const { user_id } = evt.d as { user_id: string };
-            handleFriendRemove(user_id);
+            useFriendStore.getState().handleFriendRemove(user_id);
             break;
           }
         }
@@ -241,7 +226,7 @@ export function useWebSocket() {
       typingTimersRef.current.clear();
       wsRef.current?.close();
     };
-  }, [token, send, addMessage, updateMessage, removeMessage, addTyper, removeTyper, setPresence, addNotification, addDMMessage, addConversation, ackDM]);
+  }, [token, send]);
 
   // Subscribe/unsubscribe to active stream
   useEffect(() => {

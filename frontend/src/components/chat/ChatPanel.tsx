@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useCallback } from 'react';
+import { useRef, useEffect, useLayoutEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStreamStore } from '../../stores/streamStore';
 import { useMessageStore } from '../../stores/messageStore';
@@ -16,6 +16,9 @@ export default function ChatPanel() {
   const user = useAuthStore((s) => s.user);
   const bottomRef = useRef<HTMLDivElement>(null);
   const unreadRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const prevMessageCountRef = useRef(0);
+  const wasNearBottomRef = useRef(true);
   const send = useWsSend();
   const lastReadMessageIds = useStreamStore((s) => s.lastReadMessageIds);
 
@@ -64,20 +67,46 @@ export default function ChatPanel() {
     }
   }, [activeStreamId, send]);
 
-  // Scroll to first unread divider or bottom
   const hasScrolledToUnread = useRef(false);
+
   useEffect(() => {
+    hasScrolledToUnread.current = false;
+    prevMessageCountRef.current = 0;
+    wasNearBottomRef.current = true;
+  }, [activeStreamId, activeConversationId]);
+
+  useLayoutEffect(() => {
     if (isLoading) {
-      hasScrolledToUnread.current = false;
       return;
     }
+    const el = scrollContainerRef.current;
+    const bottomEl = bottomRef.current;
+
     if (!hasScrolledToUnread.current && unreadRef.current) {
       unreadRef.current.scrollIntoView({ behavior: 'auto', block: 'center' });
       hasScrolledToUnread.current = true;
-    } else {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      prevMessageCountRef.current = displayMessages.length;
+      wasNearBottomRef.current = true;
+      return;
     }
-  }, [displayMessages, isLoading]);
+
+    if (!el || !bottomEl) {
+      prevMessageCountRef.current = displayMessages.length;
+      return;
+    }
+
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    const distBottom = scrollHeight - scrollTop - clientHeight;
+    const grew = displayMessages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = displayMessages.length;
+
+    if (grew && (wasNearBottomRef.current || distBottom < 80)) {
+      bottomEl.scrollIntoView({ behavior: 'smooth' });
+      wasNearBottomRef.current = true;
+    } else {
+      wasNearBottomRef.current = distBottom < 80;
+    }
+  }, [displayMessages.length, isLoading, firstUnreadIndex]);
 
   // Ack DM conversation when it becomes active and messages have loaded
   useEffect(() => {
@@ -141,7 +170,7 @@ export default function ChatPanel() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
         <AnimatePresence mode="wait">
         <motion.div
           key={activeStreamId || activeConversationId || 'empty'}
