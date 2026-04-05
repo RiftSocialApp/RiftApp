@@ -23,6 +23,16 @@ export default {
           success: '#22c55e',
           danger: '#ef4444',
           warning: '#f59e0b',
+          // Discord-style @mention row + pill (dark theme)
+          'mention-highlight-bg': '#3d3425',
+          'mention-highlight-hover': '#4a4032',
+          'mention-highlight-border': '#faa61a',
+          'mention-pill-bg': '#3e416d',
+          'mention-pill-hover': '#4d5180',
+          'mention-pill-text': '#dee0fc',
+          /** Discord-style active speaker ring */
+          'voice-speaking': '#43b581',
+          'discord-blurple': '#5865f2',
         },
       },
       fontFamily: {

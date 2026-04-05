@@ -153,7 +153,7 @@ function renderMentions(text: string, usernames: Set<string>, parentKey: number,
             onMentionClick(capturedName, (e.currentTarget as HTMLElement).getBoundingClientRect());
           }
         }}
-        className="rounded px-1 py-px bg-riftapp-accent/20 text-riftapp-accent-hover font-medium cursor-pointer hover:bg-riftapp-accent/30 hover:underline"
+        className="rounded px-1 py-px bg-riftapp-mention-pill-bg text-riftapp-mention-pill-text font-medium cursor-pointer hover:bg-riftapp-mention-pill-hover hover:underline"
       >
         @{name}
       </span>
@@ -380,7 +380,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       onContextMenu={handleMessageContextMenu}
       className={`group relative py-0.5 -mx-4 px-4 transition-colors duration-100 ${
         mentionsSelf
-          ? 'bg-riftapp-accent/[0.06] border-l-2 border-riftapp-accent/60 hover:bg-riftapp-accent/[0.10]'
+          ? 'bg-riftapp-mention-highlight-bg border-l-[3px] border-riftapp-mention-highlight-border hover:bg-riftapp-mention-highlight-hover'
           : 'hover:bg-riftapp-surface/20'
       } ${
         showHeader ? 'mt-[17px]' : ''

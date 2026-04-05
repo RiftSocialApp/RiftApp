@@ -5,9 +5,23 @@ interface VoicePanelProps {
   isScreenSharing: boolean;
   streamName: string;
   hubName: string;
+  noiseSuppressionEnabled: boolean;
   onLeave: () => void;
   onToggleCamera: () => void;
   onToggleScreenShare: () => void;
+  onToggleNoiseSuppression: () => void;
+}
+
+function KrispWaveformIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className={active ? 'text-riftapp-text' : 'text-riftapp-text-dim'} aria-hidden>
+      <rect x="4" y="10" width="2.5" height="8" rx="1" fill="currentColor" />
+      <rect x="8" y="6" width="2.5" height="16" rx="1" fill="currentColor" />
+      <rect x="12" y="3" width="2.5" height="22" rx="1" fill="currentColor" opacity={active ? 1 : 0.45} />
+      <rect x="16" y="7" width="2.5" height="14" rx="1" fill="currentColor" />
+      <rect x="20" y="11" width="2.5" height="6" rx="1" fill="currentColor" />
+    </svg>
+  );
 }
 
 export default function VoicePanel({
@@ -17,9 +31,11 @@ export default function VoicePanel({
   isScreenSharing,
   streamName,
   hubName,
+  noiseSuppressionEnabled,
   onLeave,
   onToggleCamera,
   onToggleScreenShare,
+  onToggleNoiseSuppression,
 }: VoicePanelProps) {
   if (!connected && !connecting) return null;
 
@@ -34,7 +50,7 @@ export default function VoicePanel({
           </span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {/* Signal strength icon */}
+          {/* Connection quality */}
           <div className="w-7 h-7 rounded-md flex items-center justify-center text-riftapp-text-dim" title="Connection quality">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-riftapp-success">
               <rect x="2" y="16" width="3" height="6" rx="1" />
@@ -43,7 +59,35 @@ export default function VoicePanel({
               <rect x="17" y="4" width="3" height="18" rx="1" />
             </svg>
           </div>
-          {/* Disconnect button */}
+          {/* Noise suppression (Discord / Krisp-style control) */}
+          <div className="relative group">
+            <button
+              type="button"
+              onClick={() => void onToggleNoiseSuppression()}
+              disabled={connecting}
+              aria-pressed={noiseSuppressionEnabled}
+              aria-label="Noise suppression"
+              className={`w-7 h-7 rounded-md flex items-center justify-center transition-all duration-150 active:scale-90 disabled:opacity-40 ${
+                noiseSuppressionEnabled
+                  ? 'bg-riftapp-surface-hover text-riftapp-text ring-1 ring-riftapp-success/35'
+                  : 'text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-surface-hover/80'
+              }`}
+            >
+              <KrispWaveformIcon active={noiseSuppressionEnabled} />
+            </button>
+            {/* Tooltip bubble (Discord-style) */}
+            <div
+              className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-[220px] -translate-x-1/2 rounded-lg border border-black/50 bg-[#111214] px-3 py-2 text-center text-[12px] leading-snug text-white shadow-[0_4px_16px_rgba(0,0,0,0.5)] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              role="tooltip"
+            >
+              Noise Suppression powered by Krisp
+              <div
+                className="absolute left-1/2 top-full h-0 w-0 -translate-x-1/2 border-x-[6px] border-x-transparent border-t-[6px] border-t-[#111214]"
+                aria-hidden
+              />
+            </div>
+          </div>
+          {/* Disconnect */}
           <button
             onClick={onLeave}
             title="Disconnect"
@@ -101,6 +145,18 @@ export default function VoicePanel({
               <line x1="8" y1="21" x2="16" y2="21" />
               <line x1="12" y1="17" x2="12" y2="21" />
               {isScreenSharing && <path d="M9 10l2 2 4-4" />}
+            </svg>
+          </button>
+
+          {/* Activities (placeholder) */}
+          <button
+            title="Activities"
+            className="w-[68px] h-[42px] rounded-xl flex items-center justify-center bg-riftapp-surface hover:bg-riftapp-surface-hover text-riftapp-text-muted hover:text-riftapp-text transition-all duration-150 active:scale-95"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1" />
+              <circle cx="17.5" cy="6.5" r="3.5" />
+              <path d="M8 18l4-4 3 3 4-6" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
 

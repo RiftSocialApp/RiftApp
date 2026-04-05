@@ -5,6 +5,7 @@ import {
   Track,
   VideoPresets,
   type RemoteParticipant,
+  type RemoteTrack,
   type RemoteTrackPublication,
   type LocalTrackPublication,
   type Participant,
@@ -35,17 +36,47 @@ interface VoiceStore {
   isScreenSharing: boolean;
   pttActive: boolean;
   pttMode: boolean;
+  /** 0–1 per remote identity; used for HTML audio elements tagged with data-riftapp-voice-id */
+  participantVolumes: Record<string, number>;
+  /** Mutes all remote voice output without changing per-user slider values */
+  voiceOutputMuted: boolean;
+  /** Extra 0–1 multiplier for participants who are screen sharing (stream audio) */
+  streamVolumes: Record<string, number>;
+  /** Per-identity stream mute (context menu) */
+  streamAudioMuted: Record<string, boolean>;
+  /** Duck stream audio when others are speaking */
+  streamAttenuationEnabled: boolean;
+  /** 0–100, higher = stronger ducking */
+  streamAttenuationStrength: number;
+  /** Browser WebRTC noise suppression (Discord-style control; not the Krisp SDK) */
+  noiseSuppressionEnabled: boolean;
 
   join: (streamId: string) => Promise<void>;
   leave: () => void;
   toggleMute: () => void;
-  toggleDeafen: () => void;
+  toggleDeafen: () => Promise<void>;
   toggleCamera: () => void;
   toggleScreenShare: () => void;
   togglePTT: () => void;
+  setParticipantVolume: (identity: string, volume: number) => void;
+  toggleVoiceOutputMute: () => void;
+  setStreamVolume: (identity: string, volume: number) => void;
+  toggleStreamAudioMute: (identity: string) => void;
+  setStreamAttenuationEnabled: (enabled: boolean) => void;
+  setStreamAttenuationStrength: (strength: number) => void;
+  toggleNoiseSuppression: () => Promise<void>;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
+
+/** Constraints passed to LiveKit when enabling the microphone */
+function micAudioCaptureOptions(noiseSuppression: boolean) {
+  return {
+    echoCancellation: true,
+    autoGainControl: true,
+    noiseSuppression,
+  };
+}
 
 let roomRef: Room | null = null;
 let joiningLock = false;
@@ -126,6 +157,40 @@ function syncParticipants() {
     isCameraOn: roomRef.localParticipant.isCameraEnabled,
     isScreenSharing: roomRef.localParticipant.isScreenShareEnabled,
   });
+  reapplyAllRemoteVoiceVolumes();
+}
+
+function effectiveRemoteVolume(identity: string): number {
+  const s = useVoiceStore.getState();
+  if (s.voiceOutputMuted) return 0;
+  let base = s.participantVolumes[identity] ?? 1;
+  const p = s.participants.find((x) => x.identity === identity);
+  if (p?.isScreenSharing) {
+    if (s.streamAudioMuted[identity]) base = 0;
+    else base *= s.streamVolumes[identity] ?? 1;
+    if (s.streamAttenuationEnabled) {
+      const othersSpeaking = s.participants.some((x) => x.isSpeaking && x.identity !== identity);
+      if (othersSpeaking) {
+        const t = (s.streamAttenuationStrength ?? 40) / 100;
+        base *= Math.max(0.12, 1 - t * 0.88);
+      }
+    }
+  }
+  return Math.min(1, Math.max(0, base));
+}
+
+function appendRemoteAudioElement(track: Track, identity: string) {
+  const el = track.attach() as HTMLMediaElement;
+  el.setAttribute('data-riftapp-voice-id', identity);
+  el.volume = effectiveRemoteVolume(identity);
+  document.body.appendChild(el);
+}
+
+function reapplyAllRemoteVoiceVolumes() {
+  document.querySelectorAll<HTMLMediaElement>('audio[data-riftapp-voice-id]').forEach((el) => {
+    const id = el.getAttribute('data-riftapp-voice-id');
+    if (id) el.volume = effectiveRemoteVolume(id);
+  });
 }
 
 function resetState() {
@@ -140,6 +205,13 @@ function resetState() {
     isCameraOn: false,
     isScreenSharing: false,
     pttActive: false,
+    participantVolumes: {},
+    voiceOutputMuted: false,
+    streamVolumes: {},
+    streamAudioMuted: {},
+    streamAttenuationEnabled: false,
+    streamAttenuationStrength: 40,
+    noiseSuppressionEnabled: true,
   });
 }
 
@@ -162,6 +234,13 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   isScreenSharing: false,
   pttActive: false,
   pttMode: false,
+  participantVolumes: {},
+  voiceOutputMuted: false,
+  streamVolumes: {},
+  streamAudioMuted: {},
+  streamAttenuationEnabled: false,
+  streamAttenuationStrength: 40,
+  noiseSuppressionEnabled: true,
 
   join: async (sid) => {
     if (joiningLock) return;
@@ -177,10 +256,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     try {
       const { token, url } = await api.getVoiceToken(sid);
 
+      const nsOn = useVoiceStore.getState().noiseSuppressionEnabled;
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
         videoCaptureDefaults: { resolution: VideoPresets.h1080.resolution },
+        audioCaptureDefaults: micAudioCaptureOptions(nsOn),
       });
       roomRef = room;
 
@@ -204,13 +285,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         }
       });
 
-      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrackPublication['track'], _pub: RemoteTrackPublication, _rp: RemoteParticipant) => {
+      room.on(RoomEvent.TrackSubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, participant: RemoteParticipant) => {
         if (track && track.kind === Track.Kind.Audio) {
-          const el = track.attach();
-          document.body.appendChild(el);
+          appendRemoteAudioElement(track, participant.identity);
         }
       });
-      room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrackPublication['track']) => {
+      room.on(RoomEvent.TrackUnsubscribed, (track: RemoteTrack, _pub: RemoteTrackPublication, _participant: RemoteParticipant) => {
         if (track) track.detach().forEach((el) => el.remove());
       });
 
@@ -222,7 +302,11 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       if (roomRef !== room) { room.disconnect(); return; }
 
       const startMuted = pttModeRef;
-      await room.localParticipant.setMicrophoneEnabled(!startMuted);
+      const ns = useVoiceStore.getState().noiseSuppressionEnabled;
+      await room.localParticipant.setMicrophoneEnabled(
+        !startMuted,
+        !startMuted ? micAudioCaptureOptions(ns) : undefined,
+      );
 
       set({
         connected: true,
@@ -234,6 +318,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         isCameraOn: false,
         isScreenSharing: false,
         participants: buildParticipants(room),
+        participantVolumes: {},
+        voiceOutputMuted: false,
+        streamVolumes: {},
+        streamAudioMuted: {},
+        streamAttenuationEnabled: false,
+        streamAttenuationStrength: 40,
       });
       wsSend('voice_state_update', { stream_id: sid, action: 'join' });
       playJoinSound();
@@ -261,7 +351,11 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   toggleMute: async () => {
     if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
     const wasEnabled = roomRef.localParticipant.isMicrophoneEnabled;
-    await roomRef.localParticipant.setMicrophoneEnabled(!wasEnabled);
+    const ns = get().noiseSuppressionEnabled;
+    await roomRef.localParticipant.setMicrophoneEnabled(
+      !wasEnabled,
+      !wasEnabled ? micAudioCaptureOptions(ns) : undefined,
+    );
     set({ isMuted: wasEnabled });
     syncParticipants();
   },
@@ -300,18 +394,18 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       rp.audioTrackPublications.forEach((pub) => {
         if (pub.track) {
           if (next) pub.track.detach().forEach((el) => el.remove());
-          else { const el = pub.track.attach(); document.body.appendChild(el); }
+          else appendRemoteAudioElement(pub.track, rp.identity);
         }
       });
     });
     if (next) {
       wasMutedBeforeDeafen = !room.localParticipant.isMicrophoneEnabled;
       if (room.localParticipant.isMicrophoneEnabled) {
-        room.localParticipant.setMicrophoneEnabled(false);
+        await room.localParticipant.setMicrophoneEnabled(false);
         set({ isMuted: true });
       }
     } else if (!wasMutedBeforeDeafen) {
-      room.localParticipant.setMicrophoneEnabled(true);
+      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(get().noiseSuppressionEnabled));
       set({ isMuted: false });
     }
     set({ isDeafened: next });
@@ -322,17 +416,69 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     const next = !get().pttMode;
     pttModeRef = next;
     if (roomRef && roomRef.state === ConnectionState.Connected) {
+      const ns = get().noiseSuppressionEnabled;
       if (next) {
-        roomRef.localParticipant.setMicrophoneEnabled(false);
+        void roomRef.localParticipant.setMicrophoneEnabled(false);
         set({ isMuted: true, pttActive: false, pttMode: next });
       } else {
-        roomRef.localParticipant.setMicrophoneEnabled(true);
+        void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(ns));
         set({ isMuted: false, pttMode: next });
       }
       syncParticipants();
     } else {
       set({ pttMode: next });
     }
+  },
+
+  setParticipantVolume: (identity, volume) => {
+    const v = Math.min(1, Math.max(0, volume));
+    set((s) => ({ participantVolumes: { ...s.participantVolumes, [identity]: v } }));
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  toggleVoiceOutputMute: () => {
+    set((s) => ({ voiceOutputMuted: !s.voiceOutputMuted }));
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  setStreamVolume: (identity, volume) => {
+    const v = Math.min(1, Math.max(0, volume));
+    set((s) => ({ streamVolumes: { ...s.streamVolumes, [identity]: v } }));
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  toggleStreamAudioMute: (identity) => {
+    set((s) => {
+      const next = !s.streamAudioMuted[identity];
+      return { streamAudioMuted: { ...s.streamAudioMuted, [identity]: next } };
+    });
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  setStreamAttenuationEnabled: (enabled) => {
+    set({ streamAttenuationEnabled: enabled });
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  setStreamAttenuationStrength: (strength) => {
+    const n = Math.min(100, Math.max(0, strength));
+    set({ streamAttenuationStrength: n });
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
+  },
+
+  toggleNoiseSuppression: async () => {
+    const room = roomRef;
+    if (!room || room.state !== ConnectionState.Connected) {
+      set((s) => ({ noiseSuppressionEnabled: !s.noiseSuppressionEnabled }));
+      return;
+    }
+    const next = !get().noiseSuppressionEnabled;
+    set({ noiseSuppressionEnabled: next });
+    if (room.localParticipant.isMicrophoneEnabled) {
+      await room.localParticipant.setMicrophoneEnabled(false);
+      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(next));
+    }
+    syncParticipants();
   },
 }));
 
@@ -346,7 +492,8 @@ if (typeof window !== 'undefined') {
     e.preventDefault();
     if (e.repeat) return;
     if (roomRef.state !== ConnectionState.Connected) return;
-    roomRef.localParticipant.setMicrophoneEnabled(true);
+    const ns = useVoiceStore.getState().noiseSuppressionEnabled;
+    void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(ns));
     useVoiceStore.setState({ isMuted: false, pttActive: true });
     syncParticipants();
   });

@@ -48,6 +48,8 @@ export default function StreamSidebar() {
   const voiceLeave = useVoiceStore((s) => s.leave);
   const voiceToggleCamera = useVoiceStore((s) => s.toggleCamera);
   const voiceToggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
+  const voiceNoiseSuppressionEnabled = useVoiceStore((s) => s.noiseSuppressionEnabled);
+  const voiceToggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
   const voiceMembers = useStreamStore((s) => s.voiceMembers);
 
   // Header context menu
@@ -476,9 +478,11 @@ export default function StreamSidebar() {
         isScreenSharing={voiceIsScreenSharing}
         streamName={streams.find((s) => s.id === voiceStreamId)?.name || ''}
         hubName={activeHub?.name || ''}
+        noiseSuppressionEnabled={voiceNoiseSuppressionEnabled}
         onLeave={voiceLeave}
         onToggleCamera={voiceToggleCamera}
         onToggleScreenShare={voiceToggleScreenShare}
+        onToggleNoiseSuppression={voiceToggleNoiseSuppression}
       />
 
       <UserBar user={user} logout={logout} />
