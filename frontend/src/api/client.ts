@@ -158,8 +158,8 @@ class ApiClient {
   editMessage(messageId: string, content: string) { return this.request<Message>(`/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify({ content }) }); }
   deleteMessage(messageId: string) { return this.request(`/messages/${messageId}`, { method: 'DELETE' }); }
 
-  addReaction(messageId: string, emoji: string) { return this.request(`/messages/${messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji }) }); }
-  removeReaction(messageId: string, emoji: string) { return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`, { method: 'DELETE' }); }
+  addReaction(messageId: string, emoji: string, emojiId?: string) { return this.request(`/messages/${messageId}/reactions`, { method: 'POST', body: JSON.stringify({ emoji, emoji_id: emojiId }) }); }
+  removeReaction(messageId: string, emoji: string, emojiId?: string) { const qs = emojiId ? `?emoji_id=${encodeURIComponent(emojiId)}` : ''; return this.request(`/messages/${messageId}/reactions/${encodeURIComponent(emoji)}${qs}`, { method: 'DELETE' }); }
 
   ackStream(streamId: string, messageId: string) { return this.request(`/streams/${streamId}/ack`, { method: 'PUT', body: JSON.stringify({ message_id: messageId }) }); }
   getReadStates(hubId: string) { return this.request<import('../types').StreamReadState[]>(`/hubs/${hubId}/read-states`); }

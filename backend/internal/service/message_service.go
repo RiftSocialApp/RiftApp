@@ -20,12 +20,12 @@ const maxAttachmentsPerMessage = 10
 const maxMentionsPerMessage = 25
 
 type MessageService struct {
-	msgRepo       *repository.MessageRepo
-	streamRepo    *repository.StreamRepo
-	hubService    *HubService
-	notifSvc      *NotificationService
-	hub           *ws.Hub
-	hubNotifRepo  *repository.HubNotificationSettingsRepo
+	msgRepo      *repository.MessageRepo
+	streamRepo   *repository.StreamRepo
+	hubService   *HubService
+	notifSvc     *NotificationService
+	hub          *ws.Hub
+	hubNotifRepo *repository.HubNotificationSettingsRepo
 }
 
 func NewMessageService(
@@ -170,12 +170,12 @@ func (s *MessageService) Delete(ctx context.Context, msgID, userID string) error
 	return nil
 }
 
-func (s *MessageService) ToggleReaction(ctx context.Context, msgID, userID, emoji string) (added bool, err error) {
+func (s *MessageService) ToggleReaction(ctx context.Context, msgID, userID, emoji string, emojiID *string) (added bool, err error) {
 	if emoji == "" {
 		return false, apperror.BadRequest("emoji is required")
 	}
 
-	exists, err := s.msgRepo.ReactionExists(ctx, msgID, userID, emoji)
+	exists, err := s.msgRepo.ReactionExists(ctx, msgID, userID, emoji, emojiID)
 	if err != nil {
 		return false, apperror.Internal("internal error", err)
 	}
@@ -183,42 +183,59 @@ func (s *MessageService) ToggleReaction(ctx context.Context, msgID, userID, emoj
 	msg, _ := s.msgRepo.GetByID(ctx, msgID)
 
 	if exists {
-		if err := s.msgRepo.RemoveReaction(ctx, msgID, userID, emoji); err != nil {
+		if err := s.msgRepo.RemoveReaction(ctx, msgID, userID, emoji, emojiID); err != nil {
 			return false, apperror.Internal("internal error", err)
 		}
-		s.broadcastReaction(msg, ws.OpReactionRemove, msgID, userID, emoji)
+		s.broadcastReaction(msg, ws.OpReactionRemove, msgID, userID, emoji, emojiID, nil)
 		return false, nil
 	}
 
-	if err := s.msgRepo.AddReaction(ctx, msgID, userID, emoji); err != nil {
+	if err := s.msgRepo.AddReaction(ctx, msgID, userID, emoji, emojiID); err != nil {
 		return false, apperror.Internal("failed to add reaction", err)
 	}
-	s.broadcastReaction(msg, ws.OpReactionAdd, msgID, userID, emoji)
+
+	// Resolve file_url for custom emoji in broadcast
+	var fileURL *string
+	if emojiID != nil {
+		var url string
+		_ = s.msgRepo.GetDB().QueryRow(ctx, `SELECT file_url FROM hub_emojis WHERE id = $1`, *emojiID).Scan(&url)
+		if url != "" {
+			fileURL = &url
+		}
+	}
+	s.broadcastReaction(msg, ws.OpReactionAdd, msgID, userID, emoji, emojiID, fileURL)
 	return true, nil
 }
 
-func (s *MessageService) RemoveReaction(ctx context.Context, msgID, userID, emoji string) error {
-	if err := s.msgRepo.RemoveReaction(ctx, msgID, userID, emoji); err != nil {
+func (s *MessageService) RemoveReaction(ctx context.Context, msgID, userID, emoji string, emojiID *string) error {
+	if err := s.msgRepo.RemoveReaction(ctx, msgID, userID, emoji, emojiID); err != nil {
 		return apperror.Internal("internal error", err)
 	}
 	msg, _ := s.msgRepo.GetByID(ctx, msgID)
-	s.broadcastReaction(msg, ws.OpReactionRemove, msgID, userID, emoji)
+	s.broadcastReaction(msg, ws.OpReactionRemove, msgID, userID, emoji, emojiID, nil)
 	return nil
 }
 
-func (s *MessageService) broadcastReaction(msg *models.Message, op, msgID, userID, emoji string) {
+func (s *MessageService) broadcastReaction(msg *models.Message, op, msgID, userID, emoji string, emojiID *string, fileURL *string) {
 	if msg == nil {
 		return
 	}
+	payload := map[string]interface{}{
+		"message_id": msgID, "user_id": userID, "emoji": emoji,
+	}
+	if emojiID != nil {
+		payload["emoji_id"] = *emojiID
+	}
+	if fileURL != nil {
+		payload["file_url"] = *fileURL
+	}
 	if msg.StreamID != nil {
-		evt := ws.NewEvent(op, map[string]string{
-			"message_id": msgID, "user_id": userID, "emoji": emoji, "stream_id": *msg.StreamID,
-		})
+		payload["stream_id"] = *msg.StreamID
+		evt := ws.NewEvent(op, payload)
 		s.hub.BroadcastToStream(*msg.StreamID, evt, "")
 	} else if msg.ConversationID != nil {
-		s.broadcastToConversation(context.Background(), *msg.ConversationID, op, map[string]string{
-			"message_id": msgID, "user_id": userID, "emoji": emoji, "conversation_id": *msg.ConversationID,
-		})
+		payload["conversation_id"] = *msg.ConversationID
+		s.broadcastToConversation(context.Background(), *msg.ConversationID, op, payload)
 	}
 }
 

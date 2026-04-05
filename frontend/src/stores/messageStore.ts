@@ -61,9 +61,9 @@ interface MessageState {
   /** Drop all cached streams + visible messages (logout). */
   clearSessionCaches: () => void;
 
-  toggleReaction: (messageId: string, emoji: string) => Promise<void>;
-  applyReactionAdd: (messageId: string, userId: string, emoji: string, isDM?: boolean) => void;
-  applyReactionRemove: (messageId: string, userId: string, emoji: string, isDM?: boolean) => void;
+  toggleReaction: (messageId: string, emoji: string, emojiId?: string) => Promise<void>;
+  applyReactionAdd: (messageId: string, userId: string, emoji: string, isDM?: boolean, emojiId?: string, fileUrl?: string) => void;
+  applyReactionRemove: (messageId: string, userId: string, emoji: string, isDM?: boolean, emojiId?: string) => void;
 }
 
 function patchCachedMessage(
@@ -237,22 +237,22 @@ export const useMessageStore = create<MessageState>((set, get) => ({
       streamMessagesCache: {},
     }),
 
-  toggleReaction: async (messageId, emoji) => {
-    await api.addReaction(messageId, emoji);
+  toggleReaction: async (messageId, emoji, emojiId) => {
+    await api.addReaction(messageId, emoji, emojiId);
   },
 
-  applyReactionAdd: (messageId, userId, emoji, isDM = false) => {
+  applyReactionAdd: (messageId, userId, emoji, isDM = false, emojiId, fileUrl) => {
     if (isDM) return;
     const patch = (m: Message) => {
       const reactions = [...(m.reactions || [])];
-      const idx = reactions.findIndex((r) => r.emoji === emoji);
+      const idx = reactions.findIndex((r) => emojiId ? r.emoji_id === emojiId : (r.emoji === emoji && !r.emoji_id));
       if (idx >= 0) {
         const r = reactions[idx];
         if (!r.users.includes(userId)) {
           reactions[idx] = { ...r, count: r.count + 1, users: [...r.users, userId] };
         }
       } else {
-        reactions.push({ emoji, count: 1, users: [userId] });
+        reactions.push({ emoji, emoji_id: emojiId, file_url: fileUrl, count: 1, users: [userId] });
       }
       return { ...m, reactions };
     };
@@ -262,12 +262,13 @@ export const useMessageStore = create<MessageState>((set, get) => ({
     }));
   },
 
-  applyReactionRemove: (messageId, userId, emoji, isDM = false) => {
+  applyReactionRemove: (messageId, userId, emoji, isDM = false, emojiId) => {
     if (isDM) return;
     const patch = (m: Message) => {
       const reactions = (m.reactions || [])
         .map((r) => {
-          if (r.emoji !== emoji) return r;
+          const match = emojiId ? r.emoji_id === emojiId : (r.emoji === emoji && !r.emoji_id);
+          if (!match) return r;
           const users = r.users.filter((u) => u !== userId);
           return { ...r, count: users.length, users };
         })

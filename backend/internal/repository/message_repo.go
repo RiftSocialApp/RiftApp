@@ -181,10 +181,13 @@ func (r *MessageRepo) FetchReactions(ctx context.Context, msgIDs []string) (map[
 	}
 
 	rows, err := r.db.Query(ctx,
-		`SELECT message_id, emoji, array_agg(user_id) AS users, count(*) AS cnt
-		 FROM reactions WHERE message_id = ANY($1)
-		 GROUP BY message_id, emoji
-		 ORDER BY min(created_at)`, msgIDs)
+		`SELECT r.message_id, r.emoji, r.emoji_id, e.file_url,
+		        array_agg(r.user_id) AS users, count(*) AS cnt
+		 FROM reactions r
+		 LEFT JOIN hub_emojis e ON r.emoji_id = e.id
+		 WHERE r.message_id = ANY($1)
+		 GROUP BY r.message_id, r.emoji, r.emoji_id, e.file_url
+		 ORDER BY min(r.created_at)`, msgIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -192,35 +195,48 @@ func (r *MessageRepo) FetchReactions(ctx context.Context, msgIDs []string) (map[
 
 	for rows.Next() {
 		var mid, emoji string
+		var emojiID, fileURL *string
 		var users []string
 		var cnt int
-		if err := rows.Scan(&mid, &emoji, &users, &cnt); err != nil {
+		if err := rows.Scan(&mid, &emoji, &emojiID, &fileURL, &users, &cnt); err != nil {
 			return nil, err
 		}
-		result[mid] = append(result[mid], models.ReactionAgg{Emoji: emoji, Count: cnt, Users: users})
+		result[mid] = append(result[mid], models.ReactionAgg{Emoji: emoji, EmojiID: emojiID, FileURL: fileURL, Count: cnt, Users: users})
 	}
 	return result, rows.Err()
 }
 
-func (r *MessageRepo) AddReaction(ctx context.Context, msgID, userID, emoji string) error {
+func (r *MessageRepo) AddReaction(ctx context.Context, msgID, userID, emoji string, emojiID *string) error {
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO reactions (message_id, user_id, emoji, created_at) VALUES ($1, $2, $3, $4)
+		`INSERT INTO reactions (message_id, user_id, emoji, emoji_id, created_at) VALUES ($1, $2, $3, $4, $5)
 		 ON CONFLICT DO NOTHING`,
-		msgID, userID, emoji, time.Now())
+		msgID, userID, emoji, emojiID, time.Now())
 	return err
 }
 
-func (r *MessageRepo) RemoveReaction(ctx context.Context, msgID, userID, emoji string) error {
+func (r *MessageRepo) RemoveReaction(ctx context.Context, msgID, userID, emoji string, emojiID *string) error {
+	if emojiID != nil {
+		_, err := r.db.Exec(ctx,
+			`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji_id = $3`,
+			msgID, userID, *emojiID)
+		return err
+	}
 	_, err := r.db.Exec(ctx,
-		`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3`,
+		`DELETE FROM reactions WHERE message_id = $1 AND user_id = $2 AND emoji = $3 AND emoji_id IS NULL`,
 		msgID, userID, emoji)
 	return err
 }
 
-func (r *MessageRepo) ReactionExists(ctx context.Context, msgID, userID, emoji string) (bool, error) {
+func (r *MessageRepo) ReactionExists(ctx context.Context, msgID, userID, emoji string, emojiID *string) (bool, error) {
 	var exists bool
+	if emojiID != nil {
+		err := r.db.QueryRow(ctx,
+			`SELECT EXISTS(SELECT 1 FROM reactions WHERE message_id=$1 AND user_id=$2 AND emoji_id=$3)`,
+			msgID, userID, *emojiID).Scan(&exists)
+		return exists, err
+	}
 	err := r.db.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3)`,
+		`SELECT EXISTS(SELECT 1 FROM reactions WHERE message_id=$1 AND user_id=$2 AND emoji=$3 AND emoji_id IS NULL)`,
 		msgID, userID, emoji).Scan(&exists)
 	return exists, err
 }

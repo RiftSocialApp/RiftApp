@@ -65,6 +65,8 @@ export interface Attachment {
 
 export interface ReactionAgg {
   emoji: string;
+  emoji_id?: string;
+  file_url?: string;
   count: number;
   users: string[];
 }

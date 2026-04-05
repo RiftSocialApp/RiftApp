@@ -58,6 +58,7 @@ export const useHubStore = create<HubState>((set, get) => ({
     const { useStreamStore } = await import('./streamStore');
     const { useDMStore } = await import('./dmStore');
     const { usePresenceStore } = await import('./presenceStore');
+    const { useEmojiStore } = await import('./emojiStore');
 
     set({ activeHubId: hubId });
     useDMStore.getState().clearActive();
@@ -70,6 +71,7 @@ export const useHubStore = create<HubState>((set, get) => ({
         useStreamStore.getState().loadStreams(hubId),
         usePresenceStore.getState().loadPresenceForHub(hubId),
         useStreamStore.getState().loadReadStates(hubId),
+        useEmojiStore.getState().loadHubEmojis(hubId),
       ]);
     } catch {
       // Streams may still be visible from cache; avoid throwing to click handlers.

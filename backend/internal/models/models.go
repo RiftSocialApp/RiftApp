@@ -89,13 +89,16 @@ type Reaction struct {
 	MessageID string    `json:"message_id"`
 	UserID    string    `json:"user_id"`
 	Emoji     string    `json:"emoji"`
+	EmojiID   *string   `json:"emoji_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 type ReactionAgg struct {
-	Emoji string   `json:"emoji"`
-	Count int      `json:"count"`
-	Users []string `json:"users"`
+	Emoji   string   `json:"emoji"`
+	EmojiID *string  `json:"emoji_id,omitempty"`
+	FileURL *string  `json:"file_url,omitempty"`
+	Count   int      `json:"count"`
+	Users   []string `json:"users"`
 }
 
 type DirectMessage struct {

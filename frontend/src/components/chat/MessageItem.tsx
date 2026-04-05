@@ -7,12 +7,13 @@ import { useAuthStore } from '../../stores/auth';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
+import { useHubStore } from '../../stores/hubStore';
+import { useEmojiStore } from '../../stores/emojiStore';
 import InviteEmbed from '../shared/InviteEmbed';
+import EmojiPicker, { type EmojiSelection } from '../shared/EmojiPicker';
 import MessageContextMenu from '../context-menus/MessageContextMenu';
 import DeleteMessageModal from '../modals/DeleteMessageModal';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
-
-const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '😮', '🙏'];
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
@@ -99,7 +100,7 @@ function linkifyText(text: string, keyPrefix: number | string = 0): React.ReactN
   return nodes;
 }
 
-function renderContent(content: string, usernames?: Set<string>, onMentionClick?: (username: string, rect: DOMRect) => void) {
+function renderContent(content: string, usernames?: Set<string>, onMentionClick?: (username: string, rect: DOMRect) => void, emojiMap?: Map<string, { id: string; file_url: string }>) {
   const parts: React.ReactNode[] = [];
   let remaining = content;
   let key = 0;
@@ -111,7 +112,7 @@ function renderContent(content: string, usernames?: Set<string>, onMentionClick?
   while ((match = codeBlockRegex.exec(remaining)) !== null) {
     if (match.index > lastIndex) {
       parts.push(
-        <span key={key++}>{renderInline(remaining.slice(lastIndex, match.index), usernames, onMentionClick)}</span>
+        <span key={key++}>{renderInline(remaining.slice(lastIndex, match.index), usernames, onMentionClick, emojiMap)}</span>
       );
     }
     parts.push(
@@ -124,7 +125,7 @@ function renderContent(content: string, usernames?: Set<string>, onMentionClick?
 
   if (lastIndex < remaining.length) {
     parts.push(
-      <span key={key++}>{renderInline(remaining.slice(lastIndex), usernames, onMentionClick)}</span>
+      <span key={key++}>{renderInline(remaining.slice(lastIndex), usernames, onMentionClick, emojiMap)}</span>
     );
   }
 
@@ -136,7 +137,7 @@ function renderContent(content: string, usernames?: Set<string>, onMentionClick?
     inviteCodes.push(inviteMatch[1]);
   }
 
-  const result = parts.length > 0 ? parts : [<span key={0}>{renderInline(content, usernames, onMentionClick)}</span>];
+  const result = parts.length > 0 ? parts : [<span key={0}>{renderInline(content, usernames, onMentionClick, emojiMap)}</span>];
 
   if (inviteCodes.length > 0) {
     result.push(
@@ -147,7 +148,7 @@ function renderContent(content: string, usernames?: Set<string>, onMentionClick?
   return result;
 }
 
-function renderInline(text: string, usernames?: Set<string>, onMentionClick?: (username: string, rect: DOMRect) => void): React.ReactNode {
+function renderInline(text: string, usernames?: Set<string>, onMentionClick?: (username: string, rect: DOMRect) => void, emojiMap?: Map<string, { id: string; file_url: string }>): React.ReactNode {
   // Split on inline code first
   return text.split(/(`[^`]+`)/).map((part, i) => {
     if (part.startsWith('`') && part.endsWith('`')) {
@@ -157,12 +158,53 @@ function renderInline(text: string, usernames?: Set<string>, onMentionClick?: (u
         </code>
       );
     }
+    // Parse custom :emoji: tokens in non-code text
+    const withEmojis = emojiMap && emojiMap.size > 0 ? renderCustomEmojis(part, emojiMap, i) : null;
+    const textToParse = withEmojis ?? part;
     // Parse @mentions in non-code text
-    if (usernames && usernames.size > 0) {
-      return renderMentions(part, usernames, i, onMentionClick);
+    if (typeof textToParse === 'string') {
+      if (usernames && usernames.size > 0) {
+        return renderMentions(textToParse, usernames, i, onMentionClick);
+      }
+      return <>{linkifyText(textToParse, i)}</>;
     }
-    return <>{linkifyText(part, i)}</>;
+    // textToParse is already a React node (from renderCustomEmojis)
+    return textToParse;
   });
+}
+
+function renderCustomEmojis(text: string, emojiMap: Map<string, { id: string; file_url: string }>, parentKey: number): React.ReactNode | null {
+  const emojiRe = /:([a-zA-Z0-9_\-]+):/g;
+  const nodes: React.ReactNode[] = [];
+  let lastIdx = 0;
+  let m;
+  let k = 0;
+  let hasMatch = false;
+  while ((m = emojiRe.exec(text)) !== null) {
+    const name = m[1];
+    const emoji = emojiMap.get(name.toLowerCase());
+    if (!emoji) continue;
+    hasMatch = true;
+    if (m.index > lastIdx) {
+      nodes.push(<span key={`${parentKey}-et${k++}`}>{linkifyText(text.slice(lastIdx, m.index), `${parentKey}-el${k}`)}</span>);
+    }
+    nodes.push(
+      <img
+        key={`${parentKey}-ce${k++}`}
+        src={publicAssetUrl(emoji.file_url)}
+        alt={`:${name}:`}
+        title={`:${name}:`}
+        className="inline-block w-5 h-5 object-contain align-text-bottom mx-0.5"
+        loading="lazy"
+      />
+    );
+    lastIdx = m.index + m[0].length;
+  }
+  if (!hasMatch) return null;
+  if (lastIdx < text.length) {
+    nodes.push(<span key={`${parentKey}-et${k++}`}>{linkifyText(text.slice(lastIdx), `${parentKey}-el${k}`)}</span>);
+  }
+  return <>{nodes}</>;
 }
 
 function renderMentions(text: string, usernames: Set<string>, parentKey: number, onMentionClick?: (username: string, rect: DOMRect) => void): React.ReactNode {
@@ -227,6 +269,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   const currentUsername = useAuthStore((s) => s.user?.username);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const myHubRole = hubMembers[currentUserId ?? '']?.role;
+  const activeHubId = useHubStore((s) => s.activeHubId);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -265,9 +308,22 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     if (user) openProfile(user, rect);
   }, [hubMembers, openProfile]);
 
+  const hubEmojis = useEmojiStore((s) => (activeHubId ? s.hubEmojis[activeHubId] : undefined));
+
+  // Build a name→{id, file_url} map for inline :emoji: rendering
+  const emojiMap = useMemo(() => {
+    const map = new Map<string, { id: string; file_url: string }>();
+    if (hubEmojis) {
+      for (const e of hubEmojis) {
+        map.set(e.name.toLowerCase(), { id: e.id, file_url: e.file_url });
+      }
+    }
+    return map;
+  }, [hubEmojis]);
+
   const renderedContent = useMemo(
-    () => message.content ? renderContent(message.content, knownUsernames, handleMentionClick) : null,
-    [message.content, knownUsernames, handleMentionClick],
+    () => message.content ? renderContent(message.content, knownUsernames, handleMentionClick, emojiMap) : null,
+    [message.content, knownUsernames, handleMentionClick, emojiMap],
   );
 
   // Detect whether the current user is mentioned in this message
@@ -353,9 +409,13 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     return () => document.removeEventListener('mousedown', handle);
   }, [pickerOpen]);
 
-  const handleToggle = (emoji: string) => {
-    toggleReaction(message.id, emoji);
+  const handleToggle = (emoji: string, emojiId?: string) => {
+    toggleReaction(message.id, emoji, emojiId);
     setPickerOpen(false);
+  };
+
+  const handlePickerSelect = (sel: EmojiSelection) => {
+    handleToggle(sel.emoji, sel.emojiId);
   };
 
   const executeDelete = useCallback(async () => {
@@ -484,18 +544,12 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
         </div>
         {/* Emoji picker */}
         {pickerOpen && (
-          <div ref={pickerRef} className="absolute right-0 top-full mt-1 bg-riftapp-panel border border-riftapp-border/60 rounded-xl shadow-elevation-high p-2 animate-scale-in z-50">
-            <div className="grid grid-cols-4 gap-1">
-              {QUICK_EMOJIS.map((emoji) => (
-                <button
-                  key={emoji}
-                  onClick={() => handleToggle(emoji)}
-                  className="w-10 h-10 flex items-center justify-center text-2xl leading-none rounded-lg hover:bg-riftapp-surface-hover active:bg-riftapp-panel transition-colors duration-150"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+          <div ref={pickerRef} className="absolute right-0 top-full mt-1 z-50">
+            <EmojiPicker
+              hubId={activeHubId}
+              onSelect={handlePickerSelect}
+              onClose={() => setPickerOpen(false)}
+            />
           </div>
         )}
       </div>
@@ -1307,25 +1361,31 @@ function ReactionPills({
   currentUserId,
   onToggle,
 }: {
-  reactions: { emoji: string; count: number; users: string[] }[];
+  reactions: { emoji: string; emoji_id?: string; file_url?: string; count: number; users: string[] }[];
   currentUserId?: string;
-  onToggle: (emoji: string) => void;
+  onToggle: (emoji: string, emojiId?: string) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1 mt-1">
       {reactions.map((r) => {
         const reacted = currentUserId ? r.users.includes(currentUserId) : false;
+        const isCustom = !!r.emoji_id && !!r.file_url;
         return (
           <button
-            key={r.emoji}
-            onClick={() => onToggle(r.emoji)}
+            key={r.emoji_id || r.emoji}
+            onClick={() => onToggle(r.emoji, r.emoji_id)}
+            title={r.emoji}
             className={`inline-flex items-center gap-1.5 h-6 min-w-[42px] px-1.5 rounded-full text-xs font-medium border transition-colors duration-150 cursor-pointer select-none ${
               reacted
                 ? 'bg-riftapp-accent/15 border-riftapp-accent/50 text-riftapp-accent'
                 : 'bg-riftapp-surface border-riftapp-border/50 text-riftapp-text-dim hover:border-riftapp-border hover:bg-riftapp-surface-hover'
             }`}
           >
-            <span className="w-4 h-4 text-[15px] leading-4 text-center shrink-0">{r.emoji}</span>
+            {isCustom ? (
+              <img src={publicAssetUrl(r.file_url!)} alt={r.emoji} className="w-4 h-4 object-contain shrink-0" />
+            ) : (
+              <span className="w-4 h-4 text-[15px] leading-4 text-center shrink-0">{r.emoji}</span>
+            )}
             <span>{r.count}</span>
           </button>
         );

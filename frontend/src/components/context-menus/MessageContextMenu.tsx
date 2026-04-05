@@ -182,8 +182,8 @@ export default function MessageContextMenu({
     onDelete?.();
   };
 
-  const addReaction = (emoji: string) => {
-    if (!isDM) void toggleReaction(message.id, emoji);
+  const addReaction = (emoji: string, emojiId?: string) => {
+    if (!isDM) void toggleReaction(message.id, emoji, emojiId);
     onClose();
   };
 

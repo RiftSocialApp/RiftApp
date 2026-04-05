@@ -3,6 +3,8 @@ import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { useMessageStore } from '../../stores/messageStore';
 import { useReplyDraftStore } from '../../stores/replyDraftStore';
 import { usePresenceStore } from '../../stores/presenceStore';
+import { useHubStore } from '../../stores/hubStore';
+import EmojiPicker, { type EmojiSelection } from '../shared/EmojiPicker';
 import { api } from '../../api/client';
 import type { Attachment, User } from '../../types';
 
@@ -45,6 +47,10 @@ export default function MessageInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastTypingRef = useRef(0);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
+  const activeHubId = useHubStore((s) => s.activeHubId);
+
+  // Emoji picker state
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -174,6 +180,19 @@ export default function MessageInput({
       }
     });
   }, [content]);
+
+  const handleEmojiSelect = useCallback((sel: EmojiSelection) => {
+    const insert = sel.emojiId ? sel.emoji : sel.emoji;
+    setContent((prev) => {
+      const textarea = textareaRef.current;
+      const cursorPos = textarea?.selectionStart ?? prev.length;
+      const before = prev.slice(0, cursorPos);
+      const after = prev.slice(cursorPos);
+      return before + insert + after;
+    });
+    setEmojiPickerOpen(false);
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Mention autocomplete navigation
@@ -418,6 +437,30 @@ export default function MessageInput({
           className="flex-1 px-1 py-3 bg-transparent text-[15px] text-riftapp-text placeholder:text-riftapp-text-dim/60 resize-none focus:outline-none max-h-[200px] leading-relaxed"
           maxLength={4000}
         />
+        <div className="relative">
+          <button
+            onClick={() => setEmojiPickerOpen((v) => !v)}
+            className="px-2 py-3 text-riftapp-text-dim hover:text-riftapp-text active:scale-95 transition-all duration-150"
+            title="Emoji"
+            type="button"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+              <line x1="9" y1="9" x2="9.01" y2="9" />
+              <line x1="15" y1="9" x2="15.01" y2="9" />
+            </svg>
+          </button>
+          {emojiPickerOpen && (
+            <div className="absolute bottom-full right-0 mb-2 z-50">
+              <EmojiPicker
+                hubId={isDMMode ? null : activeHubId}
+                onSelect={handleEmojiSelect}
+                onClose={() => setEmojiPickerOpen(false)}
+              />
+            </div>
+          )}
+        </div>
         <button
           onClick={handleSubmit}
           disabled={!canSend}

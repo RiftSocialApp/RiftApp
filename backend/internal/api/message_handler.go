@@ -80,13 +80,14 @@ func (h *MessageHandler) AddReaction(w http.ResponseWriter, r *http.Request) {
 	msgID := chi.URLParam(r, "messageID")
 	userID := middleware.GetUserID(r.Context())
 	var body struct {
-		Emoji string `json:"emoji"`
+		Emoji   string  `json:"emoji"`
+		EmojiID *string `json:"emoji_id,omitempty"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if _, err := h.svc.ToggleReaction(r.Context(), msgID, userID, body.Emoji); err != nil {
+	if _, err := h.svc.ToggleReaction(r.Context(), msgID, userID, body.Emoji, body.EmojiID); err != nil {
 		writeAppError(w, err)
 		return
 	}
@@ -97,7 +98,12 @@ func (h *MessageHandler) RemoveReaction(w http.ResponseWriter, r *http.Request) 
 	msgID := chi.URLParam(r, "messageID")
 	emoji := chi.URLParam(r, "emoji")
 	userID := middleware.GetUserID(r.Context())
-	if err := h.svc.RemoveReaction(r.Context(), msgID, userID, emoji); err != nil {
+	// Check for emoji_id query param for custom emoji removal
+	var emojiID *string
+	if eid := r.URL.Query().Get("emoji_id"); eid != "" {
+		emojiID = &eid
+	}
+	if err := h.svc.RemoveReaction(r.Context(), msgID, userID, emoji, emojiID); err != nil {
 		writeAppError(w, err)
 		return
 	}

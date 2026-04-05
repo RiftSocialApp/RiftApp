@@ -158,22 +158,22 @@ export function useWebSocket() {
             break;
           }
           case 'reaction_add': {
-            const { message_id, user_id, emoji } = evt.d as { message_id: string; user_id: string; emoji: string };
+            const { message_id, user_id, emoji, emoji_id, file_url } = evt.d as { message_id: string; user_id: string; emoji: string; emoji_id?: string; file_url?: string };
             const msgState = useMessageStore.getState();
             const dmState = useDMStore.getState();
             if (msgState.messages.some((m) => m.id === message_id)) {
-              msgState.applyReactionAdd(message_id, user_id, emoji);
+              msgState.applyReactionAdd(message_id, user_id, emoji, false, emoji_id, file_url);
             } else if (dmState.dmMessages.some((m) => m.id === message_id)) {
               dmState.applyReactionAdd(message_id, user_id, emoji);
             }
             break;
           }
           case 'reaction_remove': {
-            const { message_id, user_id, emoji } = evt.d as { message_id: string; user_id: string; emoji: string };
+            const { message_id, user_id, emoji, emoji_id } = evt.d as { message_id: string; user_id: string; emoji: string; emoji_id?: string };
             const msgState = useMessageStore.getState();
             const dmState = useDMStore.getState();
             if (msgState.messages.some((m) => m.id === message_id)) {
-              msgState.applyReactionRemove(message_id, user_id, emoji);
+              msgState.applyReactionRemove(message_id, user_id, emoji, false, emoji_id);
             } else if (dmState.dmMessages.some((m) => m.id === message_id)) {
               dmState.applyReactionRemove(message_id, user_id, emoji);
             }
