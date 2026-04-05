@@ -230,7 +230,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [messageMenu, setMessageMenu] = useState<{ x: number; y: number } | null>(null);
+  const [messageMenu, setMessageMenu] = useState<{ x: number; y: number; mediaUrl?: string } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
   const [savingEdit, setSavingEdit] = useState(false);
@@ -296,7 +296,19 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
 
   const handleMessageContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
-    setMessageMenu({ x: e.clientX, y: e.clientY });
+    // Detect if the right-click target is a media element
+    const target = e.target as HTMLElement;
+    let mediaUrl: string | undefined;
+    if (target instanceof HTMLImageElement && target.src) {
+      mediaUrl = target.src;
+    } else if (target instanceof HTMLVideoElement && target.src) {
+      mediaUrl = target.src;
+    } else {
+      // Check if target is inside a media wrapper (e.g. play overlay on video)
+      const video = target.closest('.group\\/video')?.querySelector('video');
+      if (video?.src) mediaUrl = video.src;
+    }
+    setMessageMenu({ x: e.clientX, y: e.clientY, mediaUrl });
   }, []);
 
   useEffect(() => {
@@ -533,6 +545,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
           isOwn={isOwn}
           canEdit={canEdit}
           canDelete={canDelete}
+          mediaUrl={messageMenu.mediaUrl}
           onClose={() => setMessageMenu(null)}
           onEdit={() => {
             setMessageMenu(null);
@@ -1016,6 +1029,7 @@ function VideoPlayer({ src }: { src: string }) {
       ref={containerRef}
       className="mt-1 max-w-[420px] rounded-xl overflow-hidden border border-riftapp-border/40 bg-black relative select-none group/video"
       tabIndex={0}
+      onContextMenu={(e) => e.preventDefault()}
       onMouseEnter={() => { setHovered(true); setShowControls(true); }}
       onMouseLeave={() => { setHovered(false); scheduleHide(); }}
       onMouseMove={() => { setShowControls(true); scheduleHide(); }}
@@ -1172,42 +1186,6 @@ function ImageThumb({
     <button
       type="button"
       onClick={onClick}
-      onContextMenu={(e) => {
-        e.preventDefault();
-        const menu = document.getElementById('img-ctx');
-        if (menu) menu.remove();
-        const el = document.createElement('div');
-        el.id = 'img-ctx';
-        el.className =
-          'fixed z-[300] py-1.5 min-w-[180px] rounded-lg bg-riftapp-panel border border-riftapp-border/60 shadow-elevation-high animate-scale-in';
-        el.style.left = `${e.clientX}px`;
-        el.style.top = `${e.clientY}px`;
-        const items = [
-          { label: 'Open in New Tab', action: () => window.open(src, '_blank', 'noopener') },
-          { label: 'Copy Image URL', action: () => navigator.clipboard.writeText(src) },
-        ];
-        items.forEach(({ label, action }) => {
-          const btn = document.createElement('button');
-          btn.textContent = label;
-          btn.className =
-            'w-full text-left px-3 py-1.5 text-sm text-riftapp-text hover:bg-riftapp-surface-hover transition-colors duration-100 cursor-pointer';
-          btn.onclick = () => {
-            action();
-            el.remove();
-          };
-          el.appendChild(btn);
-        });
-        document.body.appendChild(el);
-        const dismiss = () => {
-          el.remove();
-          document.removeEventListener('click', dismiss);
-          document.removeEventListener('contextmenu', dismiss);
-        };
-        requestAnimationFrame(() => {
-          document.addEventListener('click', dismiss);
-          document.addEventListener('contextmenu', dismiss);
-        });
-      }}
       className="relative block rounded-xl border border-riftapp-border/40 overflow-hidden bg-riftapp-bg/40
         hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md transition-all duration-200 cursor-pointer text-left group/thumb"
     >

@@ -88,6 +88,25 @@ function IconTrash() {
   );
 }
 
+function IconExternalLink() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#b5bac1] shrink-0">
+      <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" strokeLinecap="round" strokeLinejoin="round" />
+      <polyline points="15 3 21 3 21 9" strokeLinecap="round" strokeLinejoin="round" />
+      <line x1="10" y1="14" x2="21" y2="3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IconClipboard() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#b5bac1] shrink-0">
+      <path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2" strokeLinecap="round" />
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+    </svg>
+  );
+}
+
 interface Props {
   message: Message;
   x: number;
@@ -100,6 +119,7 @@ interface Props {
   onClose: () => void;
   onEdit: () => void;
   onDelete?: () => void;
+  mediaUrl?: string;
 }
 
 export default function MessageContextMenu({
@@ -114,6 +134,7 @@ export default function MessageContextMenu({
   onClose,
   onEdit,
   onDelete,
+  mediaUrl,
 }: Props) {
   const toggleReaction = useMessageStore((s) => s.toggleReaction);
   const setReplyTo = useReplyDraftStore((s) => s.setReplyTo);
@@ -188,6 +209,21 @@ export default function MessageContextMenu({
   return (
     <MenuOverlay x={x} y={y} onClose={onClose}>
       <div className="bg-[#111214] rounded-md border border-black/40 shadow-modal py-1.5 min-w-[240px] max-w-[280px] text-[13px] select-none">
+        {/* Media actions */}
+        {mediaUrl && (
+          <>
+            {row('Open in New Tab', <IconExternalLink />, () => {
+              window.open(mediaUrl, '_blank', 'noopener');
+              onClose();
+            })}
+            {row('Copy Media URL', <IconClipboard />, () => {
+              void navigator.clipboard.writeText(mediaUrl);
+              onClose();
+            })}
+            {menuDivider()}
+          </>
+        )}
+
         {!isDM && (
           <div className="flex items-center gap-0.5 px-1.5 pb-1.5 mb-0.5 border-b border-white/[0.06]">
             {QUICK_ROW.map((emoji) => (
