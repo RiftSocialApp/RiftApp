@@ -1,108 +1,123 @@
 # RiftApp
 
-> **Fast. Clean. Yours.** — Instant communication.
+<div align="center">
 
-A modern, privacy-first communication platform. Think fast group chat with hubs, streams, and real-time messaging — built for performance and simplicity.
+**Fast. Clean. Yours.**
 
-## Quick Start
+*Real-time communication, built for clarity and control.*
 
-### Prerequisites
+</div>
 
-- [Go 1.22+](https://go.dev/dl/)
-- [Node.js 20+](https://nodejs.org/)
-- [Docker + Docker Compose](https://docs.docker.com/get-docker/)
+---
 
-### One-Command Start (Docker)
+## ⟨ What is RiftApp? ⟩
+
+**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**—not someone else’s product roadmap.
+
+We believe great software should feel **light**, **responsive**, and **yours**. RiftApp is built for people who want the energy of a modern community app without the noise, lock-in, or clutter.
+
+---
+
+## ⟨ Why teams choose it ⟩
+
+- **Speed that keeps up** — Typing, sending, and switching contexts stay snappy so the room never feels sluggish.
+- **Spaces that make sense** — Organize people around **hubs**, **streams**, and **voice** without drowning in nested menus.
+- **Privacy by placement** — Run it on infrastructure you control; you decide who has access and where data lives.
+- **Room to grow** — From a tight friend group to a growing community, invites, friends, and moderation tools scale with you.
+
+Whether you’re coordinating a **creative crew**, a **gaming circle**, or an **internal squad**, RiftApp is meant to feel like **your** place on the internet.
+
+---
+
+## ⟨ Everything in one place ⟩
+
+**Your community, structured** — Create hubs for each group; split topics into streams; hop into voice when text isn’t enough.
+
+**Talk the way you want** — Public streams, side threads, and private DMs side by side—so nothing important gets lost in the shuffle.
+
+**Show up fully** — Profiles, avatars, and shared media help people recognize each other and celebrate the group’s personality.
+
+**Stay in control** — Invites you can share or limit, friend connections you manage, and ranks so trusted members can help keep things healthy.
+
+**Hear each other clearly** — Drop into voice streams when you need nuance, speed, or just human tone.
+
+---
+
+## ⟨ Words we use ⟩
+
+We use clear names so the app feels intentional, not borrowed:
+
+| You might say… | In RiftApp |
+|----------------|------------|
+| Server | **Hub** |
+| Channel | **Stream** |
+| Voice channel | **Voice stream** |
+| Roles | **Ranks** |
+
+---
+
+## ⟨ Under the hood ⟩
+
+RiftApp is **self-hostable** and **ready to extend** if your team ships software. For diagrams, data model, and implementation detail, see **[ARCHITECTURE.md](ARCHITECTURE.md)**.
+
+---
+
+## ⟨ Try it locally ⟩
+
+### What you’ll need
+
+Go, Node.js, and Docker are enough to run a full local stack—see `backend/go.mod` and your environment for exact versions.
+
+### First-time setup
 
 ```bash
-docker-compose up --build
+cp backend/.env.example backend/.env
 ```
 
-This starts:
-- **PostgreSQL** on port 5432
-- **Redis** on port 6379
-- **MinIO** (S3) on port 9000 (console: 9001)
-- **Backend API** on port 8080
-- **Frontend** on port 3000
+Adjust `backend/.env` for secrets, URLs, and storage before you bring services up.
 
-### Development (Local)
+### Full stack (Compose)
 
-**1. Start infrastructure:**
 ```bash
-docker-compose up postgres redis minio -d
+docker compose -f backend/compose.yml --env-file backend/.env up --build
 ```
 
-**2. Run backend:**
+### Day-to-day development
+
+Infra in the background:
+
+```bash
+docker compose -f backend/compose.yml --env-file backend/.env up postgres redis minio -d
+```
+
+API:
+
 ```bash
 cd backend
-cp ../.env.example .env
 go mod tidy
 go run ./cmd/riftapp
 ```
 
-**3. Run frontend:**
+App shell:
+
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Frontend dev server runs on `http://localhost:5173` with API proxy to backend.
+The dev UI is typically at **http://localhost:5173** with the API proxied from the frontend config.
 
-## Architecture
+---
 
-```
-Frontend (React/Vite/Tailwind)
-    ↕ REST + WebSocket
-Backend (Go / chi router)
-    ↕
-PostgreSQL + Redis + S3
-```
+## ⟨ Project layout ⟩
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for full details including database schema, API design, and WebSocket events.
+**`backend/`** — API, auth, real-time messaging, migrations, and `compose.yml` for local dependencies.  
+**`frontend/`** — Web client.  
+**`ARCHITECTURE.md`** — Technical deep dive for builders.
 
-## Project Structure
+---
 
-```
-RiftApp/
-├── backend/
-│   ├── cmd/riftapp/          # Entry point
-│   ├── internal/
-│   │   ├── api/              # HTTP handlers + router
-│   │   ├── auth/             # Auth service + JWT
-│   │   ├── config/           # Configuration
-│   │   ├── database/         # DB connection + migrations
-│   │   ├── middleware/       # Auth middleware
-│   │   ├── models/           # Data models + permissions
-│   │   └── ws/               # WebSocket hub + client
-│   ├── Dockerfile
-│   └── go.mod
-├── frontend/
-│   ├── src/
-│   │   ├── api/              # API client
-│   │   ├── components/
-│   │   │   ├── auth/         # Login/register
-│   │   │   ├── chat/         # Chat panel + messages
-│   │   │   ├── layout/       # App layout
-│   │   │   └── sidebar/      # Hub + stream sidebars
-│   │   ├── hooks/            # WebSocket hook
-│   │   ├── stores/           # Zustand state
-│   │   └── types/            # TypeScript types
-│   ├── Dockerfile
-│   └── package.json
-├── docker-compose.yml
-└── ARCHITECTURE.md
-```
-
-## Naming
-
-| Traditional    | RiftApp        |
-|---------------|----------------|
-| Server        | **Hub**        |
-| Channel       | **Stream**     |
-| Voice Channel | **Voice Stream** |
-| Roles         | **Ranks**      |
-
-## License
+## ⟨ License ⟩
 
 Private — all rights reserved.
