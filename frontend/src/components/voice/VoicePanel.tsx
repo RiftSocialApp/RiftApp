@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import SoundboardPanel from './SoundboardPanel';
+
 interface VoicePanelProps {
   connected: boolean;
   connecting: boolean;
@@ -5,6 +8,7 @@ interface VoicePanelProps {
   isScreenSharing: boolean;
   streamName: string;
   hubName: string;
+  hubId?: string | null;
   noiseSuppressionEnabled: boolean;
   onLeave: () => void;
   onToggleCamera: () => void;
@@ -31,12 +35,15 @@ export default function VoicePanel({
   isScreenSharing,
   streamName,
   hubName,
+  hubId,
   noiseSuppressionEnabled,
   onLeave,
   onToggleCamera,
   onToggleScreenShare,
   onToggleNoiseSuppression,
 }: VoicePanelProps) {
+  const [soundboardOpen, setSoundboardOpen] = useState(false);
+
   if (!connected && !connecting) return null;
 
   return (
@@ -160,17 +167,29 @@ export default function VoicePanel({
             </svg>
           </button>
 
-          {/* Soundboard (placeholder) */}
-          <button
-            title="Soundboard"
-            className="w-[68px] h-[42px] rounded-xl flex items-center justify-center bg-riftapp-surface hover:bg-riftapp-surface-hover text-riftapp-text-muted hover:text-riftapp-text transition-all duration-150 active:scale-95"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 18V5l12-2v13" />
-              <circle cx="6" cy="18" r="3" />
-              <circle cx="18" cy="16" r="3" />
-            </svg>
-          </button>
+          {/* Soundboard */}
+          <div className="relative">
+            <button
+              onClick={() => setSoundboardOpen((v) => !v)}
+              title="Soundboard"
+              className={`w-[68px] h-[42px] rounded-xl flex items-center justify-center transition-all duration-150 active:scale-95 ${
+                soundboardOpen
+                  ? 'bg-riftapp-text text-riftapp-bg'
+                  : 'bg-riftapp-surface hover:bg-riftapp-surface-hover text-riftapp-text-muted hover:text-riftapp-text'
+              }`}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18V5l12-2v13" />
+                <circle cx="6" cy="18" r="3" />
+                <circle cx="18" cy="16" r="3" />
+              </svg>
+            </button>
+            {soundboardOpen && hubId && (
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50">
+                <SoundboardPanel hubId={hubId} onClose={() => setSoundboardOpen(false)} />
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

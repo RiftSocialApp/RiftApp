@@ -214,6 +214,7 @@ class ApiClient {
   getHubSounds(hubId: string) { return this.request<HubSound[]>(`/hubs/${hubId}/sounds`); }
   createHubSound(hubId: string, name: string, fileUrl: string) { return this.request<HubSound>(`/hubs/${hubId}/sounds`, { method: 'POST', body: JSON.stringify({ name, file_url: fileUrl }) }); }
   deleteHubSound(hubId: string, soundId: string) { return this.request<void>(`/hubs/${hubId}/sounds/${soundId}`, { method: 'DELETE' }); }
+  playSoundboard(hubId: string, soundId: string) { return this.request<{ status: string }>(`/hubs/${hubId}/sounds/${soundId}/play`, { method: 'POST' }); }
 
   async uploadFile(file: File): Promise<Attachment> {
     const formData = new FormData();

@@ -414,3 +414,39 @@ func (h *Hub) IsOnline(userID string) bool {
 	sessions, ok := h.clients[userID]
 	return ok && len(sessions) > 0
 }
+
+// GetUserVoiceStreamID returns the stream the user is currently in voice for, or "".
+func (h *Hub) GetUserVoiceStreamID(userID string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for streamID, users := range h.voiceState {
+		if users[userID] {
+			return streamID
+		}
+	}
+	return ""
+}
+
+// BroadcastToVoiceChannel sends data to every user currently in voice for the given stream.
+func (h *Hub) BroadcastToVoiceChannel(streamID string, data []byte) {
+	h.mu.RLock()
+	users, ok := h.voiceState[streamID]
+	if !ok {
+		h.mu.RUnlock()
+		return
+	}
+	// Collect user IDs while holding the lock
+	userIDs := make([]string, 0, len(users))
+	for uid := range users {
+		userIDs = append(userIDs, uid)
+	}
+	// Send to each user's WebSocket sessions
+	for _, uid := range userIDs {
+		if sessions, ok := h.clients[uid]; ok {
+			for _, client := range sessions {
+				client.Send(data)
+			}
+		}
+	}
+	h.mu.RUnlock()
+}

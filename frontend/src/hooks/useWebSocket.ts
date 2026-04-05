@@ -199,6 +199,18 @@ export function useWebSocket() {
             useFriendStore.getState().handleFriendRemove(user_id);
             break;
           }
+          case 'soundboard_play': {
+            const { file_url } = evt.d as { sound_id: string; name: string; file_url: string; user_id: string };
+            // Play the sound locally for this user (all voice channel users receive this event)
+            try {
+              // file_url is an S3 path like /s3/bucket/key — route through API proxy
+              const url = file_url.startsWith('/s3/') ? `/api${file_url}` : file_url;
+              const audio = new Audio(url);
+              audio.volume = 0.5;
+              audio.play().catch(() => {});
+            } catch { /* Audio not available */ }
+            break;
+          }
         }
       };
 

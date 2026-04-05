@@ -387,6 +387,7 @@ export default function StreamSidebar() {
         isScreenSharing={voiceIsScreenSharing}
         streamName={streams.find((s) => s.id === voiceStreamId)?.name || ''}
         hubName={activeHub?.name || ''}
+        hubId={activeHubId}
         noiseSuppressionEnabled={voiceNoiseSuppressionEnabled}
         onLeave={voiceLeave}
         onToggleCamera={voiceToggleCamera}

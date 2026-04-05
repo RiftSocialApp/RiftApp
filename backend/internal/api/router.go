@@ -29,6 +29,7 @@ type RouterDeps struct {
 	NotifService            *service.NotificationService
 	FriendService           *service.FriendService
 	HubCustomizationService *service.HubCustomizationService
+	HubCustomizationRepo    *repository.HubCustomizationRepo
 	WSHub                   *ws.Hub
 	Config                  *config.Config
 	UploadHandler           *UploadHandler
@@ -57,7 +58,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	catH := NewCategoryHandler(deps.CategoryService)
 	msgH := NewMessageHandler(deps.MsgService)
 	wsH := NewWSHandler(deps.WSHub, deps.AuthService, deps.Config.AllowedOrigins)
-	voiceH := NewVoiceHandler(deps.Config, deps.HubService, deps.WSHub)
+	voiceH := NewVoiceHandler(deps.Config, deps.HubService, deps.WSHub, deps.HubCustomizationRepo)
 	notifH := NewNotifHandler(deps.NotifService)
 	dmH := NewDMHandler(deps.DMService)
 	friendH := NewFriendHandler(deps.FriendService)
@@ -149,6 +150,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 
 		r.Get("/api/voice/token", voiceH.Token)
 		r.Get("/api/hubs/{hubID}/voice-states", voiceH.States)
+		r.Post("/api/hubs/{hubID}/sounds/{soundID}/play", voiceH.PlaySound)
 
 		if deps.UploadHandler != nil {
 			r.Post("/api/upload", deps.UploadHandler.Upload)

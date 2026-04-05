@@ -99,6 +99,7 @@ func main() {
 		NotifService:            notifSvc,
 		FriendService:           friendSvc,
 		HubCustomizationService: customSvc,
+		HubCustomizationRepo:    customRepo,
 		WSHub:                   wsHub,
 		Config:                  cfg,
 		UploadHandler:           uploadH,

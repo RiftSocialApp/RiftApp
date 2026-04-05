@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -9,18 +10,34 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
+	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
 	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
 
 type VoiceHandler struct {
-	cfg    *config.Config
-	hubSvc *service.HubService
-	hub    *ws.Hub
+	cfg        *config.Config
+	hubSvc     *service.HubService
+	hub        *ws.Hub
+	customRepo *repository.HubCustomizationRepo
+	// Per-user soundboard rate limiter: userID -> last play timestamps
+	sbMu       sync.Mutex
+	sbLastPlay map[string][]time.Time
 }
 
-func NewVoiceHandler(cfg *config.Config, hubSvc *service.HubService, hub *ws.Hub) *VoiceHandler {
-	return &VoiceHandler{cfg: cfg, hubSvc: hubSvc, hub: hub}
+const (
+	soundboardMaxPlays = 3
+	soundboardWindow   = 5 * time.Second
+)
+
+func NewVoiceHandler(cfg *config.Config, hubSvc *service.HubService, hub *ws.Hub, customRepo *repository.HubCustomizationRepo) *VoiceHandler {
+	return &VoiceHandler{
+		cfg:        cfg,
+		hubSvc:     hubSvc,
+		hub:        hub,
+		customRepo: customRepo,
+		sbLastPlay: make(map[string][]time.Time),
+	}
 }
 
 func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
@@ -83,4 +100,71 @@ func (h *VoiceHandler) States(w http.ResponseWriter, r *http.Request) {
 		states = make(map[string][]string)
 	}
 	writeData(w, http.StatusOK, states)
+}
+
+func (h *VoiceHandler) PlaySound(w http.ResponseWriter, r *http.Request) {
+	userID := middleware.GetUserID(r.Context())
+	hubID := chi.URLParam(r, "hubID")
+	soundID := chi.URLParam(r, "soundID")
+
+	if hubID == "" || soundID == "" {
+		writeError(w, http.StatusBadRequest, "hubID and soundID are required")
+		return
+	}
+
+	// Rate limit: max 3 plays per 5 seconds per user
+	if !h.soundboardAllow(userID) {
+		writeError(w, http.StatusTooManyRequests, "soundboard rate limit exceeded, try again shortly")
+		return
+	}
+
+	// Verify user is in a voice channel for this hub
+	streamID := h.hub.GetUserVoiceStreamID(userID)
+	if streamID == "" {
+		writeError(w, http.StatusBadRequest, "you must be in a voice channel to play sounds")
+		return
+	}
+
+	// Fetch the sound
+	sound, err := h.customRepo.GetSound(r.Context(), hubID, soundID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "sound not found")
+		return
+	}
+
+	// Broadcast soundboard_play event to all users in the voice channel
+	evt := ws.NewEvent(ws.OpSoundboardPlay, map[string]string{
+		"sound_id": sound.ID,
+		"name":     sound.Name,
+		"file_url": sound.FileURL,
+		"user_id":  userID,
+	})
+	h.hub.BroadcastToVoiceChannel(streamID, evt)
+
+	writeData(w, http.StatusOK, map[string]string{"status": "playing"})
+}
+
+func (h *VoiceHandler) soundboardAllow(userID string) bool {
+	h.sbMu.Lock()
+	defer h.sbMu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-soundboardWindow)
+
+	// Filter out old timestamps
+	timestamps := h.sbLastPlay[userID]
+	filtered := timestamps[:0]
+	for _, t := range timestamps {
+		if t.After(cutoff) {
+			filtered = append(filtered, t)
+		}
+	}
+
+	if len(filtered) >= soundboardMaxPlays {
+		h.sbLastPlay[userID] = filtered
+		return false
+	}
+
+	h.sbLastPlay[userID] = append(filtered, now)
+	return true
 }

@@ -4,7 +4,9 @@ import { useMessageStore } from '../../stores/messageStore';
 import { useReplyDraftStore } from '../../stores/replyDraftStore';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useHubStore } from '../../stores/hubStore';
+import { useEmojiStore } from '../../stores/emojiStore';
 import EmojiPicker, { type EmojiSelection } from '../shared/EmojiPicker';
+import { EMOJI_AUTOCOMPLETE_LIST } from '../../utils/emojiNames';
 import { api } from '../../api/client';
 import type { Attachment, User } from '../../types';
 
@@ -57,6 +59,12 @@ export default function MessageInput({
   const [mentionIndex, setMentionIndex] = useState(0);
   const mentionStartRef = useRef<number | null>(null);
 
+  // :emoji: autocomplete state
+  const [emojiQuery, setEmojiQuery] = useState<string | null>(null);
+  const [emojiIndex, setEmojiIndex] = useState(0);
+  const emojiStartRef = useRef<number | null>(null);
+  const hubEmojis = useEmojiStore((s) => (activeHubId ? s.hubEmojis[activeHubId] : undefined));
+
   const memberList = useMemo<User[]>(
     () => Object.values(hubMembers),
     [hubMembers],
@@ -69,6 +77,37 @@ export default function MessageInput({
       .filter((u) => u.username.toLowerCase().startsWith(q) || u.display_name.toLowerCase().startsWith(q))
       .slice(0, 8);
   }, [mentionQuery, memberList]);
+
+  const emojiResults = useMemo(() => {
+    if (emojiQuery === null || emojiQuery.length < 1) return [];
+    const q = emojiQuery.toLowerCase();
+    const results: { name: string; emoji: string; emojiId?: string; fileUrl?: string; isCustom: boolean }[] = [];
+
+    // Custom hub emojis first
+    if (hubEmojis) {
+      for (const e of hubEmojis) {
+        if (e.name.toLowerCase().startsWith(q)) {
+          results.push({ name: e.name, emoji: `:${e.name}:`, emojiId: e.id, fileUrl: e.file_url, isCustom: true });
+        }
+        if (results.length >= 10) break;
+      }
+    }
+
+    // Then unicode emojis
+    if (results.length < 10) {
+      for (const entry of EMOJI_AUTOCOMPLETE_LIST) {
+        if (entry.name.startsWith(q)) {
+          // Avoid duplicate unicode chars
+          if (!results.some((r) => r.emoji === entry.emoji)) {
+            results.push({ name: entry.name, emoji: entry.emoji, isCustom: false });
+          }
+        }
+        if (results.length >= 10) break;
+      }
+    }
+
+    return results;
+  }, [emojiQuery, hubEmojis]);
 
   useEffect(() => {
     setReplyTo(null);
@@ -181,6 +220,27 @@ export default function MessageInput({
     });
   }, [content]);
 
+  const insertEmojiAutocomplete = useCallback((result: { name: string; emoji: string; isCustom: boolean }) => {
+    const start = emojiStartRef.current;
+    if (start === null) return;
+    const before = content.slice(0, start);
+    const textarea = textareaRef.current;
+    const cursorPos = textarea?.selectionStart ?? content.length;
+    const after = content.slice(cursorPos);
+    // For custom emojis insert :name:, for unicode insert the character directly
+    const inserted = result.isCustom ? result.emoji + ' ' : result.emoji + ' ';
+    setContent(before + inserted + after);
+    setEmojiQuery(null);
+    emojiStartRef.current = null;
+    requestAnimationFrame(() => {
+      if (textarea) {
+        textarea.focus();
+        const pos = before.length + inserted.length;
+        textarea.setSelectionRange(pos, pos);
+      }
+    });
+  }, [content]);
+
   const handleEmojiSelect = useCallback((sel: EmojiSelection) => {
     const insert = sel.emojiId ? sel.emoji : sel.emoji;
     setContent((prev) => {
@@ -219,6 +279,30 @@ export default function MessageInput({
         return;
       }
     }
+    // Emoji autocomplete navigation
+    if (emojiQuery !== null && emojiResults.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setEmojiIndex((i) => (i + 1) % emojiResults.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setEmojiIndex((i) => (i - 1 + emojiResults.length) % emojiResults.length);
+        return;
+      }
+      if (e.key === 'Tab' || e.key === 'Enter') {
+        e.preventDefault();
+        insertEmojiAutocomplete(emojiResults[emojiIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setEmojiQuery(null);
+        emojiStartRef.current = null;
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSubmit();
@@ -249,6 +333,17 @@ export default function MessageInput({
     } else {
       mentionStartRef.current = null;
       setMentionQuery(null);
+    }
+
+    // Detect :emoji query (must be at least 1 char after the colon, and no space in the query)
+    const colonMatch = textBefore.match(/(?:^|[\s]):([\w.\-+]*)$/);
+    if (colonMatch && colonMatch[1].length >= 1) {
+      emojiStartRef.current = cursorPos - colonMatch[1].length - 1; // include the ':'
+      setEmojiQuery(colonMatch[1]);
+      setEmojiIndex(0);
+    } else {
+      emojiStartRef.current = null;
+      setEmojiQuery(null);
     }
 
     // Throttled typing event
@@ -402,6 +497,35 @@ export default function MessageInput({
                 )}
                 <span className="font-medium truncate">{user.display_name}</span>
                 <span className="text-[12px] text-riftapp-text-dim ml-auto flex-shrink-0">@{user.username}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        {/* Emoji autocomplete dropdown */}
+        {emojiQuery !== null && emojiResults.length > 0 && (
+          <div className="absolute bottom-full left-0 right-0 mb-1 bg-riftapp-panel border border-riftapp-border/60 rounded-xl shadow-elevation-high overflow-hidden z-50 animate-scale-in">
+            <div className="px-3 py-1.5 text-[11px] font-semibold text-riftapp-text-dim uppercase tracking-wide">Emoji matching <span className="text-riftapp-accent">:{emojiQuery}</span></div>
+            {emojiResults.map((result, i) => (
+              <button
+                key={result.emojiId || result.name}
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  insertEmojiAutocomplete(result);
+                }}
+                onMouseEnter={() => setEmojiIndex(i)}
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-[14px] transition-colors ${
+                  i === emojiIndex
+                    ? 'bg-riftapp-accent/15 text-riftapp-text'
+                    : 'text-riftapp-text-muted hover:bg-riftapp-surface-hover'
+                }`}
+              >
+                {result.isCustom && result.fileUrl ? (
+                  <img src={publicAssetUrl(result.fileUrl)} alt={result.name} className="w-6 h-6 object-contain flex-shrink-0" />
+                ) : (
+                  <span className="w-6 h-6 flex items-center justify-center text-lg flex-shrink-0">{result.emoji}</span>
+                )}
+                <span className="font-medium truncate">:{result.name}:</span>
               </button>
             ))}
           </div>

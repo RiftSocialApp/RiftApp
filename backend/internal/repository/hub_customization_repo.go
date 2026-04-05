@@ -303,3 +303,14 @@ func (r *HubCustomizationRepo) DeleteSound(ctx context.Context, hubID, soundID s
 	}
 	return fileURL, nil
 }
+
+func (r *HubCustomizationRepo) GetSound(ctx context.Context, hubID, soundID string) (*models.HubSound, error) {
+	var s models.HubSound
+	err := r.db.QueryRow(ctx,
+		`SELECT id, hub_id, name, file_url, created_at FROM hub_sounds WHERE id = $1 AND hub_id = $2`,
+		soundID, hubID).Scan(&s.ID, &s.HubID, &s.Name, &s.FileURL, &s.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
