@@ -60,11 +60,14 @@ export default function DeleteMessageModal({ message, onConfirm, onCancel }: Pro
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/60 backdrop-blur-[2px] animate-fade-in"
       onClick={onCancel}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Delete Message"
     >
       <div
-        className="bg-[#313338] rounded-xl w-[440px] shadow-modal animate-scale-in overflow-hidden"
+        className="bg-[#313338] rounded-xl w-[440px] shadow-modal animate-scale-in overflow-hidden outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

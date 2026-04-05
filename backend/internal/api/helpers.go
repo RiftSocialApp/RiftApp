@@ -7,10 +7,14 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 )
 
-func writeJSON(w http.ResponseWriter, status int, data interface{}) {
+func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
+	json.NewEncoder(w).Encode(v)
+}
+
+func writeData(w http.ResponseWriter, status int, data interface{}) {
+	writeJSON(w, status, map[string]interface{}{"data": data})
 }
 
 func writeError(w http.ResponseWriter, status int, msg string) {

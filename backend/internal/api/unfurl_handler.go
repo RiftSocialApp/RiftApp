@@ -178,7 +178,7 @@ func HandleUnfurl(w http.ResponseWriter, r *http.Request) {
 
 	// Check cache first.
 	if cached, ok := ogCache.get(rawURL); ok {
-		writeJSON(w, http.StatusOK, cached)
+		writeData(w, http.StatusOK, cached)
 		return
 	}
 
@@ -215,5 +215,5 @@ func HandleUnfurl(w http.ResponseWriter, r *http.Request) {
 	meta := extractOG(string(body))
 	ogCache.set(rawURL, meta)
 
-	writeJSON(w, http.StatusOK, meta)
+	writeData(w, http.StatusOK, meta)
 }

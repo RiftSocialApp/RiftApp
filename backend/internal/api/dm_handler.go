@@ -24,7 +24,7 @@ func (h *DMHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, convos)
+	writeData(w, http.StatusOK, convos)
 }
 
 func (h *DMHandler) CreateOrOpen(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (h *DMHandler) CreateOrOpen(w http.ResponseWriter, r *http.Request) {
 	if created {
 		status = http.StatusCreated
 	}
-	writeJSON(w, status, result)
+	writeData(w, status, result)
 }
 
 func (h *DMHandler) Messages(w http.ResponseWriter, r *http.Request) {
@@ -61,7 +61,7 @@ func (h *DMHandler) Messages(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, messages)
+	writeData(w, http.StatusOK, messages)
 }
 
 func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
@@ -77,7 +77,7 @@ func (h *DMHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, msg)
+	writeData(w, http.StatusCreated, msg)
 }
 
 func (h *DMHandler) AckDM(w http.ResponseWriter, r *http.Request) {
@@ -104,5 +104,5 @@ func (h *DMHandler) DMReadStates(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, states)
+	writeData(w, http.StatusOK, states)
 }

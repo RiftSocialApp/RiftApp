@@ -36,7 +36,7 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, stream)
+	writeData(w, http.StatusCreated, stream)
 }
 
 func (h *StreamHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +46,7 @@ func (h *StreamHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, streams)
+	writeData(w, http.StatusOK, streams)
 }
 
 func (h *StreamHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +56,7 @@ func (h *StreamHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, stream)
+	writeData(w, http.StatusOK, stream)
 }
 
 func (h *StreamHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -88,7 +88,7 @@ func (h *StreamHandler) Patch(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, stream)
+	writeData(w, http.StatusOK, stream)
 }
 
 func (h *StreamHandler) Ack(w http.ResponseWriter, r *http.Request) {
@@ -116,7 +116,7 @@ func (h *StreamHandler) ReadStates(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, states)
+	writeData(w, http.StatusOK, states)
 }
 
 func (h *StreamHandler) Reorder(w http.ResponseWriter, r *http.Request) {

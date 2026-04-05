@@ -63,9 +63,11 @@ export default {
       },
       animation: {
         'fade-in': 'fadeIn 200ms ease-out',
+        'fade-out': 'fadeOut 200ms ease-out forwards',
         'slide-up': 'slideUp 200ms ease-out',
         'slide-in-left': 'slideInLeft 150ms ease-out',
         'scale-in': 'scaleIn 150ms ease-out',
+        'shake': 'shake 400ms ease-in-out',
         'pulse-soft': 'pulseSoft 2s ease-in-out infinite',
         'typing-dot': 'typingDot 1.4s ease-in-out infinite',
       },
@@ -73,6 +75,10 @@ export default {
         fadeIn: {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
+        },
+        fadeOut: {
+          '0%': { opacity: '1', transform: 'scale(1)' },
+          '100%': { opacity: '0', transform: 'scale(0.95)' },
         },
         slideUp: {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
@@ -85,6 +91,11 @@ export default {
         scaleIn: {
           '0%': { opacity: '0', transform: 'scale(0.95)' },
           '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        shake: {
+          '0%, 100%': { transform: 'translateX(0)' },
+          '15%, 45%, 75%': { transform: 'translateX(-4px)' },
+          '30%, 60%, 90%': { transform: 'translateX(4px)' },
         },
         pulseSoft: {
           '0%, 100%': { opacity: '1' },

@@ -19,19 +19,20 @@ import (
 )
 
 type RouterDeps struct {
-	AuthService     *auth.Service
-	UserService     *user.Service
-	HubService      *service.HubService
-	StreamService   *service.StreamService
-	CategoryService *service.CategoryService
-	MsgService      *service.MessageService
-	DMService       *service.DMService
-	NotifService    *service.NotificationService
-	FriendService   *service.FriendService
-	WSHub           *ws.Hub
-	Config          *config.Config
-	UploadHandler   *UploadHandler
-	NotifRepo       *repository.NotificationRepo
+	AuthService             *auth.Service
+	UserService             *user.Service
+	HubService              *service.HubService
+	StreamService           *service.StreamService
+	CategoryService         *service.CategoryService
+	MsgService              *service.MessageService
+	DMService               *service.DMService
+	NotifService            *service.NotificationService
+	FriendService           *service.FriendService
+	HubCustomizationService *service.HubCustomizationService
+	WSHub                   *ws.Hub
+	Config                  *config.Config
+	UploadHandler           *UploadHandler
+	NotifRepo               *repository.NotificationRepo
 }
 
 func NewRouter(deps RouterDeps) *chi.Mux {
@@ -51,6 +52,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	authH := NewAuthHandler(deps.AuthService)
 	userH := NewUserHandler(deps.UserService)
 	hubH := NewHubHandler(deps.HubService, deps.NotifService, deps.NotifRepo)
+	customH := NewHubCustomizationHandler(deps.HubCustomizationService)
 	streamH := NewStreamHandler(deps.StreamService)
 	catH := NewCategoryHandler(deps.CategoryService)
 	msgH := NewMessageHandler(deps.MsgService)
@@ -113,6 +115,10 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Get("/api/hubs/{hubID}/members", hubH.Members)
 		r.Post("/api/hubs/{hubID}/invite", hubH.CreateInvite)
 
+		r.Get("/api/hubs/{hubID}/emojis", customH.ListEmojis)
+		r.Get("/api/hubs/{hubID}/stickers", customH.ListStickers)
+		r.Get("/api/hubs/{hubID}/sounds", customH.ListSounds)
+
 		r.Get("/api/invites/{code}", hubH.GetInviteInfo)
 		r.Post("/api/invites/{code}", hubH.JoinViaInvite)
 
@@ -172,6 +178,20 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Get("/api/dms/{conversationID}/messages", dmH.Messages)
 		r.Post("/api/dms/{conversationID}/messages", dmH.SendMessage)
 		r.Put("/api/dms/{conversationID}/ack", dmH.AckDM)
+	})
+
+	// Customization write routes — tighter rate limit (5 req / 10s to prevent abuse).
+	customWriteRL := middleware.NewRateLimiter(rate.Every(10*time.Second), 5)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(deps.AuthService))
+		r.Use(middleware.RateLimit(customWriteRL))
+
+		r.Post("/api/hubs/{hubID}/emojis", customH.CreateEmoji)
+		r.Delete("/api/hubs/{hubID}/emojis/{emojiID}", customH.DeleteEmoji)
+		r.Post("/api/hubs/{hubID}/stickers", customH.CreateSticker)
+		r.Delete("/api/hubs/{hubID}/stickers/{stickerID}", customH.DeleteSticker)
+		r.Post("/api/hubs/{hubID}/sounds", customH.CreateSound)
+		r.Delete("/api/hubs/{hubID}/sounds/{soundID}", customH.DeleteSound)
 	})
 
 	return r

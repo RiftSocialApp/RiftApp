@@ -64,7 +64,7 @@ func (h *VoiceHandler) Token(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{
+	writeData(w, http.StatusOK, map[string]string{
 		"token": token,
 		"url":   publicURL,
 		"room":  roomName,
@@ -82,5 +82,5 @@ func (h *VoiceHandler) States(w http.ResponseWriter, r *http.Request) {
 	if states == nil {
 		states = make(map[string][]string)
 	}
-	writeJSON(w, http.StatusOK, states)
+	writeData(w, http.StatusOK, states)
 }

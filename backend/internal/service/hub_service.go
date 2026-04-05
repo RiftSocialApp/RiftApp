@@ -15,11 +15,11 @@ import (
 )
 
 type HubService struct {
-	hubRepo       *repository.HubRepo
-	streamRepo    *repository.StreamRepo
-	inviteRepo    *repository.InviteRepo
-	notifRepo     *repository.NotificationRepo
-	hubNotifRepo  *repository.HubNotificationSettingsRepo
+	hubRepo      *repository.HubRepo
+	streamRepo   *repository.StreamRepo
+	inviteRepo   *repository.InviteRepo
+	notifRepo    *repository.NotificationRepo
+	hubNotifRepo *repository.HubNotificationSettingsRepo
 }
 
 func NewHubService(
@@ -80,7 +80,7 @@ func (s *HubService) List(ctx context.Context, userID string) ([]models.Hub, err
 	return hubs, nil
 }
 
-func (s *HubService) Update(ctx context.Context, hubID, userID string, name *string, iconURL *string) (*models.Hub, error) {
+func (s *HubService) Update(ctx context.Context, hubID, userID string, name *string, iconURL *string, bannerURL *string) (*models.Hub, error) {
 	if !s.canManage(ctx, hubID, userID) {
 		return nil, apperror.Forbidden("you do not have permission to edit this hub")
 	}
@@ -99,12 +99,19 @@ func (s *HubService) Update(ctx context.Context, hubID, userID string, name *str
 		}
 		iconURL = &u
 	}
+	if bannerURL != nil {
+		u := strings.TrimSpace(*bannerURL)
+		if len(u) > 512 {
+			return nil, apperror.BadRequest("banner_url must be at most 512 characters")
+		}
+		bannerURL = &u
+	}
 
-	if name == nil && iconURL == nil {
+	if name == nil && iconURL == nil && bannerURL == nil {
 		return nil, apperror.BadRequest("no fields to update")
 	}
 
-	hub, err := s.hubRepo.Update(ctx, hubID, name, iconURL)
+	hub, err := s.hubRepo.Update(ctx, hubID, name, iconURL, bannerURL)
 	if err != nil {
 		return nil, apperror.NotFound("hub not found")
 	}

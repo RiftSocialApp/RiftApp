@@ -67,7 +67,9 @@ func main() {
 	friendRepo := repository.NewFriendshipRepo(db)
 	blockRepo := repository.NewBlockRepo(db)
 	notifSvc := service.NewNotificationService(notifRepo, wsHub)
+	customRepo := repository.NewHubCustomizationRepo(db)
 	hubSvc := service.NewHubService(hubRepo, streamRepo, inviteRepo, notifRepo, hubNotifRepo)
+	customSvc := service.NewHubCustomizationService(customRepo, hubRepo)
 	streamSvc := service.NewStreamService(streamRepo, hubSvc, msgRepo, notifRepo)
 	catSvc := service.NewCategoryService(catRepo, hubSvc)
 	msgSvc := service.NewMessageService(msgRepo, streamRepo, hubSvc, notifSvc, wsHub, hubNotifRepo)
@@ -80,21 +82,27 @@ func main() {
 		log.Printf("warning: file uploads disabled: %v", err)
 	}
 
+	// Wire S3 file cleanup for customization deletes.
+	if uploadH != nil {
+		customSvc.SetFileDeleter(uploadH)
+	}
+
 	// Router
 	router := api.NewRouter(api.RouterDeps{
-		AuthService:     authService,
-		UserService:     userService,
-		HubService:      hubSvc,
-		StreamService:   streamSvc,
-		CategoryService: catSvc,
-		MsgService:      msgSvc,
-		DMService:       dmSvc,
-		NotifService:    notifSvc,
-		FriendService:   friendSvc,
-		WSHub:           wsHub,
-		Config:          cfg,
-		UploadHandler:   uploadH,
-		NotifRepo:       notifRepo,
+		AuthService:             authService,
+		UserService:             userService,
+		HubService:              hubSvc,
+		StreamService:           streamSvc,
+		CategoryService:         catSvc,
+		MsgService:              msgSvc,
+		DMService:               dmSvc,
+		NotifService:            notifSvc,
+		FriendService:           friendSvc,
+		HubCustomizationService: customSvc,
+		WSHub:                   wsHub,
+		Config:                  cfg,
+		UploadHandler:           uploadH,
+		NotifRepo:               notifRepo,
 	})
 
 	srv := &http.Server{

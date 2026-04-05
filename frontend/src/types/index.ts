@@ -18,6 +18,7 @@ export interface Hub {
   name: string;
   owner_id: string;
   icon_url?: string;
+  banner_url?: string;
   created_at: string;
 }
 
@@ -150,6 +151,30 @@ export interface Block {
 }
 
 export type RelationshipType = 'none' | 'friends' | 'pending_incoming' | 'pending_outgoing' | 'blocked' | 'blocked_by';
+
+export interface HubEmoji {
+  id: string;
+  hub_id: string;
+  name: string;
+  file_url: string;
+  created_at: string;
+}
+
+export interface HubSticker {
+  id: string;
+  hub_id: string;
+  name: string;
+  file_url: string;
+  created_at: string;
+}
+
+export interface HubSound {
+  id: string;
+  hub_id: string;
+  name: string;
+  file_url: string;
+  created_at: string;
+}
 
 // WebSocket event types
 export interface WSEvent {

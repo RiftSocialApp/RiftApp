@@ -24,7 +24,7 @@ func (h *NotifHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, notifs)
+	writeData(w, http.StatusOK, notifs)
 }
 
 func (h *NotifHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
@@ -35,7 +35,7 @@ func (h *NotifHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "notification not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeData(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *NotifHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
@@ -44,5 +44,5 @@ func (h *NotifHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	writeData(w, http.StatusOK, map[string]string{"status": "ok"})
 }

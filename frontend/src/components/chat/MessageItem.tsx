@@ -711,8 +711,8 @@ function TwitterEmbed({ url }: { url: string }) {
       try {
         const res = await fetch(`/api/unfurl?url=${encodeURIComponent(url)}`);
         if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setMeta(data);
+          const body = await res.json();
+          if (!cancelled) setMeta(body.data ?? body);
         }
       } catch { /* ignore */ }
       if (!cancelled) setLoading(false);
@@ -773,8 +773,8 @@ function RedditEmbed({ url }: { url: string }) {
       try {
         const res = await fetch(`/api/unfurl?url=${encodeURIComponent(url)}`);
         if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setMeta(data);
+          const body = await res.json();
+          if (!cancelled) setMeta(body.data ?? body);
         }
       } catch { /* ignore */ }
       if (!cancelled) setLoading(false);
@@ -838,8 +838,9 @@ function GenericLinkPreview({ url }: { url: string }) {
       try {
         const res = await fetch(`/api/unfurl?url=${encodeURIComponent(url)}`);
         if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setMeta({ ...data, domain });
+          const body = await res.json();
+          const d = body.data ?? body;
+          if (!cancelled) setMeta({ ...d, domain });
         }
       } catch { /* ignore */ }
       if (!cancelled) setLoading(false);

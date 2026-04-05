@@ -1,4 +1,4 @@
-import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType } from '../types';
+import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType, HubEmoji, HubSticker, HubSound } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -36,11 +36,11 @@ class ApiClient {
 
     if (res.status === 204) return undefined as T;
 
-    const data = await res.json();
+    const body = await res.json();
     if (!res.ok) {
-      throw new Error(data.error || 'Request failed');
+      throw new Error(body.error || 'Request failed');
     }
-    return data as T;
+    return body.data as T;
   }
 
   private async tryRefresh(): Promise<boolean> {
@@ -111,7 +111,7 @@ class ApiClient {
   getHub(hubId: string) { return this.request<Hub>(`/hubs/${hubId}`); }
   getHubMembers(hubId: string) { return this.request<User[]>(`/hubs/${hubId}/members`); }
   joinHub(hubId: string) { return this.request(`/hubs/${hubId}/join`, { method: 'POST' }); }
-  updateHub(hubId: string, data: { name?: string; icon_url?: string }) { return this.request<Hub>(`/hubs/${hubId}`, { method: 'PATCH', body: JSON.stringify(data) }); }
+  updateHub(hubId: string, data: { name?: string; icon_url?: string; banner_url?: string }) { return this.request<Hub>(`/hubs/${hubId}`, { method: 'PATCH', body: JSON.stringify(data) }); }
   deleteHub(hubId: string) { return this.request<void>(`/hubs/${hubId}`, { method: 'DELETE' }); }
   createInvite(hubId: string, options?: { max_uses?: number; expires_in?: number }) { return this.request<HubInvite>(`/hubs/${hubId}/invite`, { method: 'POST', body: JSON.stringify(options ?? {}) }); }
   joinInvite(code: string) { return this.request<{ status: string; hub: Hub }>(`/invites/${code}`, { method: 'POST' }); }
@@ -200,15 +200,30 @@ class ApiClient {
   getVoiceToken(streamId: string) { return this.request<{ token: string; url: string; room: string }>(`/voice/token?streamID=${streamId}`); }
   getVoiceStates(hubId: string) { return this.request<Record<string, string[]>>(`/hubs/${hubId}/voice-states`); }
 
+  // Hub Customization — Emojis
+  getHubEmojis(hubId: string) { return this.request<HubEmoji[]>(`/hubs/${hubId}/emojis`); }
+  createHubEmoji(hubId: string, name: string, fileUrl: string) { return this.request<HubEmoji>(`/hubs/${hubId}/emojis`, { method: 'POST', body: JSON.stringify({ name, file_url: fileUrl }) }); }
+  deleteHubEmoji(hubId: string, emojiId: string) { return this.request<void>(`/hubs/${hubId}/emojis/${emojiId}`, { method: 'DELETE' }); }
+
+  // Hub Customization — Stickers
+  getHubStickers(hubId: string) { return this.request<HubSticker[]>(`/hubs/${hubId}/stickers`); }
+  createHubSticker(hubId: string, name: string, fileUrl: string) { return this.request<HubSticker>(`/hubs/${hubId}/stickers`, { method: 'POST', body: JSON.stringify({ name, file_url: fileUrl }) }); }
+  deleteHubSticker(hubId: string, stickerId: string) { return this.request<void>(`/hubs/${hubId}/stickers/${stickerId}`, { method: 'DELETE' }); }
+
+  // Hub Customization — Sounds
+  getHubSounds(hubId: string) { return this.request<HubSound[]>(`/hubs/${hubId}/sounds`); }
+  createHubSound(hubId: string, name: string, fileUrl: string) { return this.request<HubSound>(`/hubs/${hubId}/sounds`, { method: 'POST', body: JSON.stringify({ name, file_url: fileUrl }) }); }
+  deleteHubSound(hubId: string, soundId: string) { return this.request<void>(`/hubs/${hubId}/sounds/${soundId}`, { method: 'DELETE' }); }
+
   async uploadFile(file: File): Promise<Attachment> {
     const formData = new FormData();
     formData.append('file', file);
     const headers: Record<string, string> = {};
     if (this.token) { headers['Authorization'] = `Bearer ${this.token}`; }
     const res = await fetch(`${BASE}/upload`, { method: 'POST', headers, body: formData });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Upload failed');
-    return data as Attachment;
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Upload failed');
+    return body.data as Attachment;
   }
 }
 

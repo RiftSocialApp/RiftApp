@@ -34,7 +34,7 @@ func (h *HubHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, hub)
+	writeData(w, http.StatusCreated, hub)
 }
 
 func (h *HubHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (h *HubHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, hub)
+	writeData(w, http.StatusOK, hub)
 }
 
 func (h *HubHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func (h *HubHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, hubs)
+	writeData(w, http.StatusOK, hubs)
 }
 
 func (h *HubHandler) Delete(w http.ResponseWriter, r *http.Request) {
@@ -72,19 +72,20 @@ func (h *HubHandler) Update(w http.ResponseWriter, r *http.Request) {
 	hubID := chi.URLParam(r, "hubID")
 	userID := middleware.GetUserID(r.Context())
 	var body struct {
-		Name    *string `json:"name"`
-		IconURL *string `json:"icon_url"`
+		Name      *string `json:"name"`
+		IconURL   *string `json:"icon_url"`
+		BannerURL *string `json:"banner_url"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	hub, err := h.svc.Update(r.Context(), hubID, userID, body.Name, body.IconURL)
+	hub, err := h.svc.Update(r.Context(), hubID, userID, body.Name, body.IconURL, body.BannerURL)
 	if err != nil {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, hub)
+	writeData(w, http.StatusOK, hub)
 }
 
 func (h *HubHandler) Join(w http.ResponseWriter, r *http.Request) {
@@ -94,7 +95,7 @@ func (h *HubHandler) Join(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "joined"})
+	writeData(w, http.StatusOK, map[string]string{"status": "joined"})
 }
 
 func (h *HubHandler) Leave(w http.ResponseWriter, r *http.Request) {
@@ -104,7 +105,7 @@ func (h *HubHandler) Leave(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "left"})
+	writeData(w, http.StatusOK, map[string]string{"status": "left"})
 }
 
 func (h *HubHandler) Members(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +116,7 @@ func (h *HubHandler) Members(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, members)
+	writeData(w, http.StatusOK, members)
 }
 
 func (h *HubHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
@@ -131,7 +132,7 @@ func (h *HubHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, invite)
+	writeData(w, http.StatusCreated, invite)
 }
 
 func (h *HubHandler) GetInviteInfo(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +142,7 @@ func (h *HubHandler) GetInviteInfo(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, info)
+	writeData(w, http.StatusOK, info)
 }
 
 func (h *HubHandler) JoinViaInvite(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +160,7 @@ func (h *HubHandler) JoinViaInvite(w http.ResponseWriter, r *http.Request) {
 		go h.notifSvc.Create(creatorID, "invite", title, nil, nil, &hub.ID, nil, &userID)
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{"status": "joined", "hub": hub})
+	writeData(w, http.StatusOK, map[string]interface{}{"status": "joined", "hub": hub})
 }
 
 func (h *HubHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Request) {
@@ -170,7 +171,7 @@ func (h *HubHandler) GetNotificationSettings(w http.ResponseWriter, r *http.Requ
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeData(w, http.StatusOK, st)
 }
 
 func (h *HubHandler) PatchNotificationSettings(w http.ResponseWriter, r *http.Request) {
@@ -186,5 +187,5 @@ func (h *HubHandler) PatchNotificationSettings(w http.ResponseWriter, r *http.Re
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, st)
+	writeData(w, http.StatusOK, st)
 }

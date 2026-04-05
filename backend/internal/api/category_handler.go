@@ -32,7 +32,7 @@ func (h *CategoryHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, cat)
+	writeData(w, http.StatusCreated, cat)
 }
 
 func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func (h *CategoryHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, cats)
+	writeData(w, http.StatusOK, cats)
 }
 
 func (h *CategoryHandler) Delete(w http.ResponseWriter, r *http.Request) {

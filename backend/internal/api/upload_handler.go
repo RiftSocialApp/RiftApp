@@ -25,25 +25,25 @@ const maxAttachmentsPerMessage = 10
 
 // Allowed MIME type prefixes/types for uploads
 var allowedContentTypes = map[string]bool{
-	"image/png":             true,
-	"image/jpeg":            true,
-	"image/gif":             true,
-	"image/webp":            true,
-	"image/svg+xml":         true,
-	"video/mp4":             true,
-	"video/webm":            true,
-	"video/quicktime":       true,
-	"video/x-matroska":      true,
-	"video/x-msvideo":       true,
-	"audio/mpeg":            true,
-	"audio/ogg":             true,
-	"audio/wav":             true,
-	"application/pdf":       true,
-	"text/plain":            true,
-	"application/zip":       true,
-	"application/x-tar":     true,
-	"application/gzip":      true,
-	"application/json":      true,
+	"image/png":                true,
+	"image/jpeg":               true,
+	"image/gif":                true,
+	"image/webp":               true,
+	"image/svg+xml":            true,
+	"video/mp4":                true,
+	"video/webm":               true,
+	"video/quicktime":          true,
+	"video/x-matroska":         true,
+	"video/x-msvideo":          true,
+	"audio/mpeg":               true,
+	"audio/ogg":                true,
+	"audio/wav":                true,
+	"application/pdf":          true,
+	"text/plain":               true,
+	"application/zip":          true,
+	"application/x-tar":        true,
+	"application/gzip":         true,
+	"application/json":         true,
 	"application/octet-stream": true,
 }
 
@@ -170,7 +170,7 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]interface{}{
+	writeData(w, http.StatusOK, map[string]interface{}{
 		"id":           attachID,
 		"filename":     header.Filename,
 		"url":          publicURL,
@@ -225,4 +225,30 @@ func (h *UploadHandler) ServeObject(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", stat.ETag)
 
 	io.Copy(w, obj)
+}
+
+// DeleteByURL removes an object from MinIO given a public URL like "/s3/{bucket}/{objectName}".
+// Implements service.FileDeleter. Best-effort: logs errors but never returns them,
+// so DB deletes are never rolled back because of a missing/already-deleted file.
+func (h *UploadHandler) DeleteByURL(ctx context.Context, fileURL string) error {
+	// Expected format: /s3/{bucket}/{objectName}
+	trimmed := strings.TrimPrefix(fileURL, "/s3/")
+	if trimmed == fileURL {
+		log.Printf("file-delete: unrecognised URL format: %s", fileURL)
+		return nil
+	}
+	idx := strings.IndexByte(trimmed, '/')
+	if idx < 0 || idx == len(trimmed)-1 {
+		log.Printf("file-delete: unrecognised URL format: %s", fileURL)
+		return nil
+	}
+	bucket, objectName := trimmed[:idx], trimmed[idx+1:]
+	if bucket != h.bucket {
+		log.Printf("file-delete: bucket mismatch (%s != %s) for %s", bucket, h.bucket, fileURL)
+		return nil
+	}
+	if err := h.client.RemoveObject(ctx, bucket, objectName, minio.RemoveObjectOptions{}); err != nil {
+		log.Printf("file-delete: failed to remove %s: %v", fileURL, err)
+	}
+	return nil
 }

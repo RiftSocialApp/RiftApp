@@ -40,7 +40,7 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "request_sent"})
+	writeData(w, http.StatusOK, map[string]string{"status": "request_sent"})
 }
 
 func (h *FriendHandler) Accept(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +50,7 @@ func (h *FriendHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "accepted"})
+	writeData(w, http.StatusOK, map[string]string{"status": "accepted"})
 }
 
 func (h *FriendHandler) Reject(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +60,7 @@ func (h *FriendHandler) Reject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "rejected"})
+	writeData(w, http.StatusOK, map[string]string{"status": "rejected"})
 }
 
 func (h *FriendHandler) Cancel(w http.ResponseWriter, r *http.Request) {
@@ -70,7 +70,7 @@ func (h *FriendHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "cancelled"})
+	writeData(w, http.StatusOK, map[string]string{"status": "cancelled"})
 }
 
 func (h *FriendHandler) Remove(w http.ResponseWriter, r *http.Request) {
@@ -80,7 +80,7 @@ func (h *FriendHandler) Remove(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "removed"})
+	writeData(w, http.StatusOK, map[string]string{"status": "removed"})
 }
 
 func (h *FriendHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +90,7 @@ func (h *FriendHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list friends")
 		return
 	}
-	writeJSON(w, http.StatusOK, friends)
+	writeData(w, http.StatusOK, friends)
 }
 
 func (h *FriendHandler) PendingIncoming(w http.ResponseWriter, r *http.Request) {
@@ -100,7 +100,7 @@ func (h *FriendHandler) PendingIncoming(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "failed to list pending")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	writeData(w, http.StatusOK, list)
 }
 
 func (h *FriendHandler) PendingOutgoing(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +110,7 @@ func (h *FriendHandler) PendingOutgoing(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, "failed to list pending")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	writeData(w, http.StatusOK, list)
 }
 
 func (h *FriendHandler) CountPending(w http.ResponseWriter, r *http.Request) {
@@ -120,7 +120,7 @@ func (h *FriendHandler) CountPending(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to count pending")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]int{"count": count})
+	writeData(w, http.StatusOK, map[string]int{"count": count})
 }
 
 func (h *FriendHandler) Block(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +136,7 @@ func (h *FriendHandler) Block(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "blocked"})
+	writeData(w, http.StatusOK, map[string]string{"status": "blocked"})
 }
 
 func (h *FriendHandler) Unblock(w http.ResponseWriter, r *http.Request) {
@@ -146,7 +146,7 @@ func (h *FriendHandler) Unblock(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "unblocked"})
+	writeData(w, http.StatusOK, map[string]string{"status": "unblocked"})
 }
 
 func (h *FriendHandler) ListBlocked(w http.ResponseWriter, r *http.Request) {
@@ -156,7 +156,7 @@ func (h *FriendHandler) ListBlocked(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to list blocked")
 		return
 	}
-	writeJSON(w, http.StatusOK, list)
+	writeData(w, http.StatusOK, list)
 }
 
 func (h *FriendHandler) Relationship(w http.ResponseWriter, r *http.Request) {
@@ -167,5 +167,5 @@ func (h *FriendHandler) Relationship(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to get relationship")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"relationship": rel})
+	writeData(w, http.StatusOK, map[string]string{"relationship": rel})
 }

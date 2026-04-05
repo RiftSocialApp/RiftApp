@@ -10,7 +10,7 @@ type User struct {
 	DisplayName  string     `json:"display_name"`
 	AvatarURL    *string    `json:"avatar_url,omitempty"`
 	Bio          *string    `json:"bio,omitempty"`
-	Status       int        `json:"status"`    // 0=offline, 1=online, 2=idle, 3=dnd
+	Status       int        `json:"status"` // 0=offline, 1=online, 2=idle, 3=dnd
 	LastSeen     *time.Time `json:"last_seen,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
@@ -21,6 +21,7 @@ type Hub struct {
 	Name      string    `json:"name"`
 	OwnerID   string    `json:"owner_id"`
 	IconURL   *string   `json:"icon_url,omitempty"`
+	BannerURL *string   `json:"banner_url,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -136,11 +137,11 @@ type HubInvite struct {
 }
 
 type Conversation struct {
-	ID        string    `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Members   []User    `json:"members,omitempty"`
-	LastMessage *Message `json:"last_message,omitempty"`
+	ID          string    `json:"id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	Members     []User    `json:"members,omitempty"`
+	LastMessage *Message  `json:"last_message,omitempty"`
 }
 
 type Notification struct {
@@ -156,4 +157,28 @@ type Notification struct {
 	Read        bool      `json:"read"`
 	CreatedAt   time.Time `json:"created_at"`
 	Actor       *User     `json:"actor,omitempty"`
+}
+
+type HubEmoji struct {
+	ID        string    `json:"id"`
+	HubID     string    `json:"hub_id"`
+	Name      string    `json:"name"`
+	FileURL   string    `json:"file_url"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type HubSticker struct {
+	ID        string    `json:"id"`
+	HubID     string    `json:"hub_id"`
+	Name      string    `json:"name"`
+	FileURL   string    `json:"file_url"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type HubSound struct {
+	ID        string    `json:"id"`
+	HubID     string    `json:"hub_id"`
+	Name      string    `json:"name"`
+	FileURL   string    `json:"file_url"`
+	CreatedAt time.Time `json:"created_at"`
 }

@@ -31,7 +31,7 @@ func (h *UserHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, u)
+	writeData(w, http.StatusOK, u)
 }
 
 // UpdateMe patches the authenticated user's profile.
@@ -58,7 +58,7 @@ func (h *UserHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, updated)
+	writeData(w, http.StatusOK, updated)
 }
 
 // SearchUser looks up a user by exact username.
@@ -77,7 +77,7 @@ func (h *UserHandler) SearchUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u.Email = nil
-	writeJSON(w, http.StatusOK, u)
+	writeData(w, http.StatusOK, u)
 }
 
 // GetUser returns a public profile by user ID.
@@ -93,5 +93,5 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	// Strip private fields for public view
 	u.Email = nil
-	writeJSON(w, http.StatusOK, u)
+	writeData(w, http.StatusOK, u)
 }

@@ -29,7 +29,7 @@ func (h *MessageHandler) List(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, messages)
+	writeData(w, http.StatusOK, messages)
 }
 
 func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +45,7 @@ func (h *MessageHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, msg)
+	writeData(w, http.StatusCreated, msg)
 }
 
 func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +63,7 @@ func (h *MessageHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, msg)
+	writeData(w, http.StatusOK, msg)
 }
 
 func (h *MessageHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -15,7 +15,7 @@ interface HubState {
   loadHubs: () => Promise<void>;
   setActiveHub: (hubId: string) => Promise<void>;
   createHub: (name: string) => Promise<Hub>;
-  updateHub: (hubId: string, data: { name?: string; icon_url?: string }) => Promise<Hub>;
+  updateHub: (hubId: string, data: { name?: string; icon_url?: string; banner_url?: string }) => Promise<Hub>;
   deleteHub: (hubId: string) => Promise<void>;
   clearActive: () => void;
 }
