@@ -75,6 +75,16 @@ export default function ChatPanel() {
     wasNearBottomRef.current = true;
   }, [activeStreamId, activeConversationId]);
 
+  // After tab sleep, reconcile the open channel with the server (cache avoids routine refetch).
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState !== 'visible' || isDMMode || !activeStreamId) return;
+      void useMessageStore.getState().loadMessages(activeStreamId, { force: true });
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [activeStreamId, isDMMode]);
+
   useLayoutEffect(() => {
     if (isLoading) {
       return;

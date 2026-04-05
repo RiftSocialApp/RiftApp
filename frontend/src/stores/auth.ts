@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { User } from '../types';
 import { api } from '../api/client';
+import { HUBS_SESSION_STORAGE_KEY } from './hubStore';
+import { useStreamStore } from './streamStore';
+import { useMessageStore } from './messageStore';
 
 interface AuthState {
   user: User | null;
@@ -60,6 +63,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     api.setRefreshToken(null);
     localStorage.removeItem('riftapp_token');
     localStorage.removeItem('riftapp_refresh');
+    try {
+      sessionStorage.removeItem(HUBS_SESSION_STORAGE_KEY);
+    } catch { /* ignore */ }
+    useStreamStore.getState().clearSessionCaches();
+    useMessageStore.getState().clearSessionCaches();
     set({
       user: null,
       token: null,

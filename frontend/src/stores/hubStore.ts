@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import type { Hub } from '../types';
 import { api } from '../api/client';
 
+/** Session-scoped hub list for instant paint after refresh (revalidated against API). */
+export const HUBS_SESSION_STORAGE_KEY = 'riftapp.session.hubs.v1';
+
 /** Ignore stale `loadHubs` responses when multiple loads overlap (e.g. Strict Mode, refocus). */
 let loadHubsRequestId = 0;
 
@@ -23,10 +26,27 @@ export const useHubStore = create<HubState>((set) => ({
   loadHubs: async () => {
     const myId = ++loadHubsRequestId;
     try {
+      const raw = sessionStorage.getItem(HUBS_SESSION_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as { hubs?: unknown };
+        if (Array.isArray(parsed.hubs) && parsed.hubs.length > 0) {
+          set({ hubs: parsed.hubs as Hub[] });
+        }
+      }
+    } catch {
+      /* ignore corrupt session cache */
+    }
+
+    try {
       const hubs = await api.getHubs();
       if (myId !== loadHubsRequestId) return;
       if (!Array.isArray(hubs)) return;
       set({ hubs });
+      try {
+        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
+      } catch {
+        /* quota / private mode */
+      }
     } catch {
       if (myId !== loadHubsRequestId) return;
       // Never wipe the server list on transient errors / rate limits.
@@ -35,11 +55,9 @@ export const useHubStore = create<HubState>((set) => ({
 
   setActiveHub: async (hubId) => {
     const { useStreamStore } = await import('./streamStore');
-    const { useMessageStore } = await import('./messageStore');
     const { useDMStore } = await import('./dmStore');
     const { usePresenceStore } = await import('./presenceStore');
 
-    useMessageStore.getState().clearMessages();
     set({ activeHubId: hubId });
     useDMStore.getState().clearActive();
 
@@ -59,13 +77,25 @@ export const useHubStore = create<HubState>((set) => ({
 
   createHub: async (name) => {
     const hub = await api.createHub(name);
-    set((s) => ({ hubs: [...s.hubs, hub] }));
+    set((s) => {
+      const hubs = [...s.hubs, hub];
+      try {
+        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
+      } catch { /* ignore */ }
+      return { hubs };
+    });
     return hub;
   },
 
   updateHub: async (hubId, data) => {
     const hub = await api.updateHub(hubId, data);
-    set((s) => ({ hubs: s.hubs.map((h) => (h.id === hubId ? hub : h)) }));
+    set((s) => {
+      const hubs = s.hubs.map((h) => (h.id === hubId ? hub : h));
+      try {
+        sessionStorage.setItem(HUBS_SESSION_STORAGE_KEY, JSON.stringify({ hubs }));
+      } catch { /* ignore */ }
+      return { hubs };
+    });
     return hub;
   },
 

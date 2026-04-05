@@ -5,9 +5,6 @@ import { api } from '../api/client';
 /** Monotonic id so an older in-flight `loadStreams` cannot apply after a newer hub switch. */
 let loadStreamsRequestId = 0;
 
-/** Skip repeated full layout fetch when bouncing between hubs (stale-while-revalidate). */
-const HUB_LAYOUT_FRESH_MS = 8000;
-
 type HubLayoutCacheEntry = {
   at: number;
   streams: Stream[];
@@ -46,6 +43,8 @@ interface StreamState {
   clearStreams: () => void;
   loadVoiceStates: (hubId: string) => Promise<void>;
   applyVoiceState: (streamId: string, userId: string, action: 'join' | 'leave') => void;
+  /** Clear hub layout cache + stream UI (logout / account switch). */
+  clearSessionCaches: () => void;
 }
 
 export const useStreamStore = create<StreamState>((set, get) => ({
@@ -94,11 +93,9 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     const { useHubStore } = await import('./hubStore');
 
     const cached = get().hubLayoutCache[hubId];
-    const cacheAge = cached ? Date.now() - cached.at : Infinity;
+    // Session cache: once a hub layout is loaded, reuse it until logout or explicit invalidation.
     const useFreshCacheOnly =
-      cached != null &&
-      cacheAge < HUB_LAYOUT_FRESH_MS &&
-      useHubStore.getState().activeHubId === hubId;
+      cached != null && useHubStore.getState().activeHubId === hubId;
 
     if (useFreshCacheOnly) {
       if (myId !== loadStreamsRequestId || useHubStore.getState().activeHubId !== hubId) return;
@@ -148,7 +145,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     const { useNotificationStore } = await import('./notificationStore');
 
     set({ activeStreamId: streamId, viewingVoiceStreamId: null });
-    useMessageStore.getState().clearMessages();
     await useMessageStore.getState().loadMessages(streamId);
     await get().ackStream(streamId);
     await useNotificationStore.getState().markStreamNotificationsRead(streamId);
@@ -310,6 +306,20 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         }
         return { voiceMembers: next };
       }
+    });
+  },
+
+  clearSessionCaches: () => {
+    set({
+      streams: [],
+      categories: [],
+      activeStreamId: null,
+      viewingVoiceStreamId: null,
+      streamUnreads: {},
+      lastReadMessageIds: {},
+      streamHubMap: {},
+      voiceMembers: {},
+      hubLayoutCache: {},
     });
   },
 }));
