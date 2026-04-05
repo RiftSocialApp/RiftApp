@@ -2,7 +2,6 @@ import { useState, type ReactNode } from 'react';
 import { MenuOverlay, menuDivider } from './MenuOverlay';
 import type { Message } from '../../types';
 import { useMessageStore } from '../../stores/messageStore';
-import { useDMStore } from '../../stores/dmStore';
 import { useReplyDraftStore } from '../../stores/replyDraftStore';
 
 const QUICK_ROW = ['😂', '✨', '🔥', '👍'];
@@ -100,6 +99,7 @@ interface Props {
   canDelete: boolean;
   onClose: () => void;
   onEdit: () => void;
+  onDelete?: () => void;
 }
 
 export default function MessageContextMenu({
@@ -113,10 +113,9 @@ export default function MessageContextMenu({
   canDelete,
   onClose,
   onEdit,
+  onDelete,
 }: Props) {
   const toggleReaction = useMessageStore((s) => s.toggleReaction);
-  const deleteStreamMessage = useMessageStore((s) => s.deleteMessage);
-  const deleteDMMessage = useDMStore((s) => s.deleteDMMessage);
   const setReplyTo = useReplyDraftStore((s) => s.setReplyTo);
 
   const [reactionOpen, setReactionOpen] = useState(false);
@@ -156,16 +155,10 @@ export default function MessageContextMenu({
     onClose();
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => {
     if (!canDelete) return;
-    if (!window.confirm('Delete this message? This cannot be undone.')) return;
     onClose();
-    try {
-      if (isDM) await deleteDMMessage(message.id);
-      else await deleteStreamMessage(message.id);
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Could not delete');
-    }
+    onDelete?.();
   };
 
   const addReaction = (emoji: string) => {
@@ -271,7 +264,7 @@ export default function MessageContextMenu({
           row(
             'Delete Message',
             <IconTrash />,
-            () => void handleDelete(),
+            () => handleDelete(),
             { danger: true },
           )}
 

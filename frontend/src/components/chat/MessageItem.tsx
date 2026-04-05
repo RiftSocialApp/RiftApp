@@ -9,6 +9,7 @@ import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
 import InviteEmbed from '../shared/InviteEmbed';
 import MessageContextMenu from '../context-menus/MessageContextMenu';
+import DeleteMessageModal from '../modals/DeleteMessageModal';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 
 const QUICK_EMOJIS = ['👍', '❤️', '😂', '🎉', '🔥', '👀', '😮', '🙏'];
@@ -228,6 +229,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   const myHubRole = hubMembers[currentUserId ?? '']?.role;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [messageMenu, setMessageMenu] = useState<{ x: number; y: number } | null>(null);
   const [editing, setEditing] = useState(false);
   const [editDraft, setEditDraft] = useState(message.content);
@@ -344,9 +346,8 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     setPickerOpen(false);
   };
 
-  const handleDelete = useCallback(async () => {
+  const executeDelete = useCallback(async () => {
     if (!canDelete || deleting) return;
-    if (!window.confirm('Delete this message? This cannot be undone.')) return;
     setDeleting(true);
     try {
       if (isDM) {
@@ -354,12 +355,22 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       } else {
         await deleteStreamMessage(message.id);
       }
-    } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Could not delete message');
+    } catch {
+      // silently fail
     } finally {
       setDeleting(false);
+      setShowDeleteModal(false);
     }
   }, [canDelete, deleting, isDM, message.id, deleteDMMessage, deleteStreamMessage]);
+
+  const handleDeleteClick = useCallback((e?: React.MouseEvent) => {
+    if (!canDelete || deleting) return;
+    if (e?.shiftKey) {
+      void executeDelete();
+    } else {
+      setShowDeleteModal(true);
+    }
+  }, [canDelete, deleting, executeDelete]);
 
   const reactions = message.reactions || [];
 
@@ -445,7 +456,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
           {canDelete && (
             <button
               type="button"
-              onClick={() => void handleDelete()}
+              onClick={(e) => handleDeleteClick(e)}
               disabled={deleting}
               className="px-2 py-1 text-riftapp-text-dim hover:text-riftapp-danger hover:bg-riftapp-danger/10 rounded-lg transition-colors duration-100 disabled:opacity-50 border-l border-riftapp-border/40"
               title={isOwn ? 'Delete message' : 'Delete message (moderator)'}
@@ -528,6 +539,18 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
             setEditDraft(message.content);
             setEditing(true);
           }}
+          onDelete={() => {
+            setMessageMenu(null);
+            setShowDeleteModal(true);
+          }}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteMessageModal
+          message={message}
+          onConfirm={() => void executeDelete()}
+          onCancel={() => setShowDeleteModal(false)}
         />
       )}
     </div>
