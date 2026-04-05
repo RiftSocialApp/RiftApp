@@ -415,28 +415,17 @@ export default function StreamSidebar() {
           const isCollapsed = collapsed.has(cat.id);
           return (
             <div key={cat.id} className="mt-2">
-              <div className="flex items-center group">
-                <button
-                  onClick={() => toggleCollapse(cat.id)}
-                  className="flex items-center gap-0.5 flex-1 min-w-0 section-label px-1 mb-1 hover:text-riftapp-text transition-colors"
+              <button
+                onClick={() => toggleCollapse(cat.id)}
+                className="flex items-center gap-0.5 flex-1 min-w-0 section-label px-1 mb-1 hover:text-riftapp-text transition-colors"
+              >
+                <svg
+                  width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`opacity-60 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
                 >
-                  <svg
-                    width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className={`opacity-60 transition-transform ${isCollapsed ? '-rotate-90' : ''}`}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                  <span className="truncate uppercase">{cat.name}</span>
-                </button>
-                <button
-                  onClick={() => { setCreateChannelFor(cat.id); setShowCreateChannel(true); }}
-                  className="opacity-0 group-hover:opacity-100 text-riftapp-text-dim hover:text-riftapp-text transition-all p-0.5 rounded"
-                  title="Create Channel"
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </button>
-              </div>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+                <span className="truncate uppercase">{cat.name}</span>
+              </button>
               {!isCollapsed && (
                 <ChannelGroup
                   streams={catStreams}
@@ -458,17 +447,6 @@ export default function StreamSidebar() {
           );
         })}
 
-        {/* Quick create button */}
-        <button
-          onClick={() => { setCreateChannelFor(undefined); setShowCreateChannel(true); }}
-          title="Create a new channel"
-          className="channel-item channel-item-idle text-[13px] gap-1 mt-2"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="opacity-60">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span>Create Channel</span>
-        </button>
       </div>
 
       {/* Voice panel */}
