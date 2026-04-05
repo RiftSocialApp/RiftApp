@@ -1,0 +1,4 @@
+# SPA fallback is intentionally handled by functions/[[path]].js.
+# Cloudflare Pages _redirects cannot safely express an asset-excluding fallback,
+# and a blanket 200 rewrite here would cause missing /assets/* requests to return
+# index.html, which breaks hashed chunk loading.
