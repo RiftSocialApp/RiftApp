@@ -46,11 +46,10 @@ var allowedContentTypes = map[string]bool{
 }
 
 type UploadHandler struct {
-	client    *minio.Client
-	bucket    string
-	cfg       *config.Config
-	db        *pgxpool.Pool
-	publicURL string
+	client *minio.Client
+	bucket string
+	cfg    *config.Config
+	db     *pgxpool.Pool
 }
 
 func NewUploadHandler(cfg *config.Config, db *pgxpool.Pool) (*UploadHandler, error) {
@@ -90,25 +89,7 @@ func NewUploadHandler(cfg *config.Config, db *pgxpool.Pool) (*UploadHandler, err
 		}
 	}
 
-	publicBase := publicAssetURLBase(cfg)
-
-	return &UploadHandler{client: client, bucket: cfg.S3Bucket, cfg: cfg, db: db, publicURL: publicBase}, nil
-}
-
-// publicAssetURLBase is the prefix for URLs stored in the DB (avatars, attachments).
-// When S3_PUBLIC_URL is set, it must resolve through the API reverse proxy paths /s3/* and /api/s3/*
-// (see router.go). We append "/s3" if missing so stored paths are always …/s3/{bucket}/{object}.
-// When S3_PUBLIC_URL is empty, we fall back to S3_ENDPOINT (e.g. http://localhost:9000) for MinIO path-style URLs.
-func publicAssetURLBase(cfg *config.Config) string {
-	base := strings.TrimSpace(cfg.S3PublicURL)
-	if base == "" {
-		return strings.TrimRight(cfg.S3Endpoint, "/")
-	}
-	base = strings.TrimRight(base, "/")
-	if !strings.HasSuffix(base, "/s3") {
-		base += "/s3"
-	}
-	return base
+	return &UploadHandler{client: client, bucket: cfg.S3Bucket, cfg: cfg, db: db}, nil
 }
 
 func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
@@ -160,7 +141,8 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	ext := path.Ext(header.Filename)
 	objectName := uuid.New().String() + ext
 	attachID := uuid.New().String()
-	publicURL := fmt.Sprintf("%s/%s/%s", h.publicURL, h.bucket, objectName)
+	// Relative path that the frontend rewrites to /api/s3/… via publicAssetUrl().
+	publicURL := fmt.Sprintf("/s3/%s/%s", h.bucket, objectName)
 
 	// Insert DB record first (with uploader_id and created_at for orphan cleanup)
 	_, err = h.db.Exec(r.Context(),
