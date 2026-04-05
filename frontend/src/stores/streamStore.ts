@@ -16,7 +16,6 @@ interface StreamState {
   streams: Stream[];
   categories: Category[];
   activeStreamId: string | null;
-  viewingVoiceStreamId: string | null;
   streamUnreads: Record<string, number>;
   lastReadMessageIds: Record<string, string>;
   /** stream_id → hub_id for cross-hub unread indicators */
@@ -31,7 +30,6 @@ interface StreamState {
   loadStreams: (hubId: string) => Promise<void>;
   loadCategories: (hubId: string) => Promise<void>;
   setActiveStream: (streamId: string) => Promise<void>;
-  setViewingVoice: (streamId: string | null) => void;
   createStream: (hubId: string, name: string, type?: number, categoryId?: string) => Promise<Stream>;
   patchStream: (streamId: string, name: string) => Promise<Stream>;
   deleteStream: (streamId: string) => Promise<void>;
@@ -57,7 +55,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   streams: [],
   categories: [],
   activeStreamId: null,
-  viewingVoiceStreamId: null,
   streamUnreads: {},
   lastReadMessageIds: {},
   streamHubMap: {},
@@ -77,7 +74,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           categories: cached.categories,
           voiceMembers: cached.voiceMembers,
           activeStreamId: null,
-          viewingVoiceStreamId: null,
           streamHubMap,
         };
       });
@@ -150,14 +146,10 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     const { useMessageStore } = await import('./messageStore');
     const { useNotificationStore } = await import('./notificationStore');
 
-    set({ activeStreamId: streamId, viewingVoiceStreamId: null });
+    set({ activeStreamId: streamId });
     await useMessageStore.getState().loadMessages(streamId);
     await get().ackStream(streamId);
     await useNotificationStore.getState().markStreamNotificationsRead(streamId);
-  },
-
-  setViewingVoice: (streamId) => {
-    set({ viewingVoiceStreamId: streamId });
   },
 
   createStream: async (hubId, name, type = 0, categoryId?) => {
@@ -202,6 +194,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     const hubId = st?.hub_id;
     await api.deleteStream(streamId);
     const { useMessageStore } = await import('./messageStore');
+    const { useVoiceChannelUiStore } = await import('./voiceChannelUiStore');
     useMessageStore.getState().removeStreamCache(streamId);
     set((s) => {
       const streams = s.streams.filter((x) => x.id !== streamId);
@@ -214,9 +207,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       const voiceMembers = { ...s.voiceMembers };
       delete voiceMembers[streamId];
       let activeStreamId = s.activeStreamId;
-      let viewingVoiceStreamId = s.viewingVoiceStreamId;
       if (activeStreamId === streamId) activeStreamId = null;
-      if (viewingVoiceStreamId === streamId) viewingVoiceStreamId = null;
       const hubLayoutCache = { ...s.hubLayoutCache };
       if (hubId && hubLayoutCache[hubId]) {
         const prev = hubLayoutCache[hubId];
@@ -236,10 +227,12 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         streamHubMap,
         voiceMembers,
         activeStreamId,
-        viewingVoiceStreamId,
         hubLayoutCache,
       };
     });
+    if (useVoiceChannelUiStore.getState().activeChannelId === streamId) {
+      useVoiceChannelUiStore.getState().resetVoiceView();
+    }
     const { useHubStore } = await import('./hubStore');
     const { useVoiceStore } = await import('./voiceStore');
     if (useVoiceStore.getState().streamId === streamId) {
@@ -445,7 +438,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       streams: [],
       categories: [],
       activeStreamId: null,
-      viewingVoiceStreamId: null,
       voiceMembers: {},
     });
   },
@@ -481,7 +473,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       streams: [],
       categories: [],
       activeStreamId: null,
-      viewingVoiceStreamId: null,
       streamUnreads: {},
       lastReadMessageIds: {},
       streamHubMap: {},

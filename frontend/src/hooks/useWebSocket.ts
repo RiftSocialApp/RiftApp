@@ -8,6 +8,7 @@ import { useDMStore } from '../stores/dmStore';
 import { useFriendStore } from '../stores/friendStore';
 import { useHubStore } from '../stores/hubStore';
 import { useVoiceStore } from '../stores/voiceStore';
+import { useVoiceChannelUiStore } from '../stores/voiceChannelUiStore';
 import type { Message, Notification, Conversation, Hub, User, WSEvent } from '../types';
 import { publicAssetUrl } from '../utils/publicAssetUrl';
 
@@ -202,12 +203,12 @@ export function useWebSocket() {
           }
           case 'voice_move': {
             const { stream_id } = evt.d as { stream_id: string };
-            useStreamStore.getState().setViewingVoice(stream_id);
+            useVoiceChannelUiStore.getState().setActiveChannel(stream_id);
             void useVoiceStore.getState().moveToStream(stream_id);
             break;
           }
           case 'voice_disconnect': {
-            useStreamStore.getState().setViewingVoice(null);
+            useVoiceChannelUiStore.getState().resetVoiceView();
             void useVoiceStore.getState().leave();
             break;
           }

@@ -18,6 +18,8 @@ import { useStreamStore } from '../../stores/streamStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { useFriendStore } from '../../stores/friendStore';
+import { useVoiceStore } from '../../stores/voiceStore';
+import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
 
 export default function AppLayout() {
   useWebSocket();
@@ -69,20 +71,38 @@ export default function AppLayout() {
   }, [params.hubId, params.conversationId]);
 
   const activeHubId = useHubStore((s) => s.activeHubId);
-  const viewingVoiceStreamId = useStreamStore((s) => s.viewingVoiceStreamId);
+  const streams = useStreamStore((s) => s.streams);
+  const voiceStreamId = useVoiceStore((s) => s.streamId);
+  const voiceConnecting = useVoiceStore((s) => s.connecting);
+  const voiceUiOpen = useVoiceChannelUiStore((s) => s.isOpen);
+  const activeVoiceChannelId = useVoiceChannelUiStore((s) => s.activeChannelId);
+  const resetVoiceView = useVoiceChannelUiStore((s) => s.resetVoiceView);
+
+  useEffect(() => {
+    if (!voiceConnecting && !voiceStreamId) {
+      resetVoiceView();
+    }
+  }, [resetVoiceView, voiceConnecting, voiceStreamId]);
+
+  useEffect(() => {
+    if (!activeVoiceChannelId) return;
+    if (!streams.some((stream) => stream.id === activeVoiceChannelId)) {
+      resetVoiceView();
+    }
+  }, [activeVoiceChannelId, resetVoiceView, streams]);
 
   return (
-    <div className="h-screen flex overflow-hidden">
+    <div className="app-root h-screen min-h-0 flex overflow-hidden">
       <HubSidebar />
       {!activeHubId ? <DMSidebar /> : <StreamSidebar />}
       {!activeHubId && !activeConversationId ? (
         <FriendsPage />
-      ) : viewingVoiceStreamId ? (
+      ) : voiceUiOpen ? (
         <VoiceView />
       ) : (
         <ChatPanel />
       )}
-      {activeHubId && !activeConversationId && !viewingVoiceStreamId && <MemberList />}
+      {activeHubId && !activeConversationId && !voiceUiOpen && <MemberList />}
       <MiniProfilePopover />
       <FullProfileModal />
       <SelfProfilePopover />

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { HubSound } from '../../types';
 
@@ -12,7 +12,6 @@ export default function SoundboardPanel({ hubId, onClose }: SoundboardPanelProps
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,15 +23,6 @@ export default function SoundboardPanel({ hubId, onClose }: SoundboardPanelProps
     });
     return () => { cancelled = true; };
   }, [hubId]);
-
-  // Close on click outside
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [onClose]);
 
   // Close on Escape
   useEffect(() => {
@@ -56,8 +46,7 @@ export default function SoundboardPanel({ hubId, onClose }: SoundboardPanelProps
 
   return (
     <div
-      ref={ref}
-      className="bg-riftapp-panel border border-riftapp-border/60 rounded-xl shadow-elevation-high w-[280px] max-h-[320px] flex flex-col animate-scale-in z-50"
+      className="bg-riftapp-panel border border-riftapp-border/60 rounded-xl shadow-elevation-high w-full max-w-full max-h-[320px] flex flex-col animate-scale-in"
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header */}

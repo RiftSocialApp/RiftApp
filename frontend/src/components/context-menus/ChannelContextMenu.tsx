@@ -64,7 +64,7 @@ export default function ChannelContextMenu({
   const markStreamRead = useStreamStore((s) => s.markStreamRead);
   const deleteStream = useStreamStore((s) => s.deleteStream);
   const setActiveStream = useStreamStore((s) => s.setActiveStream);
-  const setViewingVoice = useStreamStore((s) => s.setViewingVoice);
+  const closeVoiceView = useVoiceChannelUiStore((s) => s.closeVoiceView);
 
   const hideNames = useVoiceChannelUiStore((s) => s.hideNamesByStream[stream.id] ?? false);
   const toggleHideNames = useVoiceChannelUiStore((s) => s.toggleHideNames);
@@ -187,7 +187,7 @@ export default function ChannelContextMenu({
                 if (!firstTextStreamId) return;
                 onClose();
                 void setActiveStream(firstTextStreamId);
-                setViewingVoice(null);
+                closeVoiceView();
               }}
               className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)] disabled:opacity-40"
             >

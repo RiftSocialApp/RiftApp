@@ -28,6 +28,7 @@ import { CSS } from '@dnd-kit/utilities';
 import SettingsModal, { type SettingsModalTab } from '../settings/SettingsModal';
 import HubSettingsModal from '../settings/HubSettingsModal';
 import VoicePanel from '../voice/VoicePanel';
+import { HeadphonesIcon, MicIcon, SettingsIcon, VoiceChannelIcon } from '../voice/VoiceIcons';
 import StatusDot, { statusLabel } from '../shared/StatusDot';
 import CreateChannelModal from '../modals/CreateChannelModal';
 import CreateCategoryModal from '../modals/CreateCategoryModal';
@@ -46,9 +47,7 @@ export default function StreamSidebar() {
   const categories = useStreamStore((s) => s.categories);
   const activeHubId = useHubStore((s) => s.activeHubId);
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
-  const viewingVoiceStreamId = useStreamStore((s) => s.viewingVoiceStreamId);
   const setActiveStream = useStreamStore((s) => s.setActiveStream);
-  const setViewingVoice = useStreamStore((s) => s.setViewingVoice);
   const hubs = useHubStore((s) => s.hubs);
   const user = useAuthStore((s) => s.user);
   const hubPermissions = useHubStore((s) => (activeHubId ? s.hubPermissions[activeHubId] : undefined));
@@ -65,6 +64,7 @@ export default function StreamSidebar() {
   const voiceIsScreenSharing = useVoiceStore((s) => s.isScreenSharing);
   const voiceJoin = useVoiceStore((s) => s.join);
   const voiceLeave = useVoiceStore((s) => s.leave);
+  const voiceMoveToStream = useVoiceStore((s) => s.moveToStream);
   const voiceToggleCamera = useVoiceStore((s) => s.toggleCamera);
   const voiceToggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
   const voiceScreenShareRequesting = useVoiceStore((s) => s.screenShareRequesting);
@@ -74,6 +74,11 @@ export default function StreamSidebar() {
   const voiceNoiseSuppressionEnabled = useVoiceStore((s) => s.noiseSuppressionEnabled);
   const voiceToggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
   const voiceMembers = useStreamStore((s) => s.voiceMembers);
+  const voiceUiOpen = useVoiceChannelUiStore((s) => s.isOpen);
+  const activeVoiceChannelId = useVoiceChannelUiStore((s) => s.activeChannelId);
+  const setActiveVoiceChannel = useVoiceChannelUiStore((s) => s.setActiveChannel);
+  const openVoiceView = useVoiceChannelUiStore((s) => s.openVoiceView);
+  const closeVoiceView = useVoiceChannelUiStore((s) => s.closeVoiceView);
 
   // Header context menu
   const [headerMenu, setHeaderMenu] = useState<{ x: number; y: number } | null>(null);
@@ -88,6 +93,7 @@ export default function StreamSidebar() {
   const [createChannelInitialType, setCreateChannelInitialType] = useState<number | undefined>(undefined);
   const [draggedVoiceUser, setDraggedVoiceUser] = useState<{ userId: string; sourceStreamId: string } | null>(null);
   const [voiceDropTargetId, setVoiceDropTargetId] = useState<string | null>(null);
+  const lastVoiceClickAtRef = useRef(0);
 
   // Collapsible categories
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -141,16 +147,33 @@ export default function StreamSidebar() {
 
   const handleVoiceClick = useCallback(
     (streamId: string) => {
-      const isConn = voiceStreamId === streamId && voiceConnected;
-      if (isConn) {
-        setViewingVoice(streamId);
-      } else {
-        voiceJoin(streamId);
-        setViewingVoice(streamId);
+      const now = Date.now();
+      if (now - lastVoiceClickAtRef.current < 200) return;
+      lastVoiceClickAtRef.current = now;
+
+      if (voiceConnecting) return;
+
+      if (!voiceConnected || !voiceStreamId) {
+        setActiveVoiceChannel(streamId);
+        void voiceJoin(streamId);
+        return;
       }
+
+      if (voiceStreamId !== streamId) {
+        setActiveVoiceChannel(streamId);
+        void voiceMoveToStream(streamId);
+        return;
+      }
+
+      openVoiceView(streamId);
     },
-    [voiceStreamId, voiceConnected, voiceJoin, setViewingVoice],
+    [openVoiceView, setActiveVoiceChannel, voiceConnected, voiceConnecting, voiceJoin, voiceMoveToStream, voiceStreamId],
   );
+
+  const handleLeaveVoice = useCallback(() => {
+    closeVoiceView();
+    void voiceLeave();
+  }, [closeVoiceView, voiceLeave]);
 
   const clearVoiceDragState = useCallback(() => {
     setDraggedVoiceUser(null);
@@ -197,7 +220,7 @@ export default function StreamSidebar() {
 
   if (!activeHubId) {
     return (
-      <div className="w-60 flex-shrink-0 bg-riftapp-surface flex flex-col">
+      <div className="sidebar w-60 min-h-0 overflow-hidden flex-shrink-0 bg-riftapp-surface flex flex-col">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-6">
             <div className="w-12 h-12 rounded-2xl bg-riftapp-panel flex items-center justify-center mx-auto mb-3">
@@ -210,13 +233,15 @@ export default function StreamSidebar() {
             </p>
           </div>
         </div>
-        <UserBar user={user} logout={logout} />
+        <div className="flex-shrink-0 border-t border-riftapp-border/40 bg-riftapp-surface/95 p-2">
+          <UserBar user={user} logout={logout} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="w-60 flex-shrink-0 bg-riftapp-surface flex flex-col">
+    <div className="sidebar w-60 min-h-0 overflow-hidden flex-shrink-0 bg-riftapp-surface flex flex-col">
       {/* Hub header */}
       <div
         className="h-12 flex items-center border-b border-riftapp-border/60 flex-shrink-0"
@@ -398,7 +423,8 @@ export default function StreamSidebar() {
         collapsed={collapsed}
         toggleCollapse={toggleCollapse}
         activeStreamId={activeStreamId}
-        viewingVoiceStreamId={viewingVoiceStreamId}
+        activeVoiceChannelId={activeVoiceChannelId}
+        voiceUiOpen={voiceUiOpen}
         streamUnreads={streamUnreads}
         setActiveStream={setActiveStream}
         handleVoiceClick={handleVoiceClick}
@@ -421,27 +447,27 @@ export default function StreamSidebar() {
         onContextMenu={handleChannelListContext}
       />
 
-      {/* Voice panel */}
-      <VoicePanel
-        connected={voiceConnected}
-        connecting={voiceConnecting}
-        isCameraOn={voiceIsCameraOn}
-        isScreenSharing={voiceIsScreenSharing}
-        screenShareRequesting={voiceScreenShareRequesting}
-        screenShareSurfaceLabel={voiceScreenShareSurfaceLabel}
-        screenShareNotice={voiceScreenShareNotice}
-        streamName={streams.find((s) => s.id === voiceStreamId)?.name || ''}
-        hubName={activeHub?.name || ''}
-        hubId={activeHubId}
-        noiseSuppressionEnabled={voiceNoiseSuppressionEnabled}
-        onLeave={voiceLeave}
-        onToggleCamera={voiceToggleCamera}
-        onToggleScreenShare={voiceToggleScreenShare}
-        onToggleNoiseSuppression={voiceToggleNoiseSuppression}
-        onDismissScreenShareNotice={voiceDismissScreenShareNotice}
-      />
-
-      <UserBar user={user} logout={logout} />
+      <div className="flex-shrink-0 border-t border-riftapp-border/40 bg-riftapp-surface/95 p-2 space-y-2">
+        <VoicePanel
+          connected={voiceConnected}
+          connecting={voiceConnecting}
+          isCameraOn={voiceIsCameraOn}
+          isScreenSharing={voiceIsScreenSharing}
+          screenShareRequesting={voiceScreenShareRequesting}
+          screenShareSurfaceLabel={voiceScreenShareSurfaceLabel}
+          screenShareNotice={voiceScreenShareNotice}
+          streamName={streams.find((s) => s.id === (voiceStreamId ?? activeVoiceChannelId))?.name || ''}
+          hubName={activeHub?.name || ''}
+          hubId={activeHubId}
+          noiseSuppressionEnabled={voiceNoiseSuppressionEnabled}
+          onLeave={handleLeaveVoice}
+          onToggleCamera={voiceToggleCamera}
+          onToggleScreenShare={voiceToggleScreenShare}
+          onToggleNoiseSuppression={voiceToggleNoiseSuppression}
+          onDismissScreenShareNotice={voiceDismissScreenShareNotice}
+        />
+        <UserBar user={user} logout={logout} />
+      </div>
 
       {showCreateChannel && activeHubId && (
         <CreateChannelModal
@@ -477,7 +503,8 @@ interface DndChannelListProps {
   collapsed: Set<string>;
   toggleCollapse: (catId: string) => void;
   activeStreamId: string | null;
-  viewingVoiceStreamId: string | null;
+  activeVoiceChannelId: string | null;
+  voiceUiOpen: boolean;
   streamUnreads: Record<string, number>;
   setActiveStream: (id: string) => Promise<void>;
   handleVoiceClick: (streamId: string) => void;
@@ -504,7 +531,8 @@ function DndChannelList({
   collapsed,
   toggleCollapse,
   activeStreamId,
-  viewingVoiceStreamId,
+  activeVoiceChannelId,
+  voiceUiOpen,
   streamUnreads,
   setActiveStream,
   handleVoiceClick,
@@ -741,7 +769,7 @@ function DndChannelList({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div ref={scrollRef} className="flex-1 overflow-y-auto py-3 px-2 space-y-1" onContextMenu={onContextMenu}>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1" onContextMenu={onContextMenu}>
         {/* Uncategorized channels */}
         {uncategorized.length > 0 && (
           <SortableContext items={uncatIds} strategy={verticalListSortingStrategy}>
@@ -750,7 +778,8 @@ function DndChannelList({
                 streams={uncategorized}
                 hubId={activeHubId}
                 activeStreamId={activeStreamId}
-                viewingVoiceStreamId={viewingVoiceStreamId}
+                activeVoiceChannelId={activeVoiceChannelId}
+                voiceUiOpen={voiceUiOpen}
                 streamUnreads={streamUnreads}
                 onSelect={setActiveStream}
                 onVoiceClick={handleVoiceClick}
@@ -794,7 +823,8 @@ function DndChannelList({
                       streams={catStreams}
                       hubId={activeHubId}
                       activeStreamId={activeStreamId}
-                      viewingVoiceStreamId={viewingVoiceStreamId}
+                      activeVoiceChannelId={activeVoiceChannelId}
+                      voiceUiOpen={voiceUiOpen}
                       streamUnreads={streamUnreads}
                       onSelect={setActiveStream}
                       onVoiceClick={handleVoiceClick}
@@ -831,10 +861,7 @@ function DndChannelList({
           <div className="channel-item channel-item-active shadow-elevation-md rounded-md opacity-90 pointer-events-none">
             <span className="text-lg leading-none text-riftapp-text-muted">
               {activeStream.type === 0 ? '#' : (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="flex-shrink-0 text-riftapp-text-dim">
-                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                </svg>
+                <VoiceChannelIcon size={16} className="flex-shrink-0 text-riftapp-text-dim" />
               )}
             </span>
             <span className="truncate">{activeStream.name}</span>
@@ -910,7 +937,8 @@ interface ChannelGroupProps {
   streams: Stream[];
   hubId: string | null;
   activeStreamId: string | null;
-  viewingVoiceStreamId: string | null;
+  activeVoiceChannelId: string | null;
+  voiceUiOpen: boolean;
   streamUnreads: Record<string, number>;
   onSelect: (id: string) => Promise<void>;
   onVoiceClick: (streamId: string) => void;
@@ -932,7 +960,8 @@ function ChannelGroup({
   streams,
   hubId,
   activeStreamId,
-  viewingVoiceStreamId,
+  activeVoiceChannelId,
+  voiceUiOpen,
   streamUnreads,
   onSelect,
   onVoiceClick,
@@ -964,7 +993,6 @@ function ChannelGroup({
           key={stream.id}
           stream={stream}
           activeStreamId={activeStreamId}
-          viewingVoiceStreamId={viewingVoiceStreamId}
           unread={streamUnreads[stream.id] || 0}
           onSelect={onSelect}
           onContextMenu={onChannelContext}
@@ -974,7 +1002,8 @@ function ChannelGroup({
       ))}
       {voiceStreams.map((stream) => {
         const isConnected = voiceStreamId === stream.id && voiceConnected;
-        const isViewing = viewingVoiceStreamId === stream.id;
+        const isTargeted = activeVoiceChannelId === stream.id;
+        const isViewing = voiceUiOpen && activeVoiceChannelId === stream.id;
         const memberIds = voiceMembers[stream.id] || [];
         const hasMembers = isConnected ? voiceParticipants.length > 0 : memberIds.length > 0;
         const hideVcNames = hideNamesByStream[stream.id] ?? false;
@@ -983,6 +1012,7 @@ function ChannelGroup({
             key={stream.id}
             stream={stream}
             isConnected={isConnected}
+            isTargeted={isTargeted}
             isViewing={isViewing}
             memberIds={memberIds}
             hasMembers={hasMembers}
@@ -1014,7 +1044,6 @@ function ChannelGroup({
 function SortableChannelItem({
   stream,
   activeStreamId,
-  viewingVoiceStreamId,
   unread,
   onSelect,
   onContextMenu,
@@ -1023,7 +1052,6 @@ function SortableChannelItem({
 }: {
   stream: Stream;
   activeStreamId: string | null;
-  viewingVoiceStreamId: string | null;
   unread: number;
   onSelect: (id: string) => Promise<void>;
   onContextMenu: (stream: Stream, e: React.MouseEvent) => void;
@@ -1048,7 +1076,7 @@ function SortableChannelItem({
     transition,
   };
 
-  const isActive = activeStreamId === stream.id && !viewingVoiceStreamId;
+  const isActive = activeStreamId === stream.id;
   const hasUnread = unread > 0 && !isActive;
 
   return (
@@ -1083,6 +1111,7 @@ function SortableChannelItem({
 function SortableVoiceItem({
   stream,
   isConnected,
+  isTargeted,
   isViewing,
   memberIds,
   hasMembers,
@@ -1105,6 +1134,7 @@ function SortableVoiceItem({
 }: {
   stream: Stream;
   isConnected: boolean;
+  isTargeted: boolean;
   isViewing: boolean;
   memberIds: string[];
   hasMembers: boolean;
@@ -1180,15 +1210,13 @@ function SortableVoiceItem({
           void onVoiceUserDrop(stream.id);
         }}
         title={isConnected ? stream.name : `Join ${stream.name}`}
-        className={`channel-item ${isViewing ? 'channel-item-active !text-riftapp-success' : isConnected ? '!text-riftapp-success channel-item-idle' : hasMembers ? '!text-riftapp-success/70 channel-item-idle' : 'channel-item-idle'} ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isVoiceDropTarget ? '!bg-riftapp-accent/15 !text-riftapp-accent ring-1 ring-riftapp-accent/50' : ''}`}
+        className={`channel-item ${isViewing ? 'channel-item-active !text-riftapp-success' : isConnected ? '!text-riftapp-success channel-item-idle' : isTargeted ? 'channel-item-active !text-riftapp-success/90' : hasMembers ? '!text-riftapp-success/70 channel-item-idle' : 'channel-item-idle'} ${draggable ? 'cursor-grab active:cursor-grabbing' : ''} ${isVoiceDropTarget ? '!bg-riftapp-accent/15 !text-riftapp-accent ring-1 ring-riftapp-accent/50' : ''}`}
         {...(draggable ? { ...attributes, ...listeners } : {})}
       >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-          className={`flex-shrink-0 ${isConnected || hasMembers ? 'text-riftapp-success' : 'text-riftapp-text-dim'}`}
-        >
-          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
-          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-        </svg>
+        <VoiceChannelIcon
+          size={16}
+          className={`flex-shrink-0 ${isConnected || isTargeted || hasMembers ? 'text-riftapp-success' : 'text-riftapp-text-dim'}`}
+        />
         <span className="truncate">{stream.name}</span>
       </button>
       {isConnected && voiceParticipants.length > 0 && (
@@ -1316,20 +1344,7 @@ function UserBar({ user }: { user: User | null; logout: () => void }) {
                 : 'text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-panel/60'
             }`}
           >
-            {voiceIsMuted ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="1" y1="1" x2="23" y2="23" />
-                <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
-                <path d="M17 16.95A7 7 0 015 12m14 0a7 7 0 01-.11 1.23" />
-                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
-                <path d="M19 10v2a7 7 0 01-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" /><line x1="8" y1="23" x2="16" y2="23" />
-              </svg>
-            )}
+            <MicIcon muted={voiceIsMuted} size={18} />
           </button>
 
           {/* Deafen */}
@@ -1342,18 +1357,7 @@ function UserBar({ user }: { user: User | null; logout: () => void }) {
                 : 'text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-panel/60'
             }`}
           >
-            {voiceIsDeafened ? (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="1" y1="1" x2="23" y2="23" />
-                <path d="M9 9a3 3 0 015-2.24M21 12a9 9 0 00-7.48-8.86" />
-                <path d="M3 12a9 9 0 008 8.94V18a3 3 0 01-3-3v-1" />
-              </svg>
-            ) : (
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M3 18v-6a9 9 0 0118 0v6" />
-                <path d="M21 19a2 2 0 01-2 2h-1a2 2 0 01-2-2v-3a2 2 0 012-2h3zM3 19a2 2 0 002 2h1a2 2 0 002-2v-3a2 2 0 00-2-2H3z" />
-              </svg>
-            )}
+            <HeadphonesIcon deafened={voiceIsDeafened} size={18} />
           </button>
 
           {/* Settings */}
@@ -1366,10 +1370,7 @@ function UserBar({ user }: { user: User | null; logout: () => void }) {
             className="w-8 h-8 rounded-md flex items-center justify-center text-riftapp-text-dim
               hover:text-riftapp-text hover:bg-riftapp-panel/60 transition-all duration-150 active:scale-90"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
-            </svg>
+            <SettingsIcon size={18} />
           </button>
         </div>
       </div>

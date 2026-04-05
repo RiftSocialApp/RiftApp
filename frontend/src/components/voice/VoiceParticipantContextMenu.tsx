@@ -8,7 +8,7 @@ import { useVoiceStore } from '../../stores/voiceStore';
 import { useAuthStore } from '../../stores/auth';
 import { useDMStore } from '../../stores/dmStore';
 import { useFriendStore } from '../../stores/friendStore';
-import { useStreamStore } from '../../stores/streamStore';
+import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
 
@@ -106,7 +106,7 @@ export default function VoiceParticipantContextMenu({
   const isCameraOn = useVoiceStore((s) => s.isCameraOn);
   const openProfile = useProfilePopoverStore((s) => s.openModal);
   const openDM = useDMStore((s) => s.openDM);
-  const setViewingVoice = useStreamStore((s) => s.setViewingVoice);
+  const closeVoiceView = useVoiceChannelUiStore((s) => s.closeVoiceView);
   const [relationship, setRelationship] = useState<RelationshipType>('none');
   const [relLoading, setRelLoading] = useState(false);
   const [moderationBusy, setModerationBusy] = useState(false);
@@ -133,11 +133,11 @@ export default function VoiceParticipantContextMenu({
   const handleMessage = useCallback(async () => {
     if (!member?.id) return;
     onClose();
-    setViewingVoice(null);
+    closeVoiceView();
     await openDM(member.id);
     const convId = useDMStore.getState().activeConversationId;
     if (convId) navigate(`/dms/${convId}`);
-  }, [member?.id, navigate, onClose, openDM, setViewingVoice]);
+  }, [closeVoiceView, member?.id, navigate, onClose, openDM]);
 
   const handleMention = useCallback(() => {
     const uname = member?.username;

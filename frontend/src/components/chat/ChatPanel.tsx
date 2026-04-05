@@ -290,7 +290,7 @@ export default function ChatPanel() {
   const showWelcome = !activeStreamId && !activeConversationId;
 
   return (
-    <div className="flex-1 flex flex-col bg-riftapp-bg min-w-0">
+    <div className="flex-1 min-h-0 flex flex-col bg-riftapp-bg min-w-0">
       {/* Header */}
       {!showWelcome && (
       <div className="h-12 flex items-center px-4 border-b border-riftapp-border/60 flex-shrink-0 shadow-[0_1px_0_rgba(0,0,0,0.2)]">
