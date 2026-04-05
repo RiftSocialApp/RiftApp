@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Track } from 'livekit-client';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useStreamStore } from '../../stores/streamStore';
@@ -7,11 +7,34 @@ import type { User } from '../../types';
 import VoiceParticipantContextMenu from './VoiceParticipantContextMenu';
 import VoiceStreamContextMenu from './VoiceStreamContextMenu';
 
+type LayoutSlotKind = 'screen' | 'camera';
+
+interface LayoutSlot {
+  id: string;
+  kind: LayoutSlotKind;
+  participant: VoiceParticipant;
+}
+
+function buildLayoutSlots(
+  visible: VoiceParticipant[],
+  suppressStream: (identity: string) => boolean,
+): LayoutSlot[] {
+  const out: LayoutSlot[] = [];
+  for (const p of visible) {
+    if (p.isScreenSharing && p.screenTrack && !suppressStream(p.identity)) {
+      out.push({ id: `${p.identity}__screen`, kind: 'screen', participant: p });
+    }
+    out.push({ id: `${p.identity}__camera`, kind: 'camera', participant: p });
+  }
+  return out;
+}
+
 type TileMenuState = {
   x: number;
   y: number;
   participant: VoiceParticipant;
   kind: 'participant' | 'stream';
+  focusSlotId: string;
 } | null;
 
 export default function VoiceView() {
@@ -37,7 +60,7 @@ export default function VoiceView() {
 
   const stream = streams.find((s) => s.id === viewingVoiceStreamId);
 
-  const [focusedIdentity, setFocusedIdentity] = useState<string | null>(null);
+  const [focusedSlotId, setFocusedSlotId] = useState<string | null>(null);
   const [showNonVideoParticipants, setShowNonVideoParticipants] = useState(true);
   /** Hide screen-share video for a participant; tile shows camera/avatar like Discord Stop Watching */
   const [stoppedWatchingStream, setStoppedWatchingStream] = useState<Record<string, boolean>>({});
@@ -52,22 +75,38 @@ export default function VoiceView() {
     return f.length > 0 ? f : participants;
   }, [participants, showNonVideoParticipants]);
 
-  const focusedParticipant = useMemo(
-    () => (focusedIdentity ? participants.find((p) => p.identity === focusedIdentity) : undefined),
-    [focusedIdentity, participants],
+  const suppressStreamFor = useCallback(
+    (identity: string) => Boolean(stoppedWatchingStream[identity]),
+    [stoppedWatchingStream],
+  );
+
+  const layoutSlots = useMemo(
+    () => buildLayoutSlots(visibleParticipants, suppressStreamFor),
+    [visibleParticipants, suppressStreamFor],
+  );
+
+  const aloneInCall = participants.length === 1;
+
+  const focusedSlot = useMemo(
+    () => (focusedSlotId ? layoutSlots.find((s) => s.id === focusedSlotId) : undefined),
+    [focusedSlotId, layoutSlots],
   );
 
   useEffect(() => {
-    if (!focusedIdentity) return;
-    if (!visibleParticipants.some((p) => p.identity === focusedIdentity)) {
-      setFocusedIdentity(null);
-    }
-  }, [focusedIdentity, visibleParticipants]);
+    if (aloneInCall) setFocusedSlotId(null);
+  }, [aloneInCall]);
+
+  useEffect(() => {
+    if (!focusedSlotId) return;
+    if (!layoutSlots.some((s) => s.id === focusedSlotId)) setFocusedSlotId(null);
+  }, [focusedSlotId, layoutSlots]);
+
+  const inFocusMode = Boolean(focusedSlot && !aloneInCall);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setFocusedIdentity(null);
+        setFocusedSlotId(null);
         setTileMenu(null);
         setMoreOpen(false);
       }
@@ -85,9 +124,13 @@ export default function VoiceView() {
     return () => document.removeEventListener('mousedown', close);
   }, [moreOpen]);
 
-  const handleTileClick = useCallback((identity: string) => {
-    setFocusedIdentity((f) => (f === identity ? null : identity));
-  }, []);
+  const handleSlotClick = useCallback(
+    (slotId: string) => {
+      if (participants.length <= 1) return;
+      setFocusedSlotId((f) => (f === slotId ? null : slotId));
+    },
+    [participants.length],
+  );
 
   const requestStageFullscreen = useCallback(() => {
     const el = stageRef.current;
@@ -99,27 +142,38 @@ export default function VoiceView() {
     window.open(window.location.href, '_blank', 'popup=yes,width=960,height=720,noopener,noreferrer');
   }, []);
 
-  const openTileContextMenu = useCallback(
-    (e: React.MouseEvent, p: VoiceParticipant) => {
+  const openSlotContextMenu = useCallback(
+    (e: React.MouseEvent, slot: LayoutSlot) => {
       e.preventDefault();
-      const showingStream =
-        Boolean(p.isScreenSharing && p.screenTrack) && !stoppedWatchingStream[p.identity];
+      const p = slot.participant;
+      const streamMenu =
+        slot.kind === 'screen' &&
+        Boolean(p.isScreenSharing && p.screenTrack) &&
+        !stoppedWatchingStream[p.identity];
       setTileMenu({
         x: e.clientX,
         y: e.clientY,
         participant: p,
-        kind: showingStream ? 'stream' : 'participant',
+        kind: streamMenu ? 'stream' : 'participant',
+        focusSlotId: slot.id,
       });
     },
     [stoppedWatchingStream],
   );
 
-  const suppressStreamFor = useCallback(
-    (identity: string) => Boolean(stoppedWatchingStream[identity]),
-    [stoppedWatchingStream],
-  );
-
-  const inFocusMode = Boolean(focusedParticipant);
+  const gridStyle = useMemo((): CSSProperties => {
+    if (layoutSlots.length <= 1) {
+      return {
+        gridTemplateColumns: '1fr',
+        gridTemplateRows: '1fr',
+        gridAutoRows: '1fr',
+      };
+    }
+    return {
+      gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
+      gridAutoRows: '1fr',
+    };
+  }, [layoutSlots.length]);
 
   return (
     <div className="flex-1 flex flex-col bg-[#000000] min-w-0 min-h-0">
@@ -166,32 +220,24 @@ export default function VoiceView() {
               <p className="text-riftapp-warning text-sm font-medium">Connecting…</p>
             </div>
           </div>
-        ) : inFocusMode && focusedParticipant ? (
+        ) : inFocusMode && focusedSlot ? (
           <FocusLayout
-            focused={focusedParticipant}
-            filmstrip={visibleParticipants}
+            focusedSlot={focusedSlot}
+            filmstripSlots={layoutSlots.filter((s) => s.id !== focusedSlot.id)}
             hubMembers={hubMembers}
-            suppressStreamFor={suppressStreamFor}
-            onTileClick={handleTileClick}
-            onTileContextMenu={openTileContextMenu}
+            onSlotClick={handleSlotClick}
+            onSlotContextMenu={openSlotContextMenu}
           />
         ) : (
-          <div
-            className="flex-1 min-h-0 p-2 grid gap-2 content-stretch"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))',
-              gridAutoRows: '1fr',
-            }}
-          >
-            {visibleParticipants.map((p) => (
-              <ParticipantTile
-                key={p.identity}
-                participant={p}
+          <div className="flex-1 min-h-0 p-2 grid gap-2 content-stretch" style={gridStyle}>
+            {layoutSlots.map((slot) => (
+              <SlotTile
+                key={slot.id}
+                slot={slot}
                 hubMembers={hubMembers}
                 fill
-                suppressStream={suppressStreamFor(p.identity)}
-                onClick={() => handleTileClick(p.identity)}
-                onContextMenu={(e) => openTileContextMenu(e, p)}
+                onClick={() => handleSlotClick(slot.id)}
+                onContextMenu={(e) => openSlotContextMenu(e, slot)}
               />
             ))}
           </div>
@@ -239,9 +285,10 @@ export default function VoiceView() {
           x={tileMenu.x}
           y={tileMenu.y}
           onClose={() => setTileMenu(null)}
-          onStopWatching={() =>
-            setStoppedWatchingStream((s) => ({ ...s, [tileMenu.participant.identity]: true }))
-          }
+          onStopWatching={() => {
+            setStoppedWatchingStream((s) => ({ ...s, [tileMenu.participant.identity]: true }));
+            if (focusedSlotId === tileMenu.focusSlotId) setFocusedSlotId(null);
+          }}
           onPopOutStream={handlePopOut}
           onMoreOptions={() => setTileMenu((m) => (m ? { ...m, kind: 'participant' } : null))}
         />
@@ -255,9 +302,9 @@ export default function VoiceView() {
           showNonVideoParticipants={showNonVideoParticipants}
           onToggleShowNonVideo={() => setShowNonVideoParticipants((v) => !v)}
           onClose={() => setTileMenu(null)}
-          onRequestFocus={() => setFocusedIdentity(tileMenu.participant.identity)}
+          onRequestFocus={() => setFocusedSlotId(tileMenu.focusSlotId)}
           onRequestFullscreen={() => {
-            setFocusedIdentity(tileMenu.participant.identity);
+            setFocusedSlotId(tileMenu.focusSlotId);
             queueMicrotask(() => stageRef.current?.requestFullscreen());
           }}
           streamHiddenLocally={Boolean(stoppedWatchingStream[tileMenu.participant.identity])}
@@ -444,30 +491,29 @@ function TileHoverExpand() {
 }
 
 function FocusLayout({
-  focused,
-  filmstrip,
+  focusedSlot,
+  filmstripSlots,
   hubMembers,
-  suppressStreamFor,
-  onTileClick,
-  onTileContextMenu,
+  onSlotClick,
+  onSlotContextMenu,
 }: {
-  focused: VoiceParticipant;
-  filmstrip: VoiceParticipant[];
+  focusedSlot: LayoutSlot;
+  filmstripSlots: LayoutSlot[];
   hubMembers: Record<string, User>;
-  suppressStreamFor: (identity: string) => boolean;
-  onTileClick: (identity: string) => void;
-  onTileContextMenu: (e: React.MouseEvent, p: VoiceParticipant) => void;
+  onSlotClick: (slotId: string) => void;
+  onSlotContextMenu: (e: React.MouseEvent, slot: LayoutSlot) => void;
 }) {
   return (
-    <div className="flex-1 flex flex-col min-h-0 gap-2 p-2">
-      <div className="flex-[2] min-h-0 rounded-xl overflow-hidden ring-1 ring-white/10 relative group bg-black/50">
+    <div className="flex-1 flex flex-col min-h-0 p-2 gap-0">
+      {/* Main stage — grows like Discord (~upper 75–82% of the view) */}
+      <div className="flex-1 min-h-0 rounded-xl overflow-hidden ring-1 ring-white/10 relative group bg-black/50">
         <button
           type="button"
           className="absolute inset-0 w-full h-full text-left"
-          onClick={() => onTileClick(focused.identity)}
-          onContextMenu={(e) => onTileContextMenu(e, focused)}
+          onClick={() => onSlotClick(focusedSlot.id)}
+          onContextMenu={(e) => onSlotContextMenu(e, focusedSlot)}
         >
-          <StageContent participant={focused} hubMembers={hubMembers} suppressStream={suppressStreamFor(focused.identity)} />
+          <StageSlotContent slot={focusedSlot} hubMembers={hubMembers} />
         </button>
         <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1 z-10">
           <button
@@ -476,7 +522,7 @@ function FocusLayout({
             title="Exit focus (or press same tile)"
             onClick={(e) => {
               e.stopPropagation();
-              onTileClick(focused.identity);
+              onSlotClick(focusedSlot.id);
             }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -485,18 +531,22 @@ function FocusLayout({
           </button>
         </div>
       </div>
-      <div className="flex-[1] min-h-[100px] max-h-[200px] flex gap-2 overflow-x-auto overflow-y-hidden pb-1">
-        {filmstrip.map((p) => (
-          <div key={p.identity} className="flex-shrink-0 w-[min(44vw,280px)] h-full min-h-[92px]">
-            <ParticipantTile
-              participant={p}
+
+      {/* Bottom rail: everyone else (camera on or avatar when off) — centered, Discord-style */}
+      <div className="flex-none flex w-full min-h-[min(200px,28vh)] max-h-[220px] h-[min(200px,28vh)] items-center justify-center overflow-x-auto overflow-y-hidden gap-2.5 pt-3 pb-1 px-1 shrink-0">
+        {filmstripSlots.map((slot) => (
+          <div
+            key={slot.id}
+            className="h-full max-h-[min(192px,26vh)] aspect-video flex-shrink-0 min-w-[140px] max-w-[min(280px,38vw)] rounded-xl overflow-hidden ring-1 ring-white/[0.12] bg-black/50"
+          >
+            <SlotTile
+              slot={slot}
               hubMembers={hubMembers}
               fill
               filmstrip
-              activeFocus={p.identity === focused.identity}
-              suppressStream={suppressStreamFor(p.identity)}
-              onClick={() => onTileClick(p.identity)}
-              onContextMenu={(e) => onTileContextMenu(e, p)}
+              activeFocus={false}
+              onClick={() => onSlotClick(slot.id)}
+              onContextMenu={(e) => onSlotContextMenu(e, slot)}
             />
           </div>
         ))}
@@ -505,36 +555,28 @@ function FocusLayout({
   );
 }
 
-function StageContent({
-  participant,
-  hubMembers,
-  suppressStream,
-}: {
-  participant: VoiceParticipant;
-  hubMembers: Record<string, User>;
-  suppressStream?: boolean;
-}) {
-  const member = hubMembers[participant.identity];
-  const displayName = member?.display_name || member?.username || participant.identity;
+function StageSlotContent({ slot, hubMembers }: { slot: LayoutSlot; hubMembers: Record<string, User> }) {
+  const p = slot.participant;
+  const member = hubMembers[p.identity];
+  const displayName = member?.display_name || member?.username || p.identity;
   const avatarUrl = member?.avatar_url;
 
-  const showStream = Boolean(participant.isScreenSharing && participant.screenTrack && !suppressStream);
-  if (showStream) {
-    return <ScreenShareStage participant={participant} hubMembers={hubMembers} fill />;
+  if (slot.kind === 'screen') {
+    return <ScreenShareStage participant={p} hubMembers={hubMembers} fill />;
   }
 
-  const hasCam = participant.isCameraOn && participant.videoTrack;
+  const hasCam = p.isCameraOn && p.videoTrack;
   if (hasCam) {
     return (
       <div className="relative w-full h-full min-h-0">
-        <CameraFill participant={participant} />
-        <NameOverlay displayName={displayName} participant={participant} />
+        <CameraFill participant={p} />
+        <NameOverlay displayName={displayName} participant={p} />
       </div>
     );
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center" style={{ backgroundColor: getAvatarColor(participant.identity) }}>
+    <div className="relative w-full h-full flex items-center justify-center" style={{ backgroundColor: getAvatarColor(p.identity) }}>
       <div className="rounded-full overflow-hidden w-28 h-28 ring-4 ring-black/30">
         {avatarUrl ? (
           <img src={avatarUrl} alt={displayName} className="w-full h-full object-cover" />
@@ -542,7 +584,7 @@ function StageContent({
           <div className="w-full h-full bg-black/30 flex items-center justify-center text-3xl font-bold text-white">{displayName.slice(0, 2).toUpperCase()}</div>
         )}
       </div>
-      <NameOverlay displayName={displayName} participant={participant} />
+      <NameOverlay displayName={displayName} participant={p} />
     </div>
   );
 }
@@ -622,45 +664,45 @@ function NameOverlay({ displayName, participant }: { displayName: string; partic
   );
 }
 
-function ParticipantTile({
-  participant,
+function SlotTile({
+  slot,
   hubMembers,
   fill,
   filmstrip,
   activeFocus,
-  suppressStream,
   onClick,
   onContextMenu,
 }: {
-  participant: VoiceParticipant;
+  slot: LayoutSlot;
   hubMembers: Record<string, User>;
   fill?: boolean;
   filmstrip?: boolean;
   activeFocus?: boolean;
-  /** When true, show camera/avatar instead of screen share in this tile */
-  suppressStream?: boolean;
   onClick?: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
+  const participant = slot.participant;
   const videoRef = useRef<HTMLVideoElement>(null);
   const member = hubMembers[participant.identity];
   const displayName = member?.display_name || member?.username || participant.identity;
   const avatarUrl = member?.avatar_url;
 
-  const showScreen = Boolean(participant.isScreenSharing && participant.screenTrack && !suppressStream);
-  const videoForAttach = showScreen ? participant.screenTrack : participant.videoTrack;
-  const hasVideo = Boolean(videoForAttach && (showScreen || participant.isCameraOn));
+  const isScreen = slot.kind === 'screen';
+  const track = isScreen ? participant.screenTrack : participant.videoTrack;
+  const hasVideo = Boolean(
+    track && track.kind === Track.Kind.Video && (isScreen || participant.isCameraOn),
+  );
 
   useEffect(() => {
-    const track = videoForAttach;
     const el = videoRef.current;
-    if (track && el && track.kind === Track.Kind.Video) {
-      track.attach(el);
+    const t = track;
+    if (t && el && t.kind === Track.Kind.Video) {
+      t.attach(el);
       return () => {
-        track.detach(el);
+        t.detach(el);
       };
     }
-  }, [videoForAttach]);
+  }, [track]);
 
   const speaking = participant.isSpeaking;
 
@@ -668,23 +710,21 @@ function ParticipantTile({
     <button
       type="button"
       className={`relative rounded-xl overflow-hidden transition-all duration-200 text-left w-full h-full min-h-0 group ${
-        speaking ? 'ring-[3px] ring-riftapp-voice-speaking shadow-lg shadow-riftapp-voice-speaking/15' : 'ring-1 ring-white/10'
-      } ${activeFocus ? 'ring-2 ring-[#5865f2]' : ''} ${fill ? 'min-h-[100px]' : 'aspect-video'}`}
-      style={!hasVideo ? { backgroundColor: getAvatarColor(participant.identity) } : undefined}
+        speaking ? 'ring-[3px] ring-riftapp-voice-speaking shadow-lg shadow-riftapp-voice-speaking/15' : filmstrip ? 'ring-0' : 'ring-1 ring-white/10'
+      } ${activeFocus ? 'ring-2 ring-[#5865f2]' : ''} ${fill ? (filmstrip ? 'min-h-0' : 'min-h-[100px]') : 'aspect-video'}`}
+      style={!hasVideo && !isScreen ? { backgroundColor: getAvatarColor(participant.identity) } : undefined}
       onClick={onClick}
       onContextMenu={onContextMenu}
     >
-      {showScreen && <div className="absolute top-1.5 right-1.5 z-10 bg-[#ed4245] text-white text-[9px] font-bold px-1 py-px rounded">LIVE</div>}
+      {isScreen && (
+        <div className="absolute top-1.5 right-1.5 z-10 bg-[#ed4245] text-white text-[9px] font-bold px-1 py-px rounded">LIVE</div>
+      )}
 
-      {hasVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className={`w-full h-full ${showScreen ? 'object-contain bg-black' : 'object-cover'}`}
-        />
-      ) : (
+      {isScreen && hasVideo ? (
+        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain bg-black" />
+      ) : !isScreen && hasVideo ? (
+        <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
+      ) : !isScreen ? (
         <div className="w-full h-full flex items-center justify-center min-h-[inherit]">
           <div className={`rounded-full overflow-hidden ${filmstrip ? 'w-14 h-14' : 'w-20 h-20'}`}>
             {avatarUrl ? (
@@ -696,9 +736,22 @@ function ParticipantTile({
             )}
           </div>
         </div>
+      ) : (
+        <div className="w-full h-full min-h-[80px] bg-black flex items-center justify-center text-[#949ba4] text-xs">No stream</div>
       )}
 
       <TileHoverExpand />
+
+      {/* Discord-style stream indicator on thumbnails in the bottom rail */}
+      {filmstrip && isScreen && hasVideo && (
+        <div className="absolute bottom-7 left-1/2 z-[5] -translate-x-1/2 pointer-events-none text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+            <rect x="2" y="3" width="20" height="14" rx="2" />
+            <line x1="8" y1="21" x2="16" y2="21" />
+            <line x1="12" y1="17" x2="12" y2="21" />
+          </svg>
+        </div>
+      )}
 
       <div className="absolute bottom-0 left-0 right-0 p-2 flex items-end justify-between bg-gradient-to-t from-black/65 to-transparent pointer-events-none">
         <div className="flex items-center gap-1 min-w-0 rounded bg-black/50 px-1.5 py-0.5 max-w-[90%]">
@@ -708,7 +761,9 @@ function ParticipantTile({
               <path d="M9 9v3a3 3 0 005.12 2.12M15 9.34V4a3 3 0 00-5.94-.6" />
             </svg>
           )}
-          <span className={`text-xs font-medium truncate ${speaking ? 'text-riftapp-voice-speaking' : 'text-white'}`}>{displayName}</span>
+          <span className={`text-xs font-medium truncate ${speaking ? 'text-riftapp-voice-speaking' : 'text-white'}`}>
+            {isScreen ? `${displayName}'s screen` : displayName}
+          </span>
         </div>
       </div>
     </button>

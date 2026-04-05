@@ -6,8 +6,10 @@ import { usePresenceStore } from '../../stores/presenceStore';
 import { useWsSend } from '../../hooks/useWebSocket';
 import { api } from '../../api/client';
 import { statusColor, statusLabel } from '../shared/StatusDot';
+import { useVoiceStore } from '../../stores/voiceStore';
+import type { NoiseSuppressionMode } from '../../stores/voiceStore';
 
-type Tab = 'profile' | 'account';
+type Tab = 'profile' | 'account' | 'voice';
 
 function SettingsModal({ onClose }: { onClose: () => void }) {
   const user = useAuthStore((s) => s.user);
@@ -28,9 +30,10 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
 
   if (!user) return null;
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'profile', label: 'Profile' },
-    { id: 'account', label: 'Account' },
+  const tabs: { id: Tab; label: string; section?: 'user' | 'app' }[] = [
+    { id: 'profile', label: 'Profile', section: 'user' },
+    { id: 'account', label: 'Account', section: 'user' },
+    { id: 'voice', label: 'Voice & Video', section: 'app' },
   ];
 
   return createPortal(
@@ -54,7 +57,25 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
             User Settings
           </h3>
           <div className="space-y-0.5">
-            {tabs.map((tab) => (
+            {tabs.filter((t) => t.section === 'user').map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-all duration-150 ${
+                  activeTab === tab.id
+                    ? 'bg-riftapp-accent/15 text-riftapp-text font-medium'
+                    : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-bg/30'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <h3 className="section-label px-2 mt-4 mb-2">
+            App Settings
+          </h3>
+          <div className="space-y-0.5">
+            {tabs.filter((t) => t.section === 'app').map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
@@ -103,7 +124,7 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           {/* Header */}
           <div className="flex items-center justify-between px-6 h-14 border-b border-riftapp-border/40 flex-shrink-0">
             <h2 className="text-[17px] font-bold tracking-tight">
-              {activeTab === 'profile' ? 'Profile' : 'My Account'}
+              {activeTab === 'profile' ? 'Profile' : activeTab === 'account' ? 'My Account' : 'Voice & Video'}
             </h2>
             <button
               onClick={onClose}
@@ -121,14 +142,65 @@ function SettingsModal({ onClose }: { onClose: () => void }) {
           <div className="flex-1 overflow-y-auto p-6 overscroll-contain [contain:content]">
             {activeTab === 'profile' ? (
               <ProfileTab user={user} setUser={setUser} />
-            ) : (
+            ) : activeTab === 'account' ? (
               <AccountTab user={user} logout={logout} onClose={onClose} />
+            ) : (
+              <VoiceVideoSettingsTab />
             )}
           </div>
         </div>
       </motion.div>
     </motion.div>,
     document.body,
+  );
+}
+
+/* ───────── Voice & Video (noise suppression) ───────── */
+
+const NOISE_SUPPRESSION_OPTIONS: { value: NoiseSuppressionMode; label: string }[] = [
+  { value: 'krisp', label: 'Krisp' },
+  { value: 'standard', label: 'Standard' },
+  { value: 'off', label: 'Off' },
+];
+
+function VoiceVideoSettingsTab() {
+  const mode = useVoiceStore((s) => s.noiseSuppressionMode);
+  const setNoiseSuppressionMode = useVoiceStore((s) => s.setNoiseSuppressionMode);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-riftapp-text-dim mb-4">Voice</h3>
+        <div className="rounded-lg border border-riftapp-border/40 bg-riftapp-panel/40 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-riftapp-text">Noise Suppression</p>
+              <p className="text-[13px] text-riftapp-text-muted mt-1 leading-snug max-w-lg">
+                Reduces background noise from your mic. Powered by Krisp.
+              </p>
+              <p className="mt-3 text-[13px] font-bold text-riftapp-text tracking-tight lowercase">krisp</p>
+            </div>
+            <label className="flex flex-col gap-1 shrink-0">
+              <span className="sr-only">Noise suppression</span>
+              <select
+                value={mode}
+                onChange={(e) => void setNoiseSuppressionMode(e.target.value as NoiseSuppressionMode)}
+                className="settings-input min-w-[160px] py-2 text-[13px] cursor-pointer"
+              >
+                {NOISE_SUPPRESSION_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </div>
+      </div>
+      <p className="text-[11px] text-riftapp-text-dim leading-relaxed">
+        Krisp and Standard use your browser&apos;s microphone processing over WebRTC. Krisp enables stronger voice isolation when the browser supports it; it is not the standalone Krisp app SDK.
+      </p>
+    </div>
   );
 }
 

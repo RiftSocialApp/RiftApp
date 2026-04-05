@@ -48,7 +48,7 @@ export default function StreamSidebar() {
   const voiceLeave = useVoiceStore((s) => s.leave);
   const voiceToggleCamera = useVoiceStore((s) => s.toggleCamera);
   const voiceToggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
-  const voiceNoiseSuppressionEnabled = useVoiceStore((s) => s.noiseSuppressionEnabled);
+  const voiceNoiseSuppressionEnabled = useVoiceStore((s) => s.noiseSuppressionMode !== 'off');
   const voiceToggleNoiseSuppression = useVoiceStore((s) => s.toggleNoiseSuppression);
   const voiceMembers = useStreamStore((s) => s.voiceMembers);
 

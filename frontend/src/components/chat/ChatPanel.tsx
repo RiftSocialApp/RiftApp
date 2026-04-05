@@ -134,14 +134,35 @@ export default function ChatPanel() {
   }, [activeStreamId, activeConversationId, activeHubId, isDMMode]);
 
   // After tab sleep, reconcile the open channel with the server (cache avoids routine refetch).
+  // Browsers often reset scrollTop while hidden; our scroll layout effect does not re-run when only
+  // `isLoading` toggles and message count is unchanged, so we explicitly pin to the bottom after refetch.
   useEffect(() => {
     const onVis = () => {
       if (document.visibilityState !== 'visible' || isDMMode || !activeStreamId) return;
-      void useMessageStore.getState().loadMessages(activeStreamId, { force: true });
+      const streamId = activeStreamId;
+      const hubId = activeHubId;
+      void useMessageStore
+        .getState()
+        .loadMessages(streamId, { force: true })
+        .finally(() => {
+          queueMicrotask(() => {
+            requestAnimationFrame(() => {
+              if (useStreamStore.getState().activeStreamId !== streamId) return;
+              const el = scrollContainerRef.current;
+              const bottomEl = bottomRef.current;
+              if (!el || !bottomEl) return;
+              bottomEl.scrollIntoView({ behavior: 'auto' });
+              setShowNewMsgBanner(false);
+              wasNearBottomRef.current = true;
+              const key = `${hubId}-${streamId}`;
+              scrollCacheRef.current[key] = { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight };
+            });
+          });
+        });
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [activeStreamId, isDMMode]);
+  }, [activeStreamId, activeHubId, isDMMode]);
 
   // Main scroll positioning — fires after channel-switch layoutEffect (declaration order)
   useLayoutEffect(() => {

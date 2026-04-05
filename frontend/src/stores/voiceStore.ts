@@ -4,6 +4,7 @@ import {
   RoomEvent,
   Track,
   VideoPresets,
+  type AudioCaptureOptions,
   type RemoteParticipant,
   type RemoteTrack,
   type RemoteTrackPublication,
@@ -13,6 +14,28 @@ import {
 } from 'livekit-client';
 import { api } from '../api/client';
 import { wsSend } from '../hooks/useWebSocket';
+
+const NS_STORAGE_KEY = 'riftapp-noise-suppression-mode';
+
+export type NoiseSuppressionMode = 'krisp' | 'standard' | 'off';
+
+function loadNoiseSuppressionMode(): NoiseSuppressionMode {
+  try {
+    const v = localStorage.getItem(NS_STORAGE_KEY);
+    if (v === 'krisp' || v === 'standard' || v === 'off') return v;
+  } catch {
+    /* private mode / unavailable */
+  }
+  return 'krisp';
+}
+
+function persistNoiseSuppressionMode(mode: NoiseSuppressionMode) {
+  try {
+    localStorage.setItem(NS_STORAGE_KEY, mode);
+  } catch {
+    /* ignore */
+  }
+}
 
 export interface VoiceParticipant {
   identity: string;
@@ -48,8 +71,11 @@ interface VoiceStore {
   streamAttenuationEnabled: boolean;
   /** 0–100, higher = stronger ducking */
   streamAttenuationStrength: number;
-  /** Browser WebRTC noise suppression (Discord-style control; not the Krisp SDK) */
-  noiseSuppressionEnabled: boolean;
+  /**
+   * Browser capture processing (Discord-style labels; uses WebRTC constraints, not the Krisp SDK).
+   * `krisp` prefers experimental voice isolation where supported; `standard` uses classic noise suppression.
+   */
+  noiseSuppressionMode: NoiseSuppressionMode;
 
   join: (streamId: string) => Promise<void>;
   leave: () => void;
@@ -64,18 +90,22 @@ interface VoiceStore {
   toggleStreamAudioMute: (identity: string) => void;
   setStreamAttenuationEnabled: (enabled: boolean) => void;
   setStreamAttenuationStrength: (strength: number) => void;
+  setNoiseSuppressionMode: (mode: NoiseSuppressionMode) => Promise<void>;
   toggleNoiseSuppression: () => Promise<void>;
 }
 
 const CONNECT_TIMEOUT_MS = 15_000;
 
 /** Constraints passed to LiveKit when enabling the microphone */
-function micAudioCaptureOptions(noiseSuppression: boolean) {
-  return {
+function micAudioCaptureOptions(mode: NoiseSuppressionMode): AudioCaptureOptions {
+  const base: AudioCaptureOptions = {
     echoCancellation: true,
     autoGainControl: true,
-    noiseSuppression,
   };
+  if (mode === 'off') return { ...base, noiseSuppression: false };
+  if (mode === 'standard') return { ...base, noiseSuppression: true };
+  // "Krisp" branding: strongest stack the browser exposes (voice isolation supersedes noiseSuppression when supported)
+  return { ...base, voiceIsolation: true };
 }
 
 let roomRef: Room | null = null;
@@ -211,7 +241,6 @@ function resetState() {
     streamAudioMuted: {},
     streamAttenuationEnabled: false,
     streamAttenuationStrength: 40,
-    noiseSuppressionEnabled: true,
   });
 }
 
@@ -240,7 +269,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   streamAudioMuted: {},
   streamAttenuationEnabled: false,
   streamAttenuationStrength: 40,
-  noiseSuppressionEnabled: true,
+  noiseSuppressionMode: loadNoiseSuppressionMode(),
 
   join: async (sid) => {
     if (joiningLock) return;
@@ -256,12 +285,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     try {
       const { token, url } = await api.getVoiceToken(sid);
 
-      const nsOn = useVoiceStore.getState().noiseSuppressionEnabled;
+      let nsMode = useVoiceStore.getState().noiseSuppressionMode;
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
         videoCaptureDefaults: { resolution: VideoPresets.h1080.resolution },
-        audioCaptureDefaults: micAudioCaptureOptions(nsOn),
+        audioCaptureDefaults: micAudioCaptureOptions(nsMode),
       });
       roomRef = room;
 
@@ -302,10 +331,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       if (roomRef !== room) { room.disconnect(); return; }
 
       const startMuted = pttModeRef;
-      const ns = useVoiceStore.getState().noiseSuppressionEnabled;
+      nsMode = useVoiceStore.getState().noiseSuppressionMode;
       await room.localParticipant.setMicrophoneEnabled(
         !startMuted,
-        !startMuted ? micAudioCaptureOptions(ns) : undefined,
+        !startMuted ? micAudioCaptureOptions(nsMode) : undefined,
       );
 
       set({
@@ -351,10 +380,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   toggleMute: async () => {
     if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
     const wasEnabled = roomRef.localParticipant.isMicrophoneEnabled;
-    const ns = get().noiseSuppressionEnabled;
+    const nsMode = get().noiseSuppressionMode;
     await roomRef.localParticipant.setMicrophoneEnabled(
       !wasEnabled,
-      !wasEnabled ? micAudioCaptureOptions(ns) : undefined,
+      !wasEnabled ? micAudioCaptureOptions(nsMode) : undefined,
     );
     set({ isMuted: wasEnabled });
     syncParticipants();
@@ -405,7 +434,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         set({ isMuted: true });
       }
     } else if (!wasMutedBeforeDeafen) {
-      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(get().noiseSuppressionEnabled));
+      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(get().noiseSuppressionMode));
       set({ isMuted: false });
     }
     set({ isDeafened: next });
@@ -416,12 +445,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     const next = !get().pttMode;
     pttModeRef = next;
     if (roomRef && roomRef.state === ConnectionState.Connected) {
-      const ns = get().noiseSuppressionEnabled;
+      const nsMode = get().noiseSuppressionMode;
       if (next) {
         void roomRef.localParticipant.setMicrophoneEnabled(false);
         set({ isMuted: true, pttActive: false, pttMode: next });
       } else {
-        void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(ns));
+        void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(nsMode));
         set({ isMuted: false, pttMode: next });
       }
       syncParticipants();
@@ -466,19 +495,20 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
   },
 
-  toggleNoiseSuppression: async () => {
+  setNoiseSuppressionMode: async (mode) => {
+    persistNoiseSuppressionMode(mode);
+    set({ noiseSuppressionMode: mode });
     const room = roomRef;
-    if (!room || room.state !== ConnectionState.Connected) {
-      set((s) => ({ noiseSuppressionEnabled: !s.noiseSuppressionEnabled }));
-      return;
-    }
-    const next = !get().noiseSuppressionEnabled;
-    set({ noiseSuppressionEnabled: next });
-    if (room.localParticipant.isMicrophoneEnabled) {
+    if (room?.state === ConnectionState.Connected && room.localParticipant.isMicrophoneEnabled) {
       await room.localParticipant.setMicrophoneEnabled(false);
-      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(next));
+      await room.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(mode));
+      syncParticipants();
     }
-    syncParticipants();
+  },
+
+  toggleNoiseSuppression: async () => {
+    const cur = get().noiseSuppressionMode;
+    await get().setNoiseSuppressionMode(cur === 'off' ? 'krisp' : 'off');
   },
 }));
 
@@ -492,8 +522,8 @@ if (typeof window !== 'undefined') {
     e.preventDefault();
     if (e.repeat) return;
     if (roomRef.state !== ConnectionState.Connected) return;
-    const ns = useVoiceStore.getState().noiseSuppressionEnabled;
-    void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(ns));
+    const nsMode = useVoiceStore.getState().noiseSuppressionMode;
+    void roomRef.localParticipant.setMicrophoneEnabled(true, micAudioCaptureOptions(nsMode));
     useVoiceStore.setState({ isMuted: false, pttActive: true });
     syncParticipants();
   });
