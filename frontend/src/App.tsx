@@ -1,10 +1,12 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
+import { useAppSettingsStore } from './stores/appSettingsStore';
 
 const AuthPage = lazy(() => import('./components/auth/AuthPage'));
 const AppLayout = lazy(() => import('./components/layout/AppLayout'));
 const InviteJoinPage = lazy(() => import('./components/invite/InviteJoinPage'));
+const SettingsModal = lazy(() => import('./components/settings/SettingsModal'));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -52,10 +54,19 @@ function RequireGuest({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   const restore = useAuthStore((s) => s.restore);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const settingsOpen = useAppSettingsStore((s) => s.settingsOpen);
+  const closeSettings = useAppSettingsStore((s) => s.closeSettings);
 
   useEffect(() => {
     restore();
   }, [restore]);
+
+  useEffect(() => {
+    if (!isAuthenticated && settingsOpen) {
+      closeSettings();
+    }
+  }, [closeSettings, isAuthenticated, settingsOpen]);
 
   return (
     <BrowserRouter>
@@ -78,6 +89,7 @@ export default function App() {
           <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        {settingsOpen && isAuthenticated && <SettingsModal />}
       </Suspense>
     </BrowserRouter>
   );

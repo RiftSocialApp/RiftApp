@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState, memo } from 'react';
-import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../../stores/auth';
 import { usePresenceStore } from '../../stores/presenceStore';
@@ -7,37 +6,29 @@ import { useWsSend } from '../../hooks/useWebSocket';
 import { api } from '../../api/client';
 import { statusColor, statusLabel } from '../shared/StatusDot';
 import { useVoiceStore, type VoiceMediaDevice } from '../../stores/voiceStore';
-import { useAppSettingsStore } from '../../stores/appSettingsStore';
+import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSettingsStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
 
-export type SettingsModalTab = 'profile' | 'account' | 'voice' | 'advanced';
+export type SettingsModalTab = SettingsOverlayTab;
 
-type SettingsModalProps = {
-  onClose: () => void;
-  initialTab?: SettingsModalTab;
-};
-
-function SettingsModal({ onClose, initialTab = 'profile' }: SettingsModalProps) {
+function SettingsModal() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
-  const [activeTab, setActiveTab] = useState<SettingsModalTab>(initialTab);
+  const activeTab = useAppSettingsStore((s) => s.settingsTab);
+  const closeSettings = useAppSettingsStore((s) => s.closeSettings);
+  const setSettingsTab = useAppSettingsStore((s) => s.setSettingsTab);
   const [confirmLogout, setConfirmLogout] = useState(false);
-  const backdropRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setActiveTab(initialTab);
-  }, [initialTab]);
 
   // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') closeSettings();
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [onClose]);
+  }, [closeSettings]);
 
   if (!user) return null;
 
@@ -48,130 +39,139 @@ function SettingsModal({ onClose, initialTab = 'profile' }: SettingsModalProps) 
     { id: 'advanced', label: 'Advanced', section: 'app' },
   ];
 
-  return createPortal(
+  return (
     <motion.div
-      ref={backdropRef}
-      onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
-      className="modal-backdrop"
+      className="fixed inset-0 z-[200] bg-riftapp-bg text-riftapp-text"
+      role="dialog"
+      aria-modal="true"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.15 }}
     >
       <motion.div
-        className="modal-content w-full max-w-[660px] h-[520px] flex isolate"
+        className="h-full w-full"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       >
-        {/* Sidebar nav */}
-        <nav className="w-[180px] bg-riftapp-panel/80 p-3 flex flex-col flex-shrink-0">
-          <h3 className="section-label px-2 mb-3">
-            User Settings
-          </h3>
-          <div className="space-y-0.5">
-            {tabs.filter((t) => t.section === 'user').map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-all duration-150 ${
-                  activeTab === tab.id
-                    ? 'bg-riftapp-accent/15 text-riftapp-text font-medium'
-                    : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-bg/30'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <h3 className="section-label px-2 mt-4 mb-2">
-            App Settings
-          </h3>
-          <div className="space-y-0.5">
-            {tabs.filter((t) => t.section === 'app').map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full text-left px-3 py-1.5 rounded-md text-sm transition-all duration-150 ${
-                  activeTab === tab.id
-                    ? 'bg-riftapp-accent/15 text-riftapp-text font-medium'
-                    : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-bg/30'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <div className="mt-auto border-t border-riftapp-border/40 pt-2">
-            {confirmLogout ? (
-              <div className="px-2 py-2 rounded-md bg-riftapp-danger/10 border border-riftapp-danger/20">
-                <p className="text-[11px] text-riftapp-danger font-medium mb-2">Log out of RiftApp?</p>
-                <div className="flex gap-1.5">
+        <div className="mx-auto flex h-full w-full max-w-[1240px] flex-col overflow-hidden md:flex-row">
+          <nav className="w-full shrink-0 overflow-y-auto border-b border-riftapp-border/40 bg-riftapp-surface/65 px-4 py-5 md:w-[272px] md:border-b-0 md:border-r md:px-5 md:py-8">
+            <div className="mx-auto flex w-full max-w-[232px] flex-col gap-5">
+              <div>
+                <h3 className="section-label px-2 mb-3">User Settings</h3>
+                <div className="space-y-1">
+                  {tabs.filter((t) => t.section === 'user').map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSettingsTab(tab.id)}
+                      className={`w-full rounded-md px-3 py-2 text-left text-sm transition-all duration-150 ${
+                        activeTab === tab.id
+                          ? 'bg-riftapp-panel text-riftapp-text font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]'
+                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="section-label px-2 mb-3">App Settings</h3>
+                <div className="space-y-1">
+                  {tabs.filter((t) => t.section === 'app').map((tab) => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setSettingsTab(tab.id)}
+                      className={`w-full rounded-md px-3 py-2 text-left text-sm transition-all duration-150 ${
+                        activeTab === tab.id
+                          ? 'bg-riftapp-panel text-riftapp-text font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]'
+                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-auto border-t border-riftapp-border/40 pt-4">
+                {confirmLogout ? (
+                  <div className="rounded-xl border border-riftapp-danger/20 bg-riftapp-danger/10 p-3">
+                    <p className="mb-2 text-[11px] font-medium text-riftapp-danger">Log out of RiftApp?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => { logout(); closeSettings(); }}
+                        className="flex-1 rounded-md bg-riftapp-danger py-1.5 text-[11px] font-semibold text-white transition-all duration-150 hover:bg-riftapp-danger/90 active:scale-95"
+                      >
+                        Log Out
+                      </button>
+                      <button
+                        onClick={() => setConfirmLogout(false)}
+                        className="flex-1 rounded-md py-1.5 text-[11px] text-riftapp-text-muted transition-all duration-150 hover:bg-riftapp-bg/30"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
                   <button
-                    onClick={() => { logout(); onClose(); }}
-                    className="flex-1 py-1 rounded-md bg-riftapp-danger text-white text-[11px] font-semibold hover:bg-riftapp-danger/90 active:scale-95 transition-all duration-150"
+                    onClick={() => setConfirmLogout(true)}
+                    className="w-full rounded-md px-3 py-2 text-left text-sm text-riftapp-danger transition-all duration-150 hover:bg-riftapp-danger/10"
                   >
                     Log Out
                   </button>
+                )}
+              </div>
+            </div>
+          </nav>
+
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain [contain:content]">
+            <div className="mx-auto flex min-h-full w-full max-w-[960px] flex-col px-6 py-6 md:px-10 md:py-8">
+              <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-riftapp-border/40 bg-riftapp-bg/95 px-6 pb-4 pt-1 backdrop-blur md:-mx-10 md:px-10 md:pb-5">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-dim">User Settings</p>
+                  <h2 className="mt-2 text-[26px] font-black tracking-tight">
+                    {activeTab === 'profile'
+                      ? 'Profile'
+                      : activeTab === 'account'
+                        ? 'My Account'
+                        : activeTab === 'voice'
+                          ? 'Voice & Video'
+                          : 'Advanced'}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="hidden text-[11px] uppercase tracking-[0.16em] text-riftapp-text-dim sm:inline">Esc</span>
                   <button
-                    onClick={() => setConfirmLogout(false)}
-                    className="flex-1 py-1 rounded-md text-[11px] text-riftapp-text-muted hover:bg-riftapp-bg/30 transition-all duration-150"
+                    onClick={closeSettings}
+                    className="flex h-9 w-9 items-center justify-center rounded-full border border-riftapp-border/50 text-riftapp-text-dim transition-all duration-150 hover:border-riftapp-text-dim hover:bg-riftapp-panel/60 hover:text-riftapp-text"
+                    title="Close settings"
                   >
-                    Cancel
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
                 </div>
               </div>
-            ) : (
-              <button
-                onClick={() => setConfirmLogout(true)}
-                className="w-full text-left px-3 py-1.5 rounded-md text-sm text-riftapp-danger hover:bg-riftapp-danger/10 transition-all duration-150"
-              >
-                Log Out
-              </button>
-            )}
-          </div>
-        </nav>
 
-        {/* Content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header */}
-          <div className="flex items-center justify-between px-6 h-14 border-b border-riftapp-border/40 flex-shrink-0">
-            <h2 className="text-[17px] font-bold tracking-tight">
-              {activeTab === 'profile'
-                ? 'Profile'
-                : activeTab === 'account'
-                  ? 'My Account'
-                  : activeTab === 'voice'
-                    ? 'Voice & Video'
-                    : 'Advanced'}
-            </h2>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-riftapp-text-dim
-                hover:text-riftapp-text hover:bg-riftapp-panel transition-all duration-150"
-              title="Close (Esc)"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 overscroll-contain [contain:content]">
-            {activeTab === 'profile' ? (
-              <ProfileTab user={user} setUser={setUser} />
-            ) : activeTab === 'account' ? (
-              <AccountTab user={user} logout={logout} onClose={onClose} />
-            ) : activeTab === 'voice' ? (
-              <VoiceVideoSettingsTab />
-            ) : (
-              <AdvancedSettingsTab />
-            )}
+              <div className="pb-12">
+                {activeTab === 'profile' ? (
+                  <ProfileTab user={user} setUser={setUser} />
+                ) : activeTab === 'account' ? (
+                  <AccountTab user={user} logout={logout} onClose={closeSettings} />
+                ) : activeTab === 'voice' ? (
+                  <VoiceVideoSettingsTab />
+                ) : (
+                  <AdvancedSettingsTab />
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </motion.div>
-    </motion.div>,
-    document.body,
+    </motion.div>
   );
 }
 

@@ -6,10 +6,17 @@ interface PersistedAppSettings {
   developerMode?: boolean;
 }
 
+export type SettingsOverlayTab = 'profile' | 'account' | 'voice' | 'advanced';
+
 interface AppSettingsState {
   developerMode: boolean;
+  settingsOpen: boolean;
+  settingsTab: SettingsOverlayTab;
   setDeveloperMode: (developerMode: boolean) => void;
   toggleDeveloperMode: () => void;
+  openSettings: (tab?: SettingsOverlayTab) => void;
+  closeSettings: () => void;
+  setSettingsTab: (tab: SettingsOverlayTab) => void;
 }
 
 function loadPersistedSettings(): PersistedAppSettings {
@@ -37,6 +44,8 @@ const persisted = loadPersistedSettings();
 
 export const useAppSettingsStore = create<AppSettingsState>((set) => ({
   developerMode: persisted.developerMode ?? false,
+  settingsOpen: false,
+  settingsTab: 'profile',
 
   setDeveloperMode: (developerMode) => {
     persistSettings({ developerMode });
@@ -49,5 +58,17 @@ export const useAppSettingsStore = create<AppSettingsState>((set) => ({
       persistSettings({ developerMode });
       return { developerMode };
     });
+  },
+
+  openSettings: (tab = 'profile') => {
+    set({ settingsOpen: true, settingsTab: tab });
+  },
+
+  closeSettings: () => {
+    set({ settingsOpen: false });
+  },
+
+  setSettingsTab: (tab) => {
+    set({ settingsTab: tab });
   },
 }));

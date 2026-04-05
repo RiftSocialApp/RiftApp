@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { usePresenceStore } from '../../stores/presenceStore';
@@ -25,7 +25,6 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import SettingsModal, { type SettingsModalTab } from '../settings/SettingsModal';
 import HubSettingsModal from '../settings/HubSettingsModal';
 import VoicePanel from '../voice/VoicePanel';
 import { HeadphonesIcon, MicIcon, SettingsIcon, VoiceChannelIcon } from '../voice/VoiceIcons';
@@ -41,6 +40,7 @@ import type { User, Stream } from '../../types';
 import { api } from '../../api/client';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { canModerateVoice, hasPermission, PermManageStreams } from '../../utils/permissions';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
 
 export default function StreamSidebar() {
   const streams = useStreamStore((s) => s.streams);
@@ -1274,29 +1274,17 @@ function SortableVoiceItem({
 /* ───── User Bar ───── */
 
 function UserBar({ user }: { user: User | null; logout: () => void }) {
-  const [showSettings, setShowSettings] = useState(false);
-  const [settingsTab, setSettingsTab] = useState<SettingsModalTab>('profile');
   const liveStatus = usePresenceStore((s) => user ? s.presence[user.id] : undefined);
   const openSelfProfile = useSelfProfileStore((s) => s.open);
+  const openSettings = useAppSettingsStore((s) => s.openSettings);
   const voiceIsMuted = useVoiceStore((s) => s.isMuted);
   const voiceIsDeafened = useVoiceStore((s) => s.isDeafened);
   const voiceToggleMute = useVoiceStore((s) => s.toggleMute);
   const voiceToggleDeafen = useVoiceStore((s) => s.toggleDeafen);
-  const closeSettings = useCallback(() => setShowSettings(false), []);
 
   const handleAvatarClick = useCallback((e: React.MouseEvent) => {
     openSelfProfile((e.currentTarget as HTMLElement).getBoundingClientRect());
   }, [openSelfProfile]);
-
-  useEffect(() => {
-    const handler = (event: Event) => {
-      const detail = event instanceof CustomEvent ? event.detail as { tab?: SettingsModalTab } | undefined : undefined;
-      setSettingsTab(detail?.tab ?? 'profile');
-      setShowSettings(true);
-    };
-    document.addEventListener('open-settings', handler);
-    return () => document.removeEventListener('open-settings', handler);
-  }, []);
 
   if (!user) return null;
 
@@ -1362,10 +1350,7 @@ function UserBar({ user }: { user: User | null; logout: () => void }) {
 
           {/* Settings */}
           <button
-            onClick={() => {
-              setSettingsTab('profile');
-              setShowSettings(true);
-            }}
+            onClick={() => openSettings('profile')}
             title="User Settings"
             className="w-8 h-8 rounded-md flex items-center justify-center text-riftapp-text-dim
               hover:text-riftapp-text hover:bg-riftapp-panel/60 transition-all duration-150 active:scale-90"
@@ -1374,7 +1359,6 @@ function UserBar({ user }: { user: User | null; logout: () => void }) {
           </button>
         </div>
       </div>
-      {showSettings && <SettingsModal onClose={closeSettings} initialTab={settingsTab} />}
     </>
   );
 }

@@ -43,6 +43,7 @@ export default function FullProfileModal() {
   const closeModal = useProfilePopoverStore((state) => state.closeModal);
   const currentUser = useAuthStore((state) => state.user);
   const developerMode = useAppSettingsStore((state) => state.developerMode);
+  const openSettings = useAppSettingsStore((state) => state.openSettings);
   const liveStatus = usePresenceStore((state) => (modalUser ? state.presence[modalUser.id] : undefined));
   const activeHubId = useHubStore((state) => state.activeHubId);
   const hubMembers = usePresenceStore((state) => state.hubMembers);
@@ -221,7 +222,7 @@ export default function FullProfileModal() {
                   type="button"
                   onClick={() => {
                     closeModal();
-                    document.dispatchEvent(new CustomEvent('open-settings'));
+                    openSettings('profile');
                   }}
                   className="btn-primary"
                 >

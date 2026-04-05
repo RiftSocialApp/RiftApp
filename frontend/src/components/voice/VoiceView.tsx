@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties }
 import { Track } from 'livekit-client';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useHubStore } from '../../stores/hubStore';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useVoiceStore, type VoiceParticipant } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
@@ -65,6 +66,7 @@ const ActivitiesIcon = activityIcons.game;
 export default function VoiceView() {
   const connected = useVoiceStore((s) => s.connected);
   const connecting = useVoiceStore((s) => s.connecting);
+  const openSettings = useAppSettingsStore((s) => s.openSettings);
   const participants = useVoiceStore((s) => s.participants);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isDeafened = useVoiceStore((s) => s.isDeafened);
@@ -371,7 +373,7 @@ export default function VoiceView() {
                     className="w-full text-left px-3 py-2 text-[14px] text-[#dbdee1] hover:bg-[#5865f2]/30 rounded-md"
                     onClick={() => {
                       setMoreOpen(false);
-                      document.dispatchEvent(new CustomEvent('open-settings', { detail: { tab: 'voice' } }));
+                      openSettings('voice');
                     }}
                   >
                     Voice settings…

@@ -36,6 +36,7 @@ export default function SelfProfilePopover() {
   const user = useAuthStore((s) => s.user);
   const liveStatus = usePresenceStore((s) => (user ? s.presence[user.id] : undefined));
   const developerMode = useAppSettingsStore((s) => s.developerMode);
+  const openSettings = useAppSettingsStore((s) => s.openSettings);
   const send = useWsSend();
 
   const cardRef = useRef<HTMLDivElement>(null);
@@ -209,7 +210,7 @@ export default function SelfProfilePopover() {
           <button
             onClick={() => {
               close();
-              document.dispatchEvent(new CustomEvent('open-settings'));
+              openSettings('profile');
             }}
             className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-riftapp-panel/60 transition-colors text-left"
           >
