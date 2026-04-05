@@ -449,9 +449,15 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
           <div
             onClick={handleProfileClick}
             onContextMenu={handleUserContextMenu}
-            className={`w-10 h-10 rounded-full ${bg} flex items-center justify-center text-xs font-bold text-white flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition-opacity`}
+            className="w-10 h-10 rounded-full flex-shrink-0 mt-0.5 cursor-pointer hover:opacity-80 transition-opacity overflow-hidden"
           >
-            {authorName.slice(0, 2).toUpperCase()}
+            {author?.avatar_url ? (
+              <img src={author.avatar_url} alt={authorName} className="w-full h-full object-cover" />
+            ) : (
+              <div className={`w-full h-full ${bg} flex items-center justify-center text-xs font-bold text-white`}>
+                {authorName.slice(0, 2).toUpperCase()}
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2 mb-0.5">
