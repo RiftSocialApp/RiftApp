@@ -36,7 +36,12 @@ export async function onRequest(context) {
   }
 
   try {
-    return await fetch(dest.toString(), init);
+    const upstream = await fetch(dest.toString(), init);
+    // Pass through the upstream response but tag it so we can confirm in
+    // DevTools that the Pages Function handled this request (not the SPA fallback).
+    const res = new Response(upstream.body, upstream);
+    res.headers.set('X-Rift-Proxy', '1');
+    return res;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     return new Response(
