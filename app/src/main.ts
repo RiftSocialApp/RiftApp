@@ -282,13 +282,31 @@ function backgroundUpdateDownload(): void {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  autoUpdater.on("update-downloaded", () => {
+  autoUpdater.on("checking-for-update", () => {
+    console.log("[Rift updater] Checking for update…");
+  });
+  autoUpdater.on("update-available", (info) => {
+    console.log(`[Rift updater] Update available: v${info.version}`);
+  });
+  autoUpdater.on("update-not-available", (info) => {
+    console.log(`[Rift updater] Already up-to-date (v${info.version})`);
+  });
+  autoUpdater.on("download-progress", (info) => {
+    console.log(`[Rift updater] Downloading… ${Math.round(info.percent)}%`);
+  });
+  autoUpdater.on("update-downloaded", (info) => {
+    console.log(`[Rift updater] Downloaded v${info.version} — notifying renderer`);
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("update-ready");
     }
   });
+  autoUpdater.on("error", (err) => {
+    console.error("[Rift updater] Error:", err?.message ?? err);
+  });
 
-  autoUpdater.checkForUpdatesAndNotify().catch(() => {});
+  autoUpdater.checkForUpdatesAndNotify().catch((err) => {
+    console.error("[Rift updater] checkForUpdatesAndNotify failed:", err);
+  });
 }
 
 // ── Bootstrap ──────────────────────────────────────────────
