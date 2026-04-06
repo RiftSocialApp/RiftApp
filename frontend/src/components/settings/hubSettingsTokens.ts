@@ -1,0 +1,35 @@
+/** Discord-style hub settings design tokens (reference: #1E1F22, #2B2D31, #5865F2) */
+export const HS = {
+  bgMain: '#1e1f22',
+  bgSidebar: '#2b2d31',
+  bgHover: '#35373c',
+  bgActive: '#404249',
+  bgCard: '#2b2d31',
+  border: '#1e1f22',
+  borderSubtle: '#3f4147',
+  textPrimary: '#f2f3f5',
+  textMuted: '#949ba4',
+  textSecondary: '#b5bac1',
+  textBody: '#dbdee1',
+  blurple: '#5865f2',
+  blurpleHover: '#4752c4',
+  linkBlue: '#00a8fc',
+  danger: '#ed4245',
+  dangerHover: '#f23f42',
+  success: '#23a559',
+  radius: '4px',
+  radiusLg: '8px',
+} as const;
+
+export const hsTw = {
+  main: 'bg-[#1e1f22]',
+  sidebar: 'bg-[#2b2d31]',
+  card: 'bg-[#2b2d31] border border-[#1e1f22] rounded-lg',
+  input: 'w-full px-3 py-2.5 rounded-[4px] bg-[#1e1f22] text-[15px] text-white border-none focus:outline-none focus:ring-1 focus:ring-[#5865f2]',
+  btnPrimary: 'px-4 py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium hover:bg-[#4752c4] transition-colors disabled:opacity-40',
+  btnDanger: 'px-4 py-2 rounded-[4px] border border-[#ed4245] text-[#ed4245] hover:bg-[#ed4245] hover:text-white text-[13px] font-medium transition-colors',
+  title: 'text-[20px] font-bold text-white tracking-tight',
+  subtitle: 'text-[13px] text-[#b5bac1] leading-relaxed',
+  sectionTitle: 'text-[12px] font-bold uppercase tracking-wider text-[#b5bac1]',
+  navCat: 'text-[11px] font-bold uppercase tracking-wider text-[#949ba4] px-2.5 mb-1.5 mt-1',
+} as const;

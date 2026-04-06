@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo, type Dispatch, type SetStateAction } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { formatDistanceToNow } from 'date-fns';
 import { useHubStore } from '../../stores/hubStore';
 import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/auth';
@@ -7,7 +8,7 @@ import { api } from '../../api/client';
 import ConfirmModal from '../modals/ConfirmModal';
 import ModalOverlay from '../shared/ModalOverlay';
 import StatusDot from '../shared/StatusDot';
-import type { Hub, User, HubEmoji, HubSticker, HubSound, HubRole } from '../../types';
+import type { Hub, User, HubEmoji, HubSticker, HubSound, HubRole, HubInvite } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { normalizeUsers } from '../../utils/entityAssets';
 import {
@@ -25,38 +26,107 @@ import {
   PermUseSoundboard,
   PermAdministrator,
 } from '../../utils/permissions';
+import { CloseButtonEsc, ToggleRow } from './hubSettingsUi';
+import {
+  ServerTagPanel,
+  EngagementPanel,
+  BoostPerksPanel,
+  EmojiPanelShell,
+  StickersPanelShell,
+  SoundboardPanelShell,
+  AccessPanel,
+  IntegrationsPanel,
+  SafetySetupPanel,
+  AuditLogPanel,
+  BansPanel,
+  AutoModPanel,
+  EnableCommunityPanel,
+  ServerTemplatePanel,
+  AppDirectoryLinkPanel,
+} from './hubSettingsPanels';
 
-type Tab = 'overview' | 'members' | 'roles' | 'emojis' | 'stickers' | 'soundboard';
+type SettingsPage =
+  | 'server-profile'
+  | 'server-tag'
+  | 'engagement'
+  | 'boost-perks'
+  | 'emoji'
+  | 'stickers'
+  | 'soundboard'
+  | 'members'
+  | 'roles'
+  | 'invites'
+  | 'access'
+  | 'integrations'
+  | 'app-directory'
+  | 'safety'
+  | 'audit-log'
+  | 'bans'
+  | 'automod'
+  | 'enable-community'
+  | 'server-template'
+  | 'delete-server';
 
-interface SidebarSection {
+interface NavSection {
   label: string;
-  items: { id: Tab; label: string; icon: React.ReactNode }[];
+  items: { id: SettingsPage; label: string; external?: boolean }[];
 }
 
-const SIDEBAR_SECTIONS: SidebarSection[] = [
+const NAV_SECTIONS: NavSection[] = [
   {
     label: '',
     items: [
-      { id: 'overview', label: 'Overview', icon: <IconGear /> },
-      { id: 'members', label: 'Members', icon: <IconMembers /> },
-      { id: 'roles', label: 'Roles', icon: <IconRoles /> },
+      { id: 'server-profile', label: 'Server Profile' },
+      { id: 'server-tag', label: 'Server Tag' },
+      { id: 'engagement', label: 'Engagement' },
+      { id: 'boost-perks', label: 'Boost Perks' },
     ],
   },
   {
-    label: 'CUSTOMIZATION',
+    label: 'EXPRESSION',
     items: [
-      { id: 'emojis', label: 'Emojis', icon: <IconEmoji /> },
-      { id: 'stickers', label: 'Stickers', icon: <IconSticker /> },
-      { id: 'soundboard', label: 'Soundboard', icon: <IconSoundboard /> },
+      { id: 'emoji', label: 'Emoji' },
+      { id: 'stickers', label: 'Stickers' },
+      { id: 'soundboard', label: 'Soundboard' },
+    ],
+  },
+  {
+    label: 'PEOPLE',
+    items: [
+      { id: 'members', label: 'Members' },
+      { id: 'roles', label: 'Roles' },
+      { id: 'invites', label: 'Invites' },
+      { id: 'access', label: 'Access' },
+    ],
+  },
+  {
+    label: 'APPS',
+    items: [
+      { id: 'integrations', label: 'Integrations' },
+      { id: 'app-directory', label: 'App Directory', external: true },
+    ],
+  },
+  {
+    label: 'MODERATION',
+    items: [
+      { id: 'safety', label: 'Safety Setup' },
+      { id: 'audit-log', label: 'Audit Log' },
+      { id: 'bans', label: 'Bans' },
+      { id: 'automod', label: 'AutoMod' },
     ],
   },
 ];
 
+const FOOTER_NAV: { id: SettingsPage; label: string; danger?: boolean }[] = [
+  { id: 'enable-community', label: 'Enable Community' },
+  { id: 'server-template', label: 'Server Template' },
+  { id: 'delete-server', label: 'Delete Server', danger: true },
+];
+
 function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [page, setPage] = useState<SettingsPage>('server-profile');
   const modalRef = useRef<HTMLDivElement>(null);
 
-  // Auto-focus modal on mount
   useEffect(() => {
     requestAnimationFrame(() => modalRef.current?.focus());
   }, []);
@@ -65,117 +135,151 @@ function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: () => void }) {
   const isOwner = currentUser?.id === hub.owner_id;
 
   const renderContent = () => {
-    switch (activeTab) {
-      case 'overview':
-        return <OverviewTab hub={hub} isOwner={isOwner} onCloseSettings={onClose} />;
-      case 'members':
-        return <MembersTab hub={hub} />;
-      case 'emojis':
-        return <CustomizationTab hub={hub} isOwner={isOwner} kind="emojis" />;
+    switch (page) {
+      case 'server-profile':
+        return <OverviewTab hub={hub} isOwner={isOwner} />;
+      case 'server-tag':
+        return <ServerTagPanel />;
+      case 'engagement':
+        return <EngagementPanel />;
+      case 'boost-perks':
+        return <BoostPerksPanel />;
+      case 'emoji':
+        return (
+          <EmojiPanelShell>
+            <CustomizationTab hub={hub} isOwner={isOwner} kind="emojis" discordLayout />
+          </EmojiPanelShell>
+        );
       case 'stickers':
-        return <CustomizationTab hub={hub} isOwner={isOwner} kind="stickers" />;
+        return (
+          <StickersPanelShell>
+            <CustomizationTab hub={hub} isOwner={isOwner} kind="stickers" discordLayout />
+          </StickersPanelShell>
+        );
       case 'soundboard':
-        return <CustomizationTab hub={hub} isOwner={isOwner} kind="sounds" />;
+        return (
+          <SoundboardPanelShell>
+            <CustomizationTab hub={hub} isOwner={isOwner} kind="sounds" discordLayout />
+          </SoundboardPanelShell>
+        );
+      case 'members':
+        return <MembersDiscordTab hub={hub} />;
       case 'roles':
         return <RolesTab hub={hub} />;
+      case 'invites':
+        return <InvitesTab hub={hub} currentUser={currentUser} />;
+      case 'access':
+        return <AccessPanel />;
+      case 'integrations':
+        return <IntegrationsPanel />;
+      case 'app-directory':
+        return <AppDirectoryLinkPanel />;
+      case 'safety':
+        return <SafetySetupPanel />;
+      case 'audit-log':
+        return <AuditLogPanel />;
+      case 'bans':
+        return <BansPanel />;
+      case 'automod':
+        return <AutoModPanel />;
+      case 'enable-community':
+        return <EnableCommunityPanel />;
+      case 'server-template':
+        return <ServerTemplatePanel />;
+      case 'delete-server':
+        return <DeleteServerTab hub={hub} isOwner={isOwner} onCloseSettings={onClose} />;
       default:
         return null;
     }
   };
 
-  const tabTitle: Record<Tab, string> = {
-    overview: 'Server Overview',
-    members: 'Members',
-    roles: 'Roles',
-    emojis: 'Emojis',
-    stickers: 'Stickers',
-    soundboard: 'Soundboard',
-  };
-
   return (
-    <ModalOverlay isOpen onClose={onClose} zIndex={300}>
+    <ModalOverlay isOpen onClose={onClose} zIndex={300} center className="p-3 sm:p-6">
       <div
         ref={modalRef}
         tabIndex={-1}
-        className="bg-[#313338] rounded-xl w-[940px] h-[660px] flex shadow-modal overflow-hidden outline-none"
+        className="bg-[#1e1f22] rounded-none sm:rounded-lg w-[min(1200px,calc(100vw-24px))] h-[min(92vh,900px)] flex shadow-2xl overflow-hidden outline-none border border-[#1e1f22]"
       >
-        {/* ───── Left Sidebar ───── */}
-        <nav className="w-[220px] bg-[#2b2d31] flex flex-col flex-shrink-0 overflow-y-auto">
-          {/* Hub name header */}
-          <div className="px-4 pt-5 pb-3 border-b border-[#1e1f22]/60">
-            <div className="flex items-center gap-2.5 mb-0.5">
+        <nav className="w-[min(240px,32vw)] min-w-[200px] bg-[#2b2d31] flex flex-col flex-shrink-0 overflow-y-auto border-r border-black/20">
+          <div className="px-3 pt-4 pb-3">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-[#949ba4] px-2 mb-2 truncate">{hub.name}</p>
+            <div className="flex items-center gap-2 px-2">
               {hub.icon_url ? (
-                <img
-                  src={publicAssetUrl(hub.icon_url)}
-                  alt=""
-                  className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
-                />
+                <img src={publicAssetUrl(hub.icon_url)} alt="" className="w-8 h-8 rounded-xl object-cover flex-shrink-0" />
               ) : (
-                <div className="w-8 h-8 rounded-lg bg-[#5865f2] flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-[#5865f2] flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                   {hub.name.slice(0, 2).toUpperCase()}
                 </div>
               )}
-              <div className="min-w-0">
-                <p className="text-[14px] font-semibold text-[#f2f3f5] truncate">{hub.name}</p>
-                <p className="text-[11px] text-[#949ba4]">Server Settings</p>
-              </div>
             </div>
           </div>
-
-          {/* Nav items */}
-          <div className="flex-1 px-2 py-3 space-y-4">
-            {SIDEBAR_SECTIONS.map((section, si) => (
+          <div className="flex-1 px-2 pb-2 space-y-3">
+            {NAV_SECTIONS.map((section, si) => (
               <div key={si}>
-                {section.label && (
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#949ba4] px-2.5 mb-1.5">
-                    {section.label}
-                  </p>
-                )}
+                {section.label ? (
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-[#949ba4] px-2.5 mb-1">{section.label}</p>
+                ) : null}
                 <div className="space-y-0.5">
                   {section.items.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => setActiveTab(item.id)}
-                      className={`w-full flex items-center gap-2.5 px-2.5 py-[7px] rounded-md text-[14px] transition-all duration-100 ${
-                        activeTab === item.id
+                      type="button"
+                      onClick={() => {
+                        if (item.external) {
+                          window.open('https://discord.com/application-directory', '_blank', 'noopener,noreferrer');
+                          return;
+                        }
+                        setPage(item.id);
+                      }}
+                      className={`w-full flex items-center justify-between gap-2 px-2.5 py-[7px] rounded-[4px] text-[14px] text-left transition-colors ${
+                        page === item.id
                           ? 'bg-[#404249] text-white font-medium'
                           : 'text-[#b5bac1] hover:text-[#dbdee1] hover:bg-[#35373c]'
                       }`}
                     >
-                      <span className="w-5 h-5 flex items-center justify-center flex-shrink-0 opacity-80">
-                        {item.icon}
-                      </span>
-                      {item.label}
+                      <span className="truncate">{item.label}</span>
+                      {item.external && (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 opacity-70">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                        </svg>
+                      )}
                     </button>
                   ))}
                 </div>
               </div>
             ))}
+            <div className="h-px bg-[#3f4147] mx-1 my-2" />
+            <div className="space-y-0.5">
+              {FOOTER_NAV.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setPage(item.id)}
+                  className={`w-full flex items-center justify-between px-2.5 py-[7px] rounded-[4px] text-[14px] text-left transition-colors ${
+                    page === item.id
+                      ? 'bg-[#404249] text-white font-medium'
+                      : item.danger
+                        ? 'text-[#ed4245] hover:bg-[#35373c]'
+                        : 'text-[#b5bac1] hover:text-[#dbdee1] hover:bg-[#35373c]'
+                  }`}
+                >
+                  {item.label}
+                  {item.danger && (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0">
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                    </svg>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </nav>
 
-        {/* ───── Main Content ───── */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Header bar */}
-          <div className="flex items-center justify-between px-6 h-14 border-b border-[#1e1f22]/60 flex-shrink-0">
-            <h2 className="text-[17px] font-bold text-white">{tabTitle[activeTab]}</h2>
-            <button
-              onClick={onClose}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-[#b5bac1]
-                hover:text-white hover:bg-[#404249] transition-all duration-150"
-              title="Close (Esc)"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+        <div className="flex-1 flex flex-col min-w-0 bg-[#1e1f22] relative">
+          <div className="absolute top-3 right-4 z-10">
+            <CloseButtonEsc onClose={onClose} />
           </div>
-
-          {/* Content area */}
-          <div className="flex-1 overflow-y-auto p-6 overscroll-contain">
-            {renderContent()}
-          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 sm:px-10 py-6 pt-14 overscroll-contain">{renderContent()}</div>
         </div>
       </div>
     </ModalOverlay>
@@ -186,10 +290,8 @@ function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: () => void }) {
    Overview Tab
    ═══════════════════════════════════════════════════ */
 
-function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boolean; onCloseSettings: () => void }) {
-  const navigate = useNavigate();
+function OverviewTab({ hub, isOwner }: { hub: Hub; isOwner: boolean }) {
   const updateHub = useHubStore((s) => s.updateHub);
-  const deleteHub = useHubStore((s) => s.deleteHub);
 
   const [name, setName] = useState(hub.name);
   const [iconFile, setIconFile] = useState<File | null>(null);
@@ -199,17 +301,11 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deleteConfirmName, setDeleteConfirmName] = useState('');
-  const [deleteBusy, setDeleteBusy] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const iconInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const [iconDragOver, setIconDragOver] = useState(false);
   const [bannerDragOver, setBannerDragOver] = useState(false);
-
-  const deleteNameMatches = deleteConfirmName.trim() === hub.name.trim() && hub.name.trim().length > 0;
 
   useEffect(() => {
     setName(hub.name);
@@ -286,29 +382,10 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
     }
   };
 
-  const handleDeleteServer = async () => {
-    if (!deleteNameMatches) return;
-    setDeleteBusy(true);
-    setDeleteError(null);
-    try {
-      await deleteHub(hub.id);
-      onCloseSettings();
-      const nextHubId = useHubStore.getState().activeHubId;
-      if (nextHubId) {
-        navigate(`/hubs/${nextHubId}`, { replace: true });
-      } else {
-        navigate('/', { replace: true });
-      }
-    } catch (err: unknown) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete server');
-    } finally {
-      setDeleteBusy(false);
-    }
-  };
-
   if (!isOwner) {
     return (
       <div className="space-y-6">
+        <h1 className="text-[20px] font-bold text-white">Server Profile</h1>
         {/* Read-only banner */}
         <div className="rounded-xl overflow-hidden bg-[#2b2d31] border border-[#1e1f22]">
           {bannerPreview ? (
@@ -343,6 +420,7 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
 
   return (
     <div className="space-y-6 relative">
+      <h1 className="text-[20px] font-bold text-white">Server Profile</h1>
       {/* ── Banner Section ── */}
       <div>
         <label className="text-[12px] font-bold uppercase tracking-wider text-[#b5bac1] mb-2 block">
@@ -480,7 +558,22 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
       )}
 
       {/* ── Save Button ── */}
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <button
+          type="button"
+          disabled={!dirty}
+          onClick={() => {
+            setName(hub.name);
+            setIconPreview(hub.icon_url ? publicAssetUrl(hub.icon_url) : null);
+            setBannerPreview(hub.banner_url ? publicAssetUrl(hub.banner_url) : null);
+            setIconFile(null);
+            setBannerFile(null);
+            setError(null);
+          }}
+          className="px-4 py-2.5 rounded-[4px] text-[13px] font-medium text-[#b5bac1] hover:text-white disabled:opacity-40"
+        >
+          Cancel
+        </button>
         <button
           disabled={!dirty || saving}
           onClick={() => void handleSave()}
@@ -490,16 +583,55 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
           {saving ? 'Saving…' : 'Save Changes'}
         </button>
       </div>
+    </div>
+  );
+}
 
-      {/* ── Separator ── */}
-      <div className="h-px bg-[#3f4147]" />
+function DeleteServerTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boolean; onCloseSettings: () => void }) {
+  const navigate = useNavigate();
+  const deleteHub = useHubStore((s) => s.deleteHub);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteConfirmName, setDeleteConfirmName] = useState('');
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteNameMatches = deleteConfirmName.trim() === hub.name.trim() && hub.name.trim().length > 0;
 
-      {/* ── Danger Zone ── */}
-      <div className="rounded-lg border border-[#f23f42]/30 bg-[#f23f42]/5 p-4">
-        <h3 className="text-[14px] font-semibold text-[#f23f42] mb-1">Danger Zone</h3>
-        <p className="text-[13px] text-[#949ba4] mb-3 leading-relaxed">
-          Deleting this server removes all channels, messages, and invites permanently. This cannot be undone.
-        </p>
+  const handleDeleteServer = async () => {
+    if (!deleteNameMatches) return;
+    setDeleteBusy(true);
+    setDeleteError(null);
+    try {
+      await deleteHub(hub.id);
+      onCloseSettings();
+      const nextHubId = useHubStore.getState().activeHubId;
+      if (nextHubId) {
+        navigate(`/hubs/${nextHubId}`, { replace: true });
+      } else {
+        navigate('/', { replace: true });
+      }
+    } catch (err: unknown) {
+      setDeleteError(err instanceof Error ? err.message : 'Failed to delete server');
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  if (!isOwner) {
+    return (
+      <div className="max-w-xl">
+        <h1 className="text-[20px] font-bold text-white mb-2">Delete Server</h1>
+        <p className="text-[13px] text-[#b5bac1]">Only the server owner can delete this server.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-xl space-y-6">
+      <h1 className="text-[20px] font-bold text-white">Delete Server</h1>
+      <p className="text-[13px] text-[#b5bac1] leading-relaxed">
+        Deleting <span className="text-white font-medium">{hub.name}</span> removes all channels, messages, and invites permanently. This cannot be undone.
+      </p>
+      <div className="rounded-lg border border-[#f23f42]/35 bg-[#f23f42]/08 p-4">
         <button
           type="button"
           onClick={() => {
@@ -507,13 +639,11 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
             setDeleteConfirmName('');
             setDeleteError(null);
           }}
-          className="px-4 py-2 rounded-[4px] text-[13px] font-medium border border-[#f23f42] text-[#f23f42]
-            hover:bg-[#f23f42] hover:text-white active:scale-95 transition-all"
+          className="px-4 py-2 rounded-[4px] text-[13px] font-medium border border-[#ed4245] text-[#ed4245] hover:bg-[#ed4245] hover:text-white transition-colors"
         >
           Delete Server
         </button>
       </div>
-
       <ConfirmModal
         isOpen={deleteOpen}
         title={`Delete '${hub.name}'`}
@@ -548,16 +678,21 @@ function OverviewTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner: boo
 }
 
 /* ═══════════════════════════════════════════════════
-   Members Tab
+   Members (Discord-style table)
    ═══════════════════════════════════════════════════ */
 
-function MembersTab({ hub }: { hub: Hub }) {
+function MembersDiscordTab({ hub }: { hub: Hub }) {
+  const [showInList, setShowInList] = useState(true);
   const [members, setMembers] = useState<User[]>([]);
   const [roles, setRoles] = useState<HubRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [sortKey, setSortKey] = useState<'name' | 'joined'>('name');
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [assigningUserId, setAssigningUserId] = useState<string | null>(null);
+  const pageSize = 10;
   const setActiveConversation = useDMStore((s) => s.setActiveConversation);
   const loadConversations = useDMStore((s) => s.loadConversations);
   const currentUser = useAuthStore((s) => s.user);
@@ -568,7 +703,6 @@ function MembersTab({ hub }: { hub: Hub }) {
     let cancelled = false;
     setLoading(true);
     setError(null);
-
     Promise.all([api.getHubMembers(hub.id), api.getRoles(hub.id)])
       .then(([memberData, roleData]) => {
         if (!cancelled) setMembers(normalizeUsers(memberData));
@@ -580,7 +714,6 @@ function MembersTab({ hub }: { hub: Hub }) {
       .finally(() => {
         if (!cancelled) setLoading(false);
       });
-
     return () => { cancelled = true; };
   }, [hub.id]);
 
@@ -604,7 +737,7 @@ function MembersTab({ hub }: { hub: Hub }) {
       const conv = await api.createOrOpenDM(member.id);
       await loadConversations();
       await setActiveConversation(conv.id);
-    } catch { /* silently fail */ }
+    } catch { /* noop */ }
   }, [loadConversations, setActiveConversation]);
 
   const filtered = members.filter((m) => {
@@ -613,135 +746,344 @@ function MembersTab({ hub }: { hub: Hub }) {
     return m.display_name.toLowerCase().includes(q) || m.username.toLowerCase().includes(q);
   });
 
+  const sorted = [...filtered].sort((a, b) => {
+    if (sortKey === 'name') {
+      return a.display_name.localeCompare(b.display_name);
+    }
+    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+  });
+
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const pageSafe = Math.min(page, totalPages);
+  const slice = sorted.slice((pageSafe - 1) * pageSize, pageSafe * pageSize);
+
+  const toggleAllPage = () => {
+    const ids = slice.map((m) => m.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selected.has(id));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (allSelected) ids.forEach((id) => next.delete(id));
+      else ids.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
   if (loading) {
     return (
-      <div className="space-y-2">
-        {[...Array(6)].map((_, i) => (
-          <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-lg">
-            <div className="w-10 h-10 rounded-full bg-[#404249] animate-pulse flex-shrink-0" />
-            <div className="flex-1 space-y-1.5">
-              <div className="h-3.5 rounded bg-[#404249] animate-pulse" style={{ width: `${60 + (i * 20) % 40}%` }} />
-              <div className="h-2.5 rounded bg-[#404249]/60 animate-pulse w-20" />
-            </div>
-          </div>
-        ))}
+      <div className="space-y-4">
+        <div className="h-8 w-48 bg-[#2b2d31] rounded animate-pulse" />
+        <div className="h-64 bg-[#2b2d31] rounded-lg animate-pulse" />
       </div>
     );
   }
 
   if (error) {
-    return (
-      <div className="text-[13px] text-[#f23f42] bg-[#f23f42]/10 rounded-lg px-4 py-3">
-        {error}
-      </div>
-    );
+    return <div className="text-[13px] text-[#f23f42] bg-[#f23f42]/10 rounded-lg px-4 py-3">{error}</div>;
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-[13px] text-[#949ba4]">
-          {members.length} {members.length === 1 ? 'member' : 'members'}
-        </p>
-        <div className="relative">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-[#949ba4] pointer-events-none">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search members"
-            className="pl-9 pr-3 py-1.5 rounded-md bg-[#1e1f22] text-[13px] text-white w-48
-              placeholder-[#949ba4] focus:outline-none focus:ring-1 focus:ring-[#5865f2] transition-all"
-          />
-        </div>
-      </div>
-
-      <div className="space-y-0.5">
-        {filtered.map((member) => (
-          <div
-            key={member.id}
-            className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-[#35373c] transition-colors group/member"
-          >
-            {/* Avatar */}
-            <div className="relative flex-shrink-0">
-              {member.avatar_url ? (
-                <img
-                  src={publicAssetUrl(member.avatar_url)}
-                  alt={member.display_name}
-                  loading="lazy"
-                  decoding="async"
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-[#5865f2] flex items-center justify-center text-xs font-bold text-white">
-                  {member.display_name.slice(0, 2).toUpperCase()}
-                </div>
-              )}
-              <StatusDot
-                userId={member.id}
-                fallbackStatus={member.status}
-                size="md"
-                className="absolute -bottom-0.5 -right-0.5 border-2 border-[#313338]"
+    <div className="max-w-5xl space-y-6">
+      <h1 className="text-[20px] font-bold text-white">Server Members</h1>
+      <ToggleRow
+        label="Show Members in Channel List"
+        description="Display members separately in the channel list."
+        checked={showInList}
+        onChange={setShowInList}
+      />
+      <div className="rounded-lg border border-[#1e1f22] bg-[#2b2d31] overflow-hidden">
+        <div className="px-4 py-3 border-b border-[#1e1f22] flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-[15px] font-semibold text-white">Recent Members</h2>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#949ba4] pointer-events-none">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+                placeholder="Search"
+                className="pl-8 pr-3 py-1.5 rounded-[4px] bg-[#1e1f22] text-[13px] text-white w-40 sm:w-52 placeholder-[#949ba4] focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
               />
             </div>
-
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-[14px] font-medium text-[#dbdee1] truncate">{member.display_name}</p>
-                {member.id === hub.owner_id && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#5865f2]/20 text-[#5865f2] font-semibold flex-shrink-0">
-                    Owner
-                  </span>
-                )}
-                {member.role === 'admin' && member.id !== hub.owner_id && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#57f287]/15 text-[#57f287] font-semibold flex-shrink-0">
-                    Admin
-                  </span>
-                )}
-                {member.rank_id && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f0b232]/15 text-[#f0b232] font-semibold flex-shrink-0">
-                    {roles.find((r) => r.id === member.rank_id)?.name ?? 'Role'}
-                  </span>
-                )}
-              </div>
-              <p className="text-[12px] text-[#949ba4] truncate">@{member.username}</p>
-            </div>
-
-            {canManageRanks && member.id !== hub.owner_id && (
-              <select
-                value={member.rank_id ?? ''}
-                onChange={(e) => void handleRoleAssign(member, e.target.value)}
-                disabled={assigningUserId === member.id}
-                className="bg-[#1e1f22] text-[#dbdee1] text-[12px] rounded px-2 py-1 border border-[#404249] focus:outline-none"
-              >
-                <option value="">No role</option>
-                {roles.map((role) => (
-                  <option key={role.id} value={role.id}>{role.name}</option>
-                ))}
-              </select>
-            )}
-
-            {/* Message button — fixed width to prevent layout shift */}
-            <div className="w-8 flex-shrink-0">
-              {member.id !== currentUser?.id && (
-                <button
-                  onClick={() => void handleMessage(member)}
-                  title={`Message ${member.display_name}`}
-                  className="opacity-0 group-hover/member:opacity-100 w-8 h-8 rounded-md flex items-center justify-center
-                    text-[#b5bac1] hover:text-[#5865f2] hover:bg-[#5865f2]/10 transition-all duration-150 active:scale-95"
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                  </svg>
-                </button>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => setSortKey((k) => (k === 'name' ? 'joined' : 'name'))}
+              className="px-3 py-1.5 rounded-[4px] bg-[#1e1f22] text-[12px] text-[#dbdee1] hover:bg-[#35373c]"
+            >
+              Sort
+            </button>
+            <button type="button" className="px-3 py-1.5 rounded-[4px] text-[12px] font-medium text-[#ed4245] hover:bg-[#ed4245]/10">
+              Prune
+            </button>
           </div>
-        ))}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-left text-[12px]">
+            <thead className="text-[#949ba4] uppercase tracking-wide border-b border-[#1e1f22] bg-[#1e1f22]/40">
+              <tr>
+                <th className="w-10 px-3 py-2.5">
+                  <input
+                    type="checkbox"
+                    checked={slice.length > 0 && slice.every((m) => selected.has(m.id))}
+                    onChange={toggleAllPage}
+                    className="rounded border-[#4e5058]"
+                  />
+                </th>
+                <th className="px-2 py-2.5 font-semibold">Name</th>
+                <th className="px-2 py-2.5 font-semibold">Member Since</th>
+                <th className="px-2 py-2.5 font-semibold">Joined Discord</th>
+                <th className="px-2 py-2.5 font-semibold">Join Method</th>
+                <th className="px-2 py-2.5 font-semibold">Roles</th>
+                <th className="px-2 py-2.5 font-semibold w-10">Signals</th>
+                <th className="w-10 px-2" aria-label="Row menu" />
+              </tr>
+            </thead>
+            <tbody>
+              {slice.map((member) => {
+                const role = member.rank_id ? roles.find((r) => r.id === member.rank_id) : undefined;
+                return (
+                  <tr key={member.id} className="border-b border-[#1e1f22]/80 hover:bg-[#35373c]/50">
+                    <td className="px-3 py-2 align-middle">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(member.id)}
+                        onChange={() => {
+                          setSelected((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(member.id)) next.delete(member.id);
+                            else next.add(member.id);
+                            return next;
+                          });
+                        }}
+                        className="rounded border-[#4e5058]"
+                      />
+                    </td>
+                    <td className="px-2 py-2 align-middle">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="relative shrink-0">
+                          {member.avatar_url ? (
+                            <img src={publicAssetUrl(member.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className="w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center text-[10px] font-bold text-white">
+                              {member.display_name.slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
+                          <StatusDot userId={member.id} fallbackStatus={member.status} size="sm" className="absolute -bottom-0.5 -right-0.5 border-2 border-[#2b2d31]" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-[13px] text-white font-medium truncate">{member.display_name}</p>
+                          <p className="text-[11px] text-[#949ba4] truncate">@{member.username}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-[#b5bac1] whitespace-nowrap">—</td>
+                    <td className="px-2 py-2 text-[#b5bac1] whitespace-nowrap">
+                      {formatDistanceToNow(new Date(member.created_at), { addSuffix: true })}
+                    </td>
+                    <td className="px-2 py-2">
+                      <span className="inline-flex items-center gap-1 text-[#00a8fc]">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                        Invite
+                      </span>
+                    </td>
+                    <td className="px-2 py-2">
+                      <div className="flex flex-wrap gap-1 max-w-[140px]">
+                        {member.id === hub.owner_id && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#5865f2]/25 text-[#c9cdfb]">Owner</span>
+                        )}
+                        {member.role === 'admin' && member.id !== hub.owner_id && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#57f287]/20 text-[#57f287]">Admin</span>
+                        )}
+                        {role && (
+                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold truncate max-w-[100px]" style={{ backgroundColor: `${role.color}33`, color: role.color }}>
+                            {role.name}
+                          </span>
+                        )}
+                      </div>
+                      {canManageRanks && member.id !== hub.owner_id && (
+                        <select
+                          value={member.rank_id ?? ''}
+                          onChange={(e) => void handleRoleAssign(member, e.target.value)}
+                          disabled={assigningUserId === member.id}
+                          className="mt-1 w-full max-w-[120px] bg-[#1e1f22] text-[#dbdee1] text-[11px] rounded px-1 py-0.5 border border-[#404249]"
+                        >
+                          <option value="">Role…</option>
+                          {roles.map((r) => (
+                            <option key={r.id} value={r.id}>{r.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="px-2 py-2 text-[#949ba4]">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-60">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                      </svg>
+                    </td>
+                    <td className="px-2 py-2 text-right">
+                      {member.id !== currentUser?.id && (
+                        <button
+                          type="button"
+                          onClick={() => void handleMessage(member)}
+                          className="p-1 rounded text-[#b5bac1] hover:text-white hover:bg-[#404249]"
+                          title="Message"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="5" cy="12" r="1.5" />
+                            <circle cx="12" cy="12" r="1.5" />
+                            <circle cx="19" cy="12" r="1.5" />
+                          </svg>
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <div className="px-4 py-3 border-t border-[#1e1f22] flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#b5bac1]">
+          <span>
+            {slice.length === 0
+              ? `Showing 0 of ${sorted.length}`
+              : `Showing ${(pageSafe - 1) * pageSize + 1}–${(pageSafe - 1) * pageSize + slice.length} of ${sorted.length}`}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={pageSafe <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="px-2 py-1 rounded bg-[#1e1f22] text-[#dbdee1] disabled:opacity-40"
+            >
+              Back
+            </button>
+            <div className="flex gap-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setPage(n)}
+                  className={`min-w-[28px] py-1 rounded text-[12px] ${n === pageSafe ? 'bg-[#5865f2] text-white' : 'bg-[#1e1f22] text-[#b5bac1] hover:bg-[#35373c]'}`}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              disabled={pageSafe >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="px-2 py-1 rounded bg-[#1e1f22] text-[#dbdee1] disabled:opacity-40"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function InvitesTab({ hub, currentUser }: { hub: Hub; currentUser: User | null }) {
+  const [invites, setInvites] = useState<HubInvite[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [banner, setBanner] = useState<string | null>(null);
+
+  const createInvite = async () => {
+    setBusy(true);
+    setBanner(null);
+    try {
+      const inv = await api.createInvite(hub.id);
+      setInvites((prev) => [inv, ...prev]);
+    } catch (e: unknown) {
+      setBanner(e instanceof Error ? e.message : 'Could not create invite');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <h1 className="text-[20px] font-bold text-white">Invites</h1>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setPaused((p) => !p)}
+            className="px-3 py-2 rounded-[4px] text-[13px] font-medium text-[#ed4245] hover:bg-[#ed4245]/10"
+          >
+            {paused ? 'Resume Invites' : 'Pause Invites'}
+          </button>
+          <button
+            type="button"
+            disabled={busy || paused}
+            onClick={() => void createInvite()}
+            className="px-4 py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium hover:bg-[#4752c4] disabled:opacity-40"
+          >
+            {busy ? 'Creating…' : 'Create invite link'}
+          </button>
+        </div>
+      </div>
+      {banner && <p className="text-[13px] text-[#f23f42]">{banner}</p>}
+      <p className="text-[11px] font-bold uppercase tracking-wider text-[#949ba4]">Active invite links</p>
+      <div className="rounded-lg border border-[#1e1f22] bg-[#2b2d31] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-left text-[12px]">
+            <thead className="text-[#949ba4] uppercase tracking-wide border-b border-[#1e1f22] bg-[#1e1f22]/40">
+              <tr>
+                <th className="px-4 py-2.5 font-semibold">Inviter</th>
+                <th className="px-2 py-2.5 font-semibold">Invite Code</th>
+                <th className="px-2 py-2.5 font-semibold">Uses</th>
+                <th className="px-2 py-2.5 font-semibold">Expires</th>
+                <th className="px-2 py-2.5 font-semibold">Roles</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invites.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-10 text-center text-[#949ba4] text-[13px]">
+                    No active invites. Create one to get started.
+                  </td>
+                </tr>
+              ) : (
+                invites.map((inv) => (
+                  <tr key={inv.id} className="border-b border-[#1e1f22]/80">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center text-[10px] font-bold text-white">
+                          {(currentUser?.display_name ?? '?').slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-[13px] text-white font-medium">
+                            {inv.creator_id === currentUser?.id ? 'You' : 'Member'}
+                          </p>
+                          <p className="text-[11px] text-[#949ba4] flex items-center gap-1">
+                            <span className="text-[#b5bac1]">#</span> general
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-2 py-3 text-[#00a8fc] font-mono text-[13px]">{inv.code}</td>
+                    <td className="px-2 py-3 text-[#b5bac1]">
+                      {inv.uses}
+                      {inv.max_uses > 0 ? ` / ${inv.max_uses}` : ''}
+                    </td>
+                    <td className="px-2 py-3 text-[#b5bac1]">
+                      {inv.expires_at ? formatDistanceToNow(new Date(inv.expires_at), { addSuffix: true }) : '∞'}
+                    </td>
+                    <td className="px-2 py-3 text-[#949ba4]">—</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -792,7 +1134,7 @@ const kindConfig: Record<CustomKind, {
   },
 };
 
-function CustomizationTab({ hub, isOwner, kind }: { hub: Hub; isOwner: boolean; kind: CustomKind }) {
+function CustomizationTab({ hub, isOwner, kind, discordLayout }: { hub: Hub; isOwner: boolean; kind: CustomKind; discordLayout?: boolean }) {
   const cfg = kindConfig[kind];
   const [items, setItems] = useState<CustomItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -985,17 +1327,28 @@ function CustomizationTab({ hub, isOwner, kind }: { hub: Hub; isOwner: boolean; 
         </div>
       )}
       {/* Header + Upload */}
-      <div className="flex items-center justify-between">
-        <p className="text-[13px] text-[#949ba4]">
-          {items.length} / {cfg.maxItems} {cfg.label.toLowerCase()}
-        </p>
+      <div className={`flex items-center justify-between gap-4 ${discordLayout ? 'flex-wrap' : ''}`}>
+        {discordLayout ? (
+          <p className="text-[13px] text-[#949ba4] max-w-xl">
+            {kind === 'sounds'
+              ? 'Upload audio files your members can play in voice channels.'
+              : 'Drag and drop multiple image files here, or use the upload button.'}{' '}
+            <span className="text-[#b5bac1]">
+              ({items.length} / {cfg.maxItems})
+            </span>
+          </p>
+        ) : (
+          <p className="text-[13px] text-[#949ba4]">
+            {items.length} / {cfg.maxItems} {cfg.label.toLowerCase()}
+          </p>
+        )}
         {canManage && (
           <>
             <button
               disabled={uploading || atLimit}
               onClick={() => fileRef.current?.click()}
               className="px-4 py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium
-                hover:bg-[#4752c4] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                hover:bg-[#4752c4] active:scale-95 transition-all disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2 shrink-0"
               title={atLimit ? `Maximum ${cfg.maxItems} ${cfg.label.toLowerCase()} reached` : undefined}
             >
               {uploading ? (
@@ -1008,7 +1361,9 @@ function CustomizationTab({ hub, isOwner, kind }: { hub: Hub; isOwner: boolean; 
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                     <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                   </svg>
-                  Upload {cfg.singular}
+                  {discordLayout
+                    ? (kind === 'emojis' ? 'Upload Emoji' : kind === 'stickers' ? 'Upload Sticker' : 'Upload Sound')
+                    : `Upload ${cfg.singular}`}
                 </>
               )}
             </button>
@@ -1037,11 +1392,19 @@ function CustomizationTab({ hub, isOwner, kind }: { hub: Hub; isOwner: boolean; 
             {kind === 'stickers' && <div className="scale-150"><IconSticker /></div>}
             {kind === 'sounds' && <div className="scale-150"><IconSoundboard /></div>}
           </div>
-          <h3 className="text-[16px] font-semibold text-white mb-1">No {cfg.label.toLowerCase()} yet</h3>
+          <h3 className={`${discordLayout ? 'text-[18px] tracking-wide' : 'text-[16px]'} font-bold text-white mb-1`}>
+            {discordLayout
+              ? (kind === 'emojis' ? 'NO EMOJI' : kind === 'stickers' ? 'NO STICKERS' : 'NO SOUNDS')
+              : `No ${cfg.label.toLowerCase()} yet`}
+          </h3>
           <p className="text-[13px] text-[#949ba4] max-w-xs leading-relaxed">
-            {canManage
-              ? `Upload ${cfg.label.toLowerCase()} by clicking the button above or dragging files here.`
-              : `This server doesn't have any custom ${cfg.label.toLowerCase()} yet.`}
+            {discordLayout
+              ? (kind === 'sounds'
+                ? 'Upload a sound to get started.'
+                : 'Get the party started by uploading an emoji or sticker.')
+              : canManage
+                ? `Upload ${cfg.label.toLowerCase()} by clicking the button above or dragging files here.`
+                : `This server doesn't have any custom ${cfg.label.toLowerCase()} yet.`}
           </p>
         </div>
       )}
@@ -1215,7 +1578,7 @@ function RolesTab({ hub }: { hub: Hub }) {
   const [newPerms, setNewPerms] = useState<number>(PermViewStreams | PermSendMessages | PermConnectVoice | PermSpeakVoice | PermUseSoundboard);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDeleteRoleId, setConfirmDeleteRoleId] = useState<string | null>(null);
-  const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
+  const [selectedPanel, setSelectedPanel] = useState<'create' | string | null>(null);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('#99aab5');
   const [editPerms, setEditPerms] = useState<number>(0);
@@ -1239,6 +1602,34 @@ function RolesTab({ hub }: { hub: Hub }) {
     void load();
   }, [load]);
 
+  const sortedRoles = useMemo(
+    () => [...roles].sort((a, b) => a.position - b.position),
+    [roles],
+  );
+
+  const firstRoleId = sortedRoles[0]?.id ?? null;
+
+  useEffect(() => {
+    if (loading || firstRoleId == null) return;
+    if (selectedPanel === null) setSelectedPanel(firstRoleId);
+  }, [loading, firstRoleId, selectedPanel]);
+
+  useEffect(() => {
+    if (selectedPanel && selectedPanel !== 'create' && !roles.some((r) => r.id === selectedPanel)) {
+      setSelectedPanel(firstRoleId ?? 'create');
+    }
+  }, [roles, selectedPanel, firstRoleId]);
+
+  const activeRole = selectedPanel && selectedPanel !== 'create' ? roles.find((r) => r.id === selectedPanel) : undefined;
+
+  useEffect(() => {
+    if (activeRole) {
+      setEditName(activeRole.name);
+      setEditColor(activeRole.color || '#99aab5');
+      setEditPerms(activeRole.permissions);
+    }
+  }, [activeRole?.id, activeRole?.name, activeRole?.color, activeRole?.permissions]);
+
   const toggleBit = useCallback((value: number, bit: number): number => {
     return (value & bit) !== 0 ? (value & ~bit) : (value | bit);
   }, []);
@@ -1252,6 +1643,7 @@ function RolesTab({ hub }: { hub: Hub }) {
       await api.createRole(hub.id, { name, color: newColor, permissions: newPerms });
       setNewName('');
       await load();
+      setSelectedPanel('create');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create role');
     } finally {
@@ -1265,44 +1657,48 @@ function RolesTab({ hub }: { hub: Hub }) {
     setError(null);
     try {
       await api.deleteRole(hub.id, roleID);
-      if (editingRoleId === roleID) setEditingRoleId(null);
+      if (selectedPanel === roleID) setSelectedPanel(null);
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to delete role');
     } finally {
       setBusyId(null);
     }
-  }, [canManage, hub.id, load, editingRoleId]);
-
-  const startEditing = useCallback((role: HubRole) => {
-    if (editingRoleId === role.id) {
-      setEditingRoleId(null);
-      return;
-    }
-    setEditingRoleId(role.id);
-    setEditName(role.name);
-    setEditColor(role.color || '#99aab5');
-    setEditPerms(role.permissions);
-  }, [editingRoleId]);
+  }, [canManage, hub.id, load, selectedPanel]);
 
   const saveRole = useCallback(async () => {
-    if (!editingRoleId || !canManage) return;
+    if (!activeRole || !canManage) return;
     const name = editName.trim();
     if (!name) return;
-    setBusyId(editingRoleId);
+    setBusyId(activeRole.id);
     setError(null);
     try {
-      await api.updateRole(hub.id, editingRoleId, { name, color: editColor, permissions: editPerms });
-      setEditingRoleId(null);
+      await api.updateRole(hub.id, activeRole.id, { name, color: editColor, permissions: editPerms });
       await load();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to update role');
     } finally {
       setBusyId(null);
     }
-  }, [canManage, hub.id, editingRoleId, editName, editColor, editPerms, load]);
+  }, [canManage, hub.id, activeRole, editName, editColor, editPerms, load]);
 
   const isAdminPerm = (perms: number) => (perms & PermAdministrator) !== 0;
+
+  const renderPermGrid = (value: number, setVal: Dispatch<SetStateAction<number>>) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+      {ROLE_PERMISSION_OPTIONS.map((opt) => (
+        <label key={opt.key} className={`flex items-center gap-2 text-[12px] ${isAdminPerm(value) && opt.key !== PermAdministrator ? 'text-[#949ba4]' : 'text-[#dbdee1]'}`}>
+          <input
+            type="checkbox"
+            checked={isAdminPerm(value) || (value & opt.key) !== 0}
+            onChange={() => setVal((p) => toggleBit(p, opt.key))}
+            disabled={isAdminPerm(value) && opt.key !== PermAdministrator}
+          />
+          {opt.label}
+        </label>
+      ))}
+    </div>
+  );
 
   if (!canManage) {
     return (
@@ -1313,136 +1709,134 @@ function RolesTab({ hub }: { hub: Hub }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-5xl">
+      <h1 className="text-[20px] font-bold text-white">Roles</h1>
       {error && <div className="text-[13px] text-[#f23f42] bg-[#f23f42]/10 rounded-lg px-4 py-3">{error}</div>}
 
-      <div className="bg-[#2b2d31] rounded-lg border border-[#1e1f22] p-4 space-y-3">
-        <h3 className="text-[14px] font-semibold text-white">Create Role</h3>
-        <div className="flex gap-3 items-center">
-          <input
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            placeholder="Role name"
-            maxLength={32}
-            className="flex-1 px-3 py-2 rounded-[4px] bg-[#1e1f22] text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
-          />
-          <input
-            type="color"
-            value={newColor}
-            onChange={(e) => setNewColor(e.target.value)}
-            className="w-10 h-10 rounded bg-transparent"
-          />
-          <button
-            onClick={() => void createRole()}
-            disabled={!newName.trim() || busyId === 'new'}
-            className="px-4 py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium hover:bg-[#4752c4] disabled:opacity-40"
-          >
-            {busyId === 'new' ? 'Creating…' : 'Create'}
-          </button>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {ROLE_PERMISSION_OPTIONS.map((opt) => (
-            <label key={opt.key} className={`flex items-center gap-2 text-[12px] ${isAdminPerm(newPerms) && opt.key !== PermAdministrator ? 'text-[#949ba4]' : 'text-[#dbdee1]'}`}>
-              <input
-                type="checkbox"
-                checked={isAdminPerm(newPerms) || (newPerms & opt.key) !== 0}
-                onChange={() => setNewPerms((p) => toggleBit(p, opt.key))}
-                disabled={isAdminPerm(newPerms) && opt.key !== PermAdministrator}
-              />
-              {opt.label}
-            </label>
-          ))}
-        </div>
-        {isAdminPerm(newPerms) && (
-          <p className="text-[11px] text-[#faa61a] mt-1">Administrator grants full access to all permissions.</p>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="text-[14px] font-semibold text-white">Existing Roles</h3>
-        {loading ? (
-          <p className="text-[13px] text-[#949ba4]">Loading roles…</p>
-        ) : roles.length === 0 ? (
-          <p className="text-[13px] text-[#949ba4]">No custom roles yet.</p>
-        ) : (
-          roles.map((role) => (
-            <div key={role.id} className="bg-[#2b2d31] border border-[#1e1f22] rounded-lg overflow-hidden">
-              <div className="flex items-center justify-between px-3 py-2.5">
+      <div className="flex flex-col lg:flex-row gap-0 min-h-[420px] rounded-lg border border-[#1e1f22] overflow-hidden bg-[#2b2d31]">
+        <aside className="w-full lg:w-56 shrink-0 border-b lg:border-b-0 lg:border-r border-[#1e1f22] flex flex-col max-h-[40vh] lg:max-h-none">
+          <div className="p-2 border-b border-[#1e1f22]">
+            <button
+              type="button"
+              onClick={() => {
+                setSelectedPanel('create');
+                setNewName('');
+                setNewColor('#99aab5');
+                setNewPerms(PermViewStreams | PermSendMessages | PermConnectVoice | PermSpeakVoice | PermUseSoundboard);
+              }}
+              className="w-full py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium hover:bg-[#4752c4]"
+            >
+              Add role
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-1 space-y-0.5">
+            {loading ? (
+              <p className="text-[12px] text-[#949ba4] px-2 py-2">Loading…</p>
+            ) : sortedRoles.length === 0 ? (
+              <p className="text-[12px] text-[#949ba4] px-2 py-2">No roles yet.</p>
+            ) : (
+              sortedRoles.map((role) => (
                 <button
-                  onClick={() => startEditing(role)}
-                  className="flex items-center gap-2 min-w-0 hover:opacity-80 transition-opacity"
+                  key={role.id}
+                  type="button"
+                  onClick={() => setSelectedPanel(role.id)}
+                  className={`w-full flex items-center gap-2 px-2.5 py-2 rounded-[4px] text-left text-[13px] transition-colors ${
+                    selectedPanel === role.id ? 'bg-[#404249] text-white' : 'text-[#b5bac1] hover:bg-[#35373c]'
+                  }`}
                 >
-                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: role.color || '#99aab5' }} />
-                  <span className="text-[13px] text-white truncate">{role.name}</span>
-                  <svg
-                    width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-                    className={`text-[#949ba4] transition-transform duration-200 flex-shrink-0 ${editingRoleId === role.id ? 'rotate-180' : ''}`}
-                  >
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                  <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: role.color || '#99aab5' }} />
+                  <span className="truncate">{role.name}</span>
                 </button>
+              ))
+            )}
+          </div>
+        </aside>
+
+        <section className="flex-1 min-w-0 p-4 overflow-y-auto">
+          {selectedPanel === 'create' && (
+            <div className="space-y-4 max-w-2xl">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-[16px] font-semibold text-white">Create role</h2>
+              </div>
+              <div className="flex gap-3 items-center flex-wrap">
+                <input
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  placeholder="Role name"
+                  maxLength={32}
+                  className="flex-1 min-w-[160px] px-3 py-2 rounded-[4px] bg-[#1e1f22] text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
+                />
+                <input
+                  type="color"
+                  value={newColor}
+                  onChange={(e) => setNewColor(e.target.value)}
+                  className="w-10 h-10 rounded bg-transparent cursor-pointer"
+                />
                 <button
-                  onClick={() => setConfirmDeleteRoleId(role.id)}
-                  disabled={busyId === role.id}
-                  className="text-[12px] px-2.5 py-1 rounded bg-[#f23f42]/10 text-[#f23f42] hover:bg-[#f23f42]/20 disabled:opacity-40"
+                  type="button"
+                  onClick={() => void createRole()}
+                  disabled={!newName.trim() || busyId === 'new'}
+                  className="px-4 py-2 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium hover:bg-[#4752c4] disabled:opacity-40"
                 >
-                  {busyId === role.id ? 'Deleting…' : 'Delete'}
+                  {busyId === 'new' ? 'Creating…' : 'Create role'}
                 </button>
               </div>
-
-              {editingRoleId === role.id && (
-                <div className="border-t border-[#1e1f22] px-3 py-3 space-y-3">
-                  <div className="flex gap-3 items-center">
-                    <input
-                      value={editName}
-                      onChange={(e) => setEditName(e.target.value)}
-                      placeholder="Role name"
-                      maxLength={32}
-                      className="flex-1 px-3 py-2 rounded-[4px] bg-[#1e1f22] text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
-                    />
-                    <input
-                      type="color"
-                      value={editColor}
-                      onChange={(e) => setEditColor(e.target.value)}
-                      className="w-10 h-10 rounded bg-transparent"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {ROLE_PERMISSION_OPTIONS.map((opt) => (
-                      <label key={opt.key} className={`flex items-center gap-2 text-[12px] ${isAdminPerm(editPerms) && opt.key !== PermAdministrator ? 'text-[#949ba4]' : 'text-[#dbdee1]'}`}>
-                        <input
-                          type="checkbox"
-                          checked={isAdminPerm(editPerms) || (editPerms & opt.key) !== 0}
-                          onChange={() => setEditPerms((p) => toggleBit(p, opt.key))}
-                          disabled={isAdminPerm(editPerms) && opt.key !== PermAdministrator}
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                  {isAdminPerm(editPerms) && (
-                    <p className="text-[11px] text-[#faa61a]">Administrator grants full access to all permissions.</p>
-                  )}
-                  <div className="flex justify-end gap-2 pt-1">
-                    <button
-                      onClick={() => setEditingRoleId(null)}
-                      className="px-3 py-1.5 rounded-[4px] text-[13px] text-[#b5bac1] hover:text-white transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => void saveRole()}
-                      disabled={!editName.trim() || busyId === editingRoleId}
-                      className="px-4 py-1.5 rounded-[4px] bg-[#248046] text-white text-[13px] font-medium hover:bg-[#1a6334] disabled:opacity-40"
-                    >
-                      {busyId === editingRoleId ? 'Saving…' : 'Save Changes'}
-                    </button>
-                  </div>
-                </div>
+              {renderPermGrid(newPerms, setNewPerms)}
+              {isAdminPerm(newPerms) && (
+                <p className="text-[11px] text-[#faa61a]">Administrator grants full access to all permissions.</p>
               )}
             </div>
-          ))
-        )}
+          )}
+
+          {selectedPanel !== 'create' && activeRole && (
+            <div className="space-y-4 max-w-2xl">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <h2 className="text-[16px] font-semibold text-white">Edit role — {activeRole.name}</h2>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDeleteRoleId(activeRole.id)}
+                  disabled={busyId === activeRole.id}
+                  className="text-[12px] px-3 py-1.5 rounded-[4px] bg-[#f23f42]/10 text-[#f23f42] hover:bg-[#f23f42]/20 disabled:opacity-40"
+                >
+                  Delete role
+                </button>
+              </div>
+              <div className="flex gap-3 items-center flex-wrap">
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  placeholder="Role name"
+                  maxLength={32}
+                  className="flex-1 min-w-[160px] px-3 py-2 rounded-[4px] bg-[#1e1f22] text-[13px] text-white focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
+                />
+                <input
+                  type="color"
+                  value={editColor}
+                  onChange={(e) => setEditColor(e.target.value)}
+                  className="w-10 h-10 rounded bg-transparent cursor-pointer"
+                />
+              </div>
+              {renderPermGrid(editPerms, setEditPerms)}
+              {isAdminPerm(editPerms) && (
+                <p className="text-[11px] text-[#faa61a]">Administrator grants full access to all permissions.</p>
+              )}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => void saveRole()}
+                  disabled={!editName.trim() || busyId === activeRole.id}
+                  className="px-4 py-2 rounded-[4px] bg-[#248046] text-white text-[13px] font-medium hover:bg-[#1a6334] disabled:opacity-40"
+                >
+                  {busyId === activeRole.id ? 'Saving…' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!loading && selectedPanel !== 'create' && !activeRole && (
+            <p className="text-[13px] text-[#949ba4]">Select a role to edit permissions.</p>
+          )}
+        </section>
       </div>
 
       <ConfirmModal
@@ -1468,34 +1862,6 @@ function RolesTab({ hub }: { hub: Hub }) {
 /* ═══════════════════════════════════════════════════
    Icons
    ═══════════════════════════════════════════════════ */
-
-function IconGear() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-function IconMembers() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function IconRoles() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
 
 function IconEmoji() {
   return (
