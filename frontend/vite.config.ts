@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
@@ -9,7 +9,10 @@ const vendorChunks: Record<string, string[]> = {
   'vendor-misc': ['zustand', 'date-fns'],
 };
 
+const electronEmbed = process.env.VITE_ELECTRON_EMBED === '1';
+
 export default defineConfig({
+  base: electronEmbed ? './' : '/',
   plugins: [react()],
   resolve: {
     alias: {

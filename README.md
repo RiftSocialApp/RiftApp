@@ -2,7 +2,7 @@
 
 <p align="center">
   <br/>
-  <b>Fast · Clean · Yours</b>
+  <b>Fast Â· Clean Â· Yours</b>
   <br/><br/>
   <i>Real-time communication, built for clarity and control.</i>
   <br/><br/>
@@ -10,11 +10,11 @@
 
 <p align="center">
   <sub><b>Chat</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
+  &nbsp;&nbsp;Â·&nbsp;&nbsp;
   <sub><b>Voice</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
+  &nbsp;&nbsp;Â·&nbsp;&nbsp;
   <sub><b>DMs</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
+  &nbsp;&nbsp;Â·&nbsp;&nbsp;
   <sub><b>Your infrastructure</b></sub>
 </p>
 
@@ -54,7 +54,7 @@ Self-host so **your** conversations stay **your** business.
 
 <br/>
 
-**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**, not someone else’s product roadmap.
+**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**, not someone elseâ€™s product roadmap.
 
 > *We believe great software should feel **light**, **responsive**, and **yours**.*
 
@@ -78,7 +78,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 <br/>
 
 <p align="center">
-  <i>Creative crews · Gaming circles · Internal squads · Your crew here</i>
+  <i>Creative crews Â· Gaming circles Â· Internal squads Â· Your crew here</i>
 </p>
 
 <p align="center">
@@ -106,7 +106,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 <br/>
 
 > **Show up fully**  
-> Profiles, avatars, and shared media help people recognize each other and celebrate the group’s personality.
+> Profiles, avatars, and shared media help people recognize each other and celebrate the groupâ€™s personality.
 
 <br/>
 
@@ -128,7 +128,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 
 We use clear names so the app feels **intentional**, not borrowed.
 
-| You might say… | In RiftApp |
+| You might sayâ€¦ | In RiftApp |
 |:--------------:|:----------:|
 | Server | **`Hub`** |
 | Channel | **`Stream`** |
@@ -235,6 +235,10 @@ npm run dev
 
 The dev UI is typically at **`http://localhost:5173`**, with the API proxied from the frontend config.
 
+*Desktop (Electron) — dev:* run `cd app && npm run dev` (starts Vite in `frontend` and Electron when `http://localhost:5173` is ready). Keep the API running for `/api` proxy.
+
+*Desktop — release build:* from `app/`, run `npm run build` (or `npm run dist:win`). Build output always goes to **`app/dist-electron/`** (NSIS setup exe, `win-unpacked/`, blockmap, etc.). The packaged app loads **`https://riftapp.io/`** (same as the browser). Optional env: `RIFT_UPDATE_URL` (generic update server base for `latest.yml`). On Windows without code-signing tools, use `CSC_IDENTITY_AUTO_DISCOVERY=false` (already set in `npm run dist:win`).
+
 <br/>
 
 </details>
@@ -251,6 +255,7 @@ The dev UI is typically at **`http://localhost:5173`**, with the API proxied fro
 |:-----|:-----------------|
 | **`backend/`** | API, auth, real-time messaging, migrations, and `compose.yml` for local dependencies |
 | **`frontend/`** | Web client |
+| **`app/`** | Electron desktop shell (electron-builder + electron-updater) |
 | **`ARCHITECTURE.md`** | Technical deep dive for builders |
 
 <br/>
