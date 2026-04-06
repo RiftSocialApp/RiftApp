@@ -25,6 +25,8 @@ import {
 
 const VOICE_SETTINGS_STORAGE_KEY = 'riftapp-voice-settings-v2';
 export type ScreenShareKind = 'screen' | 'window' | 'tab';
+export type ScreenShareFps = 15 | 30 | 60;
+export type ScreenShareResolution = '480p' | '720p' | '1080p' | '1440p' | 'source';
 
 type VoiceDeviceKind = 'audioinput' | 'audiooutput' | 'videoinput';
 
@@ -228,6 +230,8 @@ interface VoiceStore {
   screenShareModalOpen: boolean;
   screenShareRequesting: boolean;
   screenShareKind: ScreenShareKind;
+  screenShareFps: ScreenShareFps;
+  screenShareResolution: ScreenShareResolution;
   screenShareSurfaceLabel: string | null;
   screenShareNotice: ScreenShareNotice | null;
 
@@ -237,6 +241,8 @@ interface VoiceStore {
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => void;
   toggleScreenShare: () => void;
+  changeScreenShare: () => Promise<void>;
+  setScreenShareQuality: (fps: ScreenShareFps, resolution: ScreenShareResolution) => Promise<void>;
   dismissScreenShareNotice: () => void;
   togglePTT: () => void;
   setParticipantVolume: (identity: string, volume: number) => void;
@@ -826,9 +832,36 @@ function inferSurfaceLabel(kind: ScreenShareKind): string {
   return requestedSurfaceLabel(kind);
 }
 
-function buildScreenShareOptions(kind: ScreenShareKind) {
+const SCREEN_SHARE_RESOLUTIONS: Record<ScreenShareResolution, { width?: number; height?: number }> = {
+  '480p':   { width: 854,  height: 480  },
+  '720p':   { width: 1280, height: 720  },
+  '1080p':  { width: 1920, height: 1080 },
+  '1440p':  { width: 2560, height: 1440 },
+  'source': {},
+};
+
+const SCREEN_SHARE_BITRATES: Record<ScreenShareResolution, Record<ScreenShareFps, number>> = {
+  '480p':   { 15: 500_000,   30: 800_000,   60: 1_200_000  },
+  '720p':   { 15: 1_500_000, 30: 2_500_000, 60: 4_000_000  },
+  '1080p':  { 15: 3_000_000, 30: 5_000_000, 60: 8_000_000  },
+  '1440p':  { 15: 5_000_000, 30: 8_000_000, 60: 12_000_000 },
+  'source': { 15: 5_000_000, 30: 8_000_000, 60: 12_000_000 },
+};
+
+function screenSharePublishEncoding(fps: ScreenShareFps, resolution: ScreenShareResolution) {
+  return {
+    screenShareEncoding: {
+      maxBitrate: SCREEN_SHARE_BITRATES[resolution][fps],
+      maxFramerate: fps,
+      priority: 'high' as const,
+    },
+  };
+}
+
+function buildScreenShareOptions(kind: ScreenShareKind, fps: ScreenShareFps = 30, resolution: ScreenShareResolution = '1080p') {
+  const resConstraints = SCREEN_SHARE_RESOLUTIONS[resolution];
   const options: Record<string, unknown> = {
-    resolution: { width: 1920, height: 1080, frameRate: 30 },
+    resolution: { ...resConstraints, frameRate: fps },
     contentHint: 'detail',
     surfaceSwitching: 'include',
   };
@@ -845,12 +878,43 @@ function buildScreenShareOptions(kind: ScreenShareKind) {
   return options;
 }
 
-async function stopScreenShare(room: Room) {
-  const pub = room.localParticipant.getTrackPublication(Track.Source.ScreenShare) as LocalTrackPublication | undefined;
-  if (pub?.track) {
-    pub.track.stop();
-    await room.localParticipant.unpublishTrack(pub.track);
+async function startScreenShare(room: Room, state: Pick<VoiceStore, 'screenShareKind' | 'screenShareFps' | 'screenShareResolution'>, streamId: string | null) {
+  // Go directly to browser's native picker — no intermediate modal
+  useVoiceStore.setState({ screenShareRequesting: true });
+  setScreenShareNotice(null);
+  try {
+    await room.localParticipant.setScreenShareEnabled(
+      true,
+      buildScreenShareOptions(state.screenShareKind, state.screenShareFps, state.screenShareResolution) as never,
+      screenSharePublishEncoding(state.screenShareFps, state.screenShareResolution),
+    );
+    useVoiceStore.setState({
+      isScreenSharing: true,
+      screenShareRequesting: false,
+      screenShareSurfaceLabel: inferSurfaceLabel(state.screenShareKind),
+      screenShareModalOpen: true,
+    });
+    if (streamId) wsSend('voice_screen_share_update', { stream_id: streamId, sharing: true });
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : '';
+    const message = err instanceof Error ? err.message.toLowerCase() : '';
+    useVoiceStore.setState({ screenShareRequesting: false });
+    if (name === 'AbortError' || message.includes('cancel')) {
+      setScreenShareNotice({ tone: 'info', message: 'Screen share cancelled' });
+    } else if (name === 'NotFoundError' || message.includes('available')) {
+      setScreenShareNotice({ tone: 'error', message: 'No screen available to share' });
+    } else if (name === 'NotAllowedError') {
+      setScreenShareNotice({ tone: 'error', message: 'Screen share permission denied — check browser settings' });
+    } else {
+      setScreenShareNotice({ tone: 'error', message: 'Unable to start screen share' });
+    }
   }
+}
+
+async function stopScreenShare(room: Room) {
+  // Use setScreenShareEnabled(false) so LiveKit properly signals all remote participants
+  // before stopping the underlying track (prevents ghost/frozen tiles on remote end)
+  await room.localParticipant.setScreenShareEnabled(false);
   useVoiceStore.setState({ isScreenSharing: false, screenShareSurfaceLabel: null, screenShareRequesting: false, screenShareModalOpen: false });
 }
 
@@ -1016,6 +1080,8 @@ function resetState() {
     screenShareModalOpen: false,
     screenShareRequesting: false,
     screenShareKind: 'screen',
+    screenShareFps: 30,
+    screenShareResolution: '1080p',
     screenShareSurfaceLabel: null,
     screenShareNotice: null,
   });
@@ -1060,6 +1126,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   screenShareModalOpen: false,
   screenShareRequesting: false,
   screenShareKind: 'screen',
+  screenShareFps: 30,
+  screenShareResolution: '1080p',
   screenShareSurfaceLabel: null,
   screenShareNotice: null,
 
@@ -1238,34 +1306,57 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       await stopScreenShare(roomRef);
       if (streamId) wsSend('voice_screen_share_update', { stream_id: streamId, sharing: false });
     } else {
-      // Go directly to browser's native picker — no intermediate modal
-      set({ screenShareRequesting: true });
-      setScreenShareNotice(null);
-      try {
-        await roomRef.localParticipant.setScreenShareEnabled(true, buildScreenShareOptions('screen') as never);
-        set({
-          isScreenSharing: true,
-          screenShareRequesting: false,
-          screenShareSurfaceLabel: inferSurfaceLabel('screen'),
-          screenShareModalOpen: true,
-        });
-        if (streamId) wsSend('voice_screen_share_update', { stream_id: streamId, sharing: true });
-      } catch (err) {
-        const name = err instanceof DOMException ? err.name : '';
-        const message = err instanceof Error ? err.message.toLowerCase() : '';
-        set({ screenShareRequesting: false });
-        if (name === 'AbortError' || message.includes('cancel')) {
-          setScreenShareNotice({ tone: 'info', message: 'Screen share cancelled' });
-        } else if (name === 'NotFoundError' || message.includes('available')) {
-          setScreenShareNotice({ tone: 'error', message: 'No screen available to share' });
-        } else if (name === 'NotAllowedError') {
-          setScreenShareNotice({ tone: 'error', message: 'Screen share permission denied — check browser settings' });
-        } else {
-          setScreenShareNotice({ tone: 'error', message: 'Unable to start screen share' });
-        }
-      }
+      await startScreenShare(roomRef, get(), streamId);
     }
     syncParticipants();
+  },
+
+  changeScreenShare: async () => {
+    if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
+    const streamId = get().streamId;
+    if (roomRef.localParticipant.isScreenShareEnabled) {
+      await stopScreenShare(roomRef);
+      if (streamId) wsSend('voice_screen_share_update', { stream_id: streamId, sharing: false });
+      syncParticipants();
+    }
+    await startScreenShare(roomRef, get(), streamId);
+    syncParticipants();
+  },
+
+  setScreenShareQuality: async (fps: ScreenShareFps, resolution: ScreenShareResolution) => {
+    set({ screenShareFps: fps, screenShareResolution: resolution });
+    if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
+    if (!roomRef.localParticipant.isScreenShareEnabled) return;
+    const pub = roomRef.localParticipant.getTrackPublication(Track.Source.ScreenShare) as LocalTrackPublication | undefined;
+    // 1. Update browser capture constraints (resolution + fps)
+    const mediaTrack = (pub?.track as { mediaStreamTrack?: MediaStreamTrack } | undefined)?.mediaStreamTrack;
+    if (mediaTrack && mediaTrack.readyState === 'live') {
+      const resConstraints = SCREEN_SHARE_RESOLUTIONS[resolution];
+      try {
+        await mediaTrack.applyConstraints({ ...resConstraints, frameRate: fps });
+      } catch {
+        // applyConstraints not supported for this screen capture — will apply on next share start
+      }
+    }
+    // 2. Update the LiveKit sender bitrate/framerate cap so the encoding envelope
+    //    matches what the browser now captures. Without this the SFU would still
+    //    forward within the original publish envelope.
+    const { maxBitrate, maxFramerate } = screenSharePublishEncoding(fps, resolution).screenShareEncoding;
+    const rtcSender = (pub?.track as { sender?: RTCRtpSender } | undefined)?.sender;
+    if (rtcSender) {
+      try {
+        const params = rtcSender.getParameters();
+        if (params.encodings?.length) {
+          params.encodings.forEach((enc) => {
+            enc.maxBitrate = maxBitrate;
+            enc.maxFramerate = maxFramerate;
+          });
+          await rtcSender.setParameters(params);
+        }
+      } catch {
+        // setParameters not supported — effective on next share
+      }
+    }
   },
 
 

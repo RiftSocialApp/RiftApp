@@ -4,7 +4,7 @@ import { usePresenceStore } from '../../stores/presenceStore';
 import { useHubStore } from '../../stores/hubStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
 import { useStreamStore } from '../../stores/streamStore';
-import { useVoiceStore, type VoiceParticipant } from '../../stores/voiceStore';
+import { useVoiceStore, type VoiceParticipant, type ScreenShareFps, type ScreenShareResolution } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
 import type { User } from '../../types';
 import VoiceParticipantContextMenu from './VoiceParticipantContextMenu';
@@ -77,6 +77,10 @@ export default function VoiceView() {
   const toggleDeafen = useVoiceStore((s) => s.toggleDeafen);
   const toggleCamera = useVoiceStore((s) => s.toggleCamera);
   const toggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
+  const changeScreenShare = useVoiceStore((s) => s.changeScreenShare);
+  const setScreenShareQuality = useVoiceStore((s) => s.setScreenShareQuality);
+  const screenShareFps = useVoiceStore((s) => s.screenShareFps);
+  const screenShareResolution = useVoiceStore((s) => s.screenShareResolution);
   const toggleVoiceOutputMute = useVoiceStore((s) => s.toggleVoiceOutputMute);
   const leave = useVoiceStore((s) => s.leave);
 
@@ -96,8 +100,11 @@ export default function VoiceView() {
   const [stoppedWatchingStream, setStoppedWatchingStream] = useState<Record<string, boolean>>({});
   const [tileMenu, setTileMenu] = useState<TileMenuState>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [screenShareMenuOpen, setScreenShareMenuOpen] = useState(false);
+  const [qualitySubOpen, setQualitySubOpen] = useState(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const moreWrapRef = useRef<HTMLDivElement>(null);
+  const screenShareMenuRef = useRef<HTMLDivElement>(null);
 
   const visibleParticipants = useMemo(() => {
     if (showNonVideoParticipants) return participants;
@@ -139,6 +146,8 @@ export default function VoiceView() {
         setFocusedSlotId(null);
         setTileMenu(null);
         setMoreOpen(false);
+        setScreenShareMenuOpen(false);
+        setQualitySubOpen(false);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -153,6 +162,18 @@ export default function VoiceView() {
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [moreOpen]);
+
+  useEffect(() => {
+    if (!screenShareMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (screenShareMenuRef.current && !screenShareMenuRef.current.contains(e.target as Node)) {
+        setScreenShareMenuOpen(false);
+        setQualitySubOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [screenShareMenuOpen]);
 
   const handleSlotClick = useCallback(
     (slotId: string) => {
@@ -347,9 +368,108 @@ export default function VoiceView() {
               <CameraIcon enabled={isCameraOn} size={22} />
             </ControlBtn>
 
-            <ControlBtn onClick={() => void toggleScreenShare()} active={isScreenSharing} tooltip={isScreenSharing ? 'Stop Sharing' : 'Share Your Screen'}>
-              <ScreenShareIcon active={isScreenSharing} size={22} />
-            </ControlBtn>
+            {/* Screen share — plain button when idle, split button when active */}
+            {isScreenSharing ? (
+              <div className="relative flex items-center" ref={screenShareMenuRef}>
+                {/* Main stop-sharing part */}
+                <button
+                  type="button"
+                  onClick={() => { setScreenShareMenuOpen(false); setQualitySubOpen(false); void toggleScreenShare(); }}
+                  title="Stop Sharing"
+                  className="w-12 h-12 rounded-l-2xl flex items-center justify-center transition-all duration-150 active:scale-95 bg-[#5865f2] hover:bg-[#4752c4] text-white"
+                >
+                  <ScreenShareIcon active size={22} />
+                </button>
+                {/* Arrow dropdown trigger */}
+                <button
+                  type="button"
+                  onClick={() => { setScreenShareMenuOpen((o) => !o); setQualitySubOpen(false); }}
+                  title="Stream options"
+                  className="w-6 h-12 rounded-r-2xl flex items-center justify-center transition-all duration-150 active:scale-95 bg-[#4752c4] hover:bg-[#3c45a5] text-white border-l border-white/20"
+                >
+                  <svg width="10" height="10" viewBox="0 0 10 6" fill="currentColor">
+                    <path d="M0 0l5 6 5-6z" />
+                  </svg>
+                </button>
+                {/* Dropdown menu */}
+                {screenShareMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-2 min-w-[200px] rounded-lg bg-[#111214] border border-black/40 py-1 shadow-modal z-50">
+                    {/* Change Stream */}
+                    <button
+                      type="button"
+                      className="w-full text-left px-3 py-2 text-[14px] text-[#dbdee1] hover:bg-white/[0.08] flex items-center gap-2.5"
+                      onClick={() => {
+                        setScreenShareMenuOpen(false);
+                        setQualitySubOpen(false);
+                        void changeScreenShare();
+                      }}
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-[#b5bac1]">
+                        <rect x="2" y="3" width="20" height="14" rx="2" />
+                        <polyline points="8 21 12 17 16 21" />
+                      </svg>
+                      Change Stream
+                    </button>
+                    {/* Stream Quality */}
+                    <div className="relative">
+                      <button
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-[14px] text-[#dbdee1] hover:bg-white/[0.08] flex items-center justify-between gap-2"
+                        onClick={() => setQualitySubOpen((o) => !o)}
+                      >
+                        <span className="flex items-center gap-2.5">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="flex-shrink-0 text-[#b5bac1]">
+                            <circle cx="12" cy="12" r="3" />
+                            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14" />
+                          </svg>
+                          Stream Quality
+                        </span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" className="text-[#b5bac1]">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                      {/* Quality sub-panel (inline, no sub-menu positioning issues) */}
+                      {qualitySubOpen && (
+                        <div className="border-t border-white/[0.06] mx-2 pt-2 pb-1">
+                          <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">Frame Rate</p>
+                          {([15, 30, 60] as ScreenShareFps[]).map((fps) => (
+                            <button
+                              key={fps}
+                              type="button"
+                              onClick={() => void setScreenShareQuality(fps, screenShareResolution)}
+                              className="w-full flex items-center justify-between px-2 py-1.5 text-[13px] text-[#dbdee1] hover:bg-white/[0.08] rounded-md"
+                            >
+                              <span>{fps} FPS</span>
+                              {screenShareFps === fps && (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5865f2" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              )}
+                            </button>
+                          ))}
+                          <p className="px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">Resolution</p>
+                          {(['480p', '720p', '1080p', '1440p', 'source'] as ScreenShareResolution[]).map((res) => (
+                            <button
+                              key={res}
+                              type="button"
+                              onClick={() => void setScreenShareQuality(screenShareFps, res)}
+                              className="w-full flex items-center justify-between px-2 py-1.5 text-[13px] text-[#dbdee1] hover:bg-white/[0.08] rounded-md"
+                            >
+                              <span className="capitalize">{res === 'source' ? 'Source' : res}</span>
+                              {screenShareResolution === res && (
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5865f2" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <ControlBtn onClick={() => void toggleScreenShare()} active={false} tooltip="Share Your Screen">
+                <ScreenShareIcon active={false} size={22} />
+              </ControlBtn>
+            )}
 
             <ControlBtn onClick={() => {}} tooltip="Activities" className="opacity-60 cursor-default">
               <ActivitiesIcon size={22} />
