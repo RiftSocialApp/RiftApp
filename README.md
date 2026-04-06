@@ -1,269 +1,110 @@
-<h1 align="center">RiftApp</h1>
+RiftApp
 
-<p align="center">
-  <br/>
-  <b>Fast · Clean · Yours</b>
-  <br/><br/>
-  <i>Real-time communication, built for clarity and control.</i>
-  <br/><br/>
-</p>
+Fast · Clean · Yours
+Real-time communication, built for clarity and control.
 
-<p align="center">
-  <sub><b>Chat</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
-  <sub><b>Voice</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
-  <sub><b>DMs</b></sub>
-  &nbsp;&nbsp;·&nbsp;&nbsp;
-  <sub><b>Your infrastructure</b></sub>
-</p>
+Chat · Voice · DMs · Self-host or Cloud
 
-<br/>
+What is RiftApp?
 
----
+RiftApp is a modern communication platform that brings together chat, voice, DMs, and shared spaces into one fast, minimal experience.
 
-<br/>
+Self-host it for full control
+Or use Rift Cloud for a managed setup
 
-## ⟨ What is RiftApp? ⟩
+Software should feel fast, stay out of your way, and belong to you.
 
-<table>
-<tr>
-<td width="33%" valign="top">
+Run Rift your way
+Self-Hosted (Free)
 
-**For teams**
+Run Rift on your own infrastructure using Docker.
 
-Bring people together without the clutter.
+Full control over your data
+No subscriptions
+Simple deployment with Docker Compose
+Ideal for homelabs, private teams, and custom setups
 
-</td>
-<td width="33%" valign="top">
+Your servers. Your rules.
 
-**For communities**
+Rift Cloud
 
-A home that scales from a few friends to a crowd.
+Let us handle everything.
 
-</td>
-<td width="33%" valign="top">
+No setup required
+Global infrastructure
+Automatic updates and scaling
+Access from anywhere instantly
+Rift Pro
 
-**For you**
+Upgrade your experience with Rift Pro (available on Rift Cloud).
 
-Self-host so **your** conversations stay **your** business.
+Free (Cloud)
+Standard chat and voice
+Global entrance sound
+Base streaming quality
+Core features
+Rift Pro
+Higher video quality and FPS streaming
+Per-hub entrance sounds (custom join sounds per community)
+More customization options
+Priority performance
+Future premium features
 
-</td>
-</tr>
-</table>
+Rift Pro enhances quality and customization — it doesn’t lock core features.
 
-<br/>
+Why teams choose Rift
+Blazing fast — no laggy UI or slow switching
+Clean structure — hubs, streams, and voice that make sense
+Flexible hosting — self-host or cloud
+Privacy-first — your data stays where you choose
+Built to scale — from small groups to large communities
+Everything in one place
 
-**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**, not someone else's product roadmap.
+Structured communities
+Create hubs, organize streams, and jump into voice instantly
 
-> *We believe great software should feel **light**, **responsive**, and **yours**.*
+Real conversations
+Public chats, threads, and DMs side by side
 
-RiftApp is built for people who want the energy of a modern community app **without** the noise, lock-in, or clutter.
+Express yourself
+Profiles, avatars, and shared media
 
-<br/>
+Control & moderation
+Invites, ranks, and permissions
 
----
+Clear voice
+Low-latency voice when text isn’t enough
 
-<br/>
-
-## ⟨ Why teams choose it ⟩
-
-| | |
-|:--|:--|
-| **Speed that keeps up** | Typing, sending, and switching contexts stay snappy so the room never feels sluggish. |
-| **Spaces that make sense** | Organize people around **hubs**, **streams**, and **voice** without drowning in nested menus. |
-| **Privacy by placement** | Run it on infrastructure **you** control. You decide who has access and where data lives. |
-| **Room to grow** | From a tight friend group to a growing community, invites, friends, and moderation tools scale with you. |
-
-<br/>
-
-<p align="center">
-  <i>Creative crews · Gaming circles · Internal squads · Your crew here</i>
-</p>
-
-<p align="center">
-  RiftApp is meant to feel like <b>your</b> place on the internet.
-</p>
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ Everything in one place ⟩
-
-<br/>
-
-> **Your community, structured**  
-> Create hubs for each group, split topics into streams, and hop into voice when text is not enough.
-
-<br/>
-
-> **Talk the way you want**  
-> Public streams, side threads, and private DMs side by side, so nothing important gets lost in the shuffle.
-
-<br/>
-
-> **Show up fully**  
-> Profiles, avatars, and shared media help people recognize each other and celebrate the group's personality.
-
-<br/>
-
-> **Stay in control**  
-> Invites you can share or limit, friend connections you manage, and ranks so trusted members can help keep things healthy.
-
-<br/>
-
-> **Hear each other clearly**  
-> Drop into voice streams when you need nuance, speed, or just human tone.
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ Words we use ⟩
-
-We use clear names so the app feels **intentional**, not borrowed.
-
-| You might say… | In RiftApp |
-|:--------------:|:----------:|
-| Server | **`Hub`** |
-| Channel | **`Stream`** |
-| Voice channel | **`Voice stream`** |
-| Roles | **`Ranks`** |
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ Under the hood ⟩
-
-<table>
-<tr>
-<td>
-
-**Self-hostable**
-
-Run it where you want.
-
-</td>
-<td>
-
-**Extensible**
-
-Room for your team to ship alongside it.
-
-</td>
-<td>
-
-**Documented**
-
-Technical depth lives in **[ARCHITECTURE.md](ARCHITECTURE.md)** (diagrams, data model, implementation).
-
-</td>
-</tr>
-</table>
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ Try it locally ⟩
-
-<details>
-<summary><b>Prerequisites & first-time setup</b> (click to expand)</summary>
-
-<br/>
-
-**You will need:** Go, Node.js, and Docker for a full local stack. See `backend/go.mod` and your environment for exact versions.
-
-**Environment file:**
-
-```bash
+Terminology
+Common term	RiftApp
+Server	Hub
+Channel	Stream
+Voice channel	Voice stream
+Roles	Ranks
+Under the hood
+Self-hostable with Docker
+Cloud-ready architecture
+Extensible design
+Technical details in ARCHITECTURE.md
+Quick start (Self-hosted)
 cp backend/.env.example backend/.env
-```
-
-Adjust `backend/.env` for secrets, URLs, and storage before you bring services up.
-
-<br/>
-
-</details>
-
-<br/>
-
-**Full stack (Compose)**
-
-```bash
 docker compose -f backend/compose.yml --env-file backend/.env up --build
-```
 
-<br/>
+Once running, Rift will be available locally.
 
-<details>
-<summary><b>Day-to-day development</b> (click to expand)</summary>
+Project structure
+Path	Description
+backend/	API, auth, realtime systems, Docker
+frontend/	Web client
+app/	Desktop app (Electron)
+ARCHITECTURE.md	Technical deep dive
+Philosophy
+No clutter
+No lock-in
+No bloat
 
-<br/>
+Just fast, clean communication — on your terms.
 
-*Infra in the background:*
+License
 
-```bash
-docker compose -f backend/compose.yml --env-file backend/.env up postgres redis minio -d
-```
-
-*API:*
-
-```bash
-cd backend
-go mod tidy
-go run ./cmd/riftapp
-```
-
-*App shell:*
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-The dev UI is typically at **`http://localhost:5173`**, with the API proxied from the frontend config.
-
-*Desktop (Electron) — dev:* run `cd app && npm run dev` (starts Vite in `frontend` and Electron when `http://localhost:5173` is ready). Keep the API running for `/api` proxy.
-
-*Desktop — release build:* from `app/`, run `npm run build` (or `npm run dist:win`). Build output always goes to **`app/dist-electron/`** (NSIS setup exe, `win-unpacked/`, blockmap, etc.). The packaged app loads **`https://riftapp.io/`** (same as the browser). Optional env: `RIFT_UPDATE_URL` (generic update server base for `latest.yml`). On Windows without code-signing tools, use `CSC_IDENTITY_AUTO_DISCOVERY=false` (already set in `npm run dist:win`).
-
-<br/>
-
-</details>
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ Project layout ⟩
-
-| Path | What lives there |
-|:-----|:-----------------|
-| **`backend/`** | API, auth, real-time messaging, migrations, and `compose.yml` for local dependencies |
-| **`frontend/`** | Web client |
-| **`app/`** | Electron desktop shell (electron-builder + electron-updater) |
-| **`ARCHITECTURE.md`** | Technical deep dive for builders |
-
-<br/>
-
----
-
-<br/>
-
-## ⟨ License ⟩
-
-<p align="center"><i>Private. All rights reserved.</i></p>
+Private. All rights reserved.
