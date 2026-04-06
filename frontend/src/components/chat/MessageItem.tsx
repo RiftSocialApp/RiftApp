@@ -68,6 +68,21 @@ function avatarBg(name: string): string {
 
 const INVITE_URL_RE = /https?:\/\/[^\s/]+\/invite\/([A-Za-z0-9]+)/g;
 
+/**
+ * Detects whether the entire message content is a single GIF or sticker URL.
+ * Returns the URL and type if matched, null otherwise.
+ */
+function detectInlineMedia(content: string): { url: string; type: 'gif' | 'sticker' } | null {
+  const trimmed = content.trim();
+  if (!trimmed || trimmed.includes('\n') || trimmed.includes(' ')) return null;
+  // Sticker: served through the S3 proxy
+  if (/^(\/api)?\/s3\//.test(trimmed)) return { url: trimmed.startsWith('/api') ? trimmed : `/api${trimmed}`, type: 'sticker' };
+  // GIF: Tenor URLs or any URL ending in .gif
+  if (/^https?:\/\/.*tenor\.(com|googleapis\.com)\//i.test(trimmed)) return { url: trimmed, type: 'gif' };
+  if (/^https?:\/\/.*\.gif(\?.*)?$/i.test(trimmed)) return { url: trimmed, type: 'gif' };
+  return null;
+}
+
 function linkifyText(text: string, keyPrefix: number | string = 0): React.ReactNode[] {
   const re = /(https?:\/\/[^\s<>]+|www\.[^\s<>]+)/gi;
   const nodes: React.ReactNode[] = [];
@@ -458,6 +473,9 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   // Extract all non-invite URLs from message text for the unified embed system
   const embedUrls = useMemo(() => extractEmbedUrls(message.content || ''), [message.content]);
 
+  // Detect if the entire message is a single GIF or sticker URL
+  const inlineMedia = useMemo(() => detectInlineMedia(message.content || ''), [message.content]);
+
   const contentBlock =
     editing ? (
       <div className="mt-1 space-y-2">
@@ -503,9 +521,15 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       </div>
     ) : (
       <div className={interactionsDisabled ? 'pointer-events-none' : undefined}>
-        <div className="text-[15px] leading-[1.375rem] text-riftapp-text/[0.90]">{renderedContent}</div>
+        {inlineMedia ? (
+          <InlineMediaImage url={inlineMedia.url} type={inlineMedia.type} />
+        ) : (
+          <>
+            <div className="text-[15px] leading-[1.375rem] text-riftapp-text/[0.90]">{renderedContent}</div>
+            {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} />}
+          </>
+        )}
         <Attachments message={message} />
-        {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} />}
         {reactions.length > 0 && (
           <ReactionPills reactions={reactions} currentUserId={currentUserId} onToggle={handleToggle} />
         )}
@@ -1240,6 +1264,39 @@ function VideoPlayer({ src }: { src: string }) {
         </div>
       )}
     </div>
+  );
+}
+
+/* ─── Inline GIF / Sticker embed (sent as plain URL) ────────────────── */
+function InlineMediaImage({ url, type }: { url: string; type: 'gif' | 'sticker' }) {
+  const [loaded, setLoaded] = useState(false);
+  const [lightbox, setLightbox] = useState(false);
+  const isSticker = type === 'sticker';
+
+  return (
+    <>
+      {lightbox && <ImageLightbox src={url} alt={type} onClose={() => setLightbox(false)} />}
+      <button
+        type="button"
+        onClick={() => setLightbox(true)}
+        className={`relative block rounded-xl overflow-hidden mt-1 cursor-pointer text-left group/inline-media
+          ${isSticker ? '' : 'border border-riftapp-border/40 bg-riftapp-bg/40 hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md'}
+          transition-all duration-200`}
+      >
+        {!loaded && !isSticker && (
+          <div className="absolute inset-0 bg-riftapp-surface animate-pulse-soft rounded-xl" />
+        )}
+        <img
+          src={url}
+          alt={type}
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setLoaded(true)}
+          className={`block object-contain rounded-xl transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}
+            ${isSticker ? 'w-32 h-32' : 'max-w-[420px] max-h-[288px] w-auto h-auto'}`}
+        />
+      </button>
+    </>
   );
 }
 
