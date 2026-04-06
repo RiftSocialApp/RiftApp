@@ -56,7 +56,7 @@ jobs:
           $pkg.version = "${{ steps.version.outputs.value }}"
           $pkg | ConvertTo-Json -Depth 20 | Set-Content package.json -Encoding UTF8
 
-      - run: npm ci
+      - run: npm install
 
       - name: Build Windows installer
         run: npm run dist:win
