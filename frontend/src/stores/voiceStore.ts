@@ -234,9 +234,6 @@ interface VoiceStore {
   toggleDeafen: () => Promise<void>;
   toggleCamera: () => void;
   toggleScreenShare: () => void;
-  confirmScreenShare: () => Promise<void>;
-  cancelScreenShareModal: () => void;
-  setScreenShareKind: (kind: ScreenShareKind) => void;
   dismissScreenShareNotice: () => void;
   togglePTT: () => void;
   setParticipantVolume: (identity: string, volume: number) => void;
@@ -1205,49 +1202,36 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     if (roomRef.localParticipant.isScreenShareEnabled) {
       await stopScreenShare(roomRef);
     } else {
-      set({ screenShareModalOpen: true });
-    }
-    syncParticipants();
-  },
-
-  confirmScreenShare: async () => {
-    if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
-    const kind = get().screenShareKind;
-    set({ screenShareRequesting: true });
-    setScreenShareNotice(null);
-    try {
-      await roomRef.localParticipant.setScreenShareEnabled(true, buildScreenShareOptions(kind) as never);
-      set({
-        isScreenSharing: true,
-        screenShareModalOpen: false,
-        screenShareRequesting: false,
-        screenShareSurfaceLabel: inferSurfaceLabel(kind),
-      });
-    } catch (err) {
-      const name = err instanceof DOMException ? err.name : '';
-      const message = err instanceof Error ? err.message.toLowerCase() : '';
-      set({ screenShareModalOpen: false, screenShareRequesting: false });
-      if (name === 'AbortError' || message.includes('cancel')) {
-        setScreenShareNotice({ tone: 'info', message: 'Screen share cancelled' });
-      } else if (name === 'NotFoundError' || message.includes('available')) {
-        setScreenShareNotice({ tone: 'error', message: 'No screen available to share' });
-      } else if (name === 'NotAllowedError') {
-        setScreenShareNotice({ tone: 'error', message: 'Permission denied' });
-      } else {
-        setScreenShareNotice({ tone: 'error', message: 'Unable to start screen share' });
+      // Go directly to browser's native picker — no intermediate modal
+      set({ screenShareRequesting: true });
+      setScreenShareNotice(null);
+      try {
+        await roomRef.localParticipant.setScreenShareEnabled(true, buildScreenShareOptions('screen') as never);
+        set({
+          isScreenSharing: true,
+          screenShareRequesting: false,
+          screenShareSurfaceLabel: inferSurfaceLabel('screen'),
+          screenShareModalOpen: true,
+        });
+      } catch (err) {
+        const name = err instanceof DOMException ? err.name : '';
+        const message = err instanceof Error ? err.message.toLowerCase() : '';
+        set({ screenShareRequesting: false });
+        if (name === 'AbortError' || message.includes('cancel')) {
+          setScreenShareNotice({ tone: 'info', message: 'Screen share cancelled' });
+        } else if (name === 'NotFoundError' || message.includes('available')) {
+          setScreenShareNotice({ tone: 'error', message: 'No screen available to share' });
+        } else if (name === 'NotAllowedError') {
+          setScreenShareNotice({ tone: 'error', message: 'Screen share permission denied — check browser settings' });
+        } else {
+          setScreenShareNotice({ tone: 'error', message: 'Unable to start screen share' });
+        }
       }
     }
     syncParticipants();
   },
 
-  cancelScreenShareModal: () => {
-    if (get().screenShareRequesting) return;
-    set({ screenShareModalOpen: false });
-  },
 
-  setScreenShareKind: (kind) => {
-    set({ screenShareKind: kind });
-  },
 
   dismissScreenShareNotice: () => {
     setScreenShareNotice(null);
