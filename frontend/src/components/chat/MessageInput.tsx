@@ -12,13 +12,6 @@ import { EMOJI_AUTOCOMPLETE_LIST } from '../../utils/emojiNames';
 import { api } from '../../api/client';
 import type { Attachment, HubSticker, User } from '../../types';
 
-interface PendingMedia {
-  type: 'gif' | 'sticker';
-  url: string;
-  previewUrl: string;
-  name?: string;
-}
-
 const TYPING_THROTTLE_MS = 500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
 
@@ -51,7 +44,6 @@ export default function MessageInput({
   const [content, setContent] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
-  const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const sendMessage = useMessageStore((s) => s.sendMessage);
   const replyTo = useReplyDraftStore((s) => s.replyTo);
   const setReplyTo = useReplyDraftStore((s) => s.setReplyTo);
@@ -268,35 +260,24 @@ export default function MessageInput({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [trackEmojiUsage]);
 
-  const handleGifSelect = useCallback((url: string, previewUrl: string, _width?: number, _height?: number) => {
-    setPendingMedia({ type: 'gif', url, previewUrl });
+  const handleGifSelect = useCallback(async (url: string, _previewUrl: string, _width?: number, _height?: number) => {
     closeMediaPicker();
-  }, [closeMediaPicker]);
-
-  const handleStickerSelect = useCallback((sticker: HubSticker) => {
-    setPendingMedia({
-      type: 'sticker',
-      url: publicAssetUrl(sticker.file_url),
-      previewUrl: publicAssetUrl(sticker.file_url),
-      name: sticker.name,
-    });
-    closeMediaPicker();
-  }, [closeMediaPicker]);
-
-  const sendPendingMedia = useCallback(async () => {
-    if (!pendingMedia) return;
-    const mediaUrl = pendingMedia.url;
-    setPendingMedia(null);
     if (isDMMode && onSendDM) {
-      await onSendDM(mediaUrl);
+      await onSendDM(url);
     } else {
-      await sendMessage(mediaUrl);
+      await sendMessage(url);
     }
-  }, [pendingMedia, isDMMode, onSendDM, sendMessage]);
+  }, [closeMediaPicker, isDMMode, onSendDM, sendMessage]);
 
-  const cancelPendingMedia = useCallback(() => {
-    setPendingMedia(null);
-  }, []);
+  const handleStickerSelect = useCallback(async (sticker: HubSticker) => {
+    closeMediaPicker();
+    const stickerUrl = publicAssetUrl(sticker.file_url);
+    if (isDMMode && onSendDM) {
+      await onSendDM(stickerUrl);
+    } else {
+      await sendMessage(stickerUrl);
+    }
+  }, [closeMediaPicker, isDMMode, onSendDM, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Mention autocomplete navigation
@@ -507,43 +488,6 @@ export default function MessageInput({
         </div>
       )}
 
-      {/* Pending GIF / Sticker preview */}
-      {pendingMedia && (
-        <div className="mb-2 animate-slide-up">
-          <div className="relative inline-block bg-riftapp-surface border border-riftapp-border/60 rounded-xl overflow-hidden shadow-elevation-low group/media">
-            <img
-              src={pendingMedia.previewUrl}
-              alt={pendingMedia.name ?? pendingMedia.type}
-              className={`object-contain ${pendingMedia.type === 'sticker' ? 'w-32 h-32 p-2' : 'max-w-[240px] max-h-[180px]'}`}
-            />
-            <div className="absolute top-1.5 right-1.5 flex gap-1">
-              <button
-                type="button"
-                onClick={cancelPendingMedia}
-                className="w-6 h-6 bg-black/60 hover:bg-riftapp-danger rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all"
-                title="Cancel"
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" />
-                  <line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 flex items-center justify-between">
-              <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide">
-                {pendingMedia.type === 'gif' ? 'GIF' : pendingMedia.name ?? 'Sticker'}
-              </span>
-              <button
-                type="button"
-                onClick={sendPendingMedia}
-                className="text-[11px] font-semibold text-white bg-riftapp-accent hover:bg-riftapp-accent-hover px-2.5 py-1 rounded-md transition-colors active:scale-95"
-              >
-                Send
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Custom emoji visual preview — shows rendered emojis when :name: patterns are in the input */}
       {content && hubEmojis && hubEmojis.length > 0 && (() => {
