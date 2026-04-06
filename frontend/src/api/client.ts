@@ -155,7 +155,7 @@ class ApiClient {
 
   getStreams(hubId: string) { return this.request<Stream[]>(`/hubs/${hubId}/streams`); }
   createStream(hubId: string, name: string, type: number = 0, categoryId?: string) { return this.request<Stream>(`/hubs/${hubId}/streams`, { method: 'POST', body: JSON.stringify({ name, type, category_id: categoryId }) }); }
-  patchStream(streamId: string, body: { name: string }) {
+  patchStream(streamId: string, body: { name?: string; bitrate?: number; user_limit?: number; region?: string }) {
     return this.request<Stream>(`/streams/${streamId}`, { method: 'PATCH', body: JSON.stringify(body) });
   }
   deleteStream(streamId: string) {
@@ -164,6 +164,9 @@ class ApiClient {
 
   getCategories(hubId: string) { return this.request<Category[]>(`/hubs/${hubId}/categories`); }
   createCategory(hubId: string, name: string) { return this.request<Category>(`/hubs/${hubId}/categories`, { method: 'POST', body: JSON.stringify({ name }) }); }
+  patchCategory(hubId: string, categoryId: string, body: { name: string }) {
+    return this.request<Category>(`/hubs/${hubId}/categories/${categoryId}`, { method: 'PATCH', body: JSON.stringify(body) });
+  }
   deleteCategory(hubId: string, categoryId: string) { return this.request(`/hubs/${hubId}/categories/${categoryId}`, { method: 'DELETE' }); }
   reorderStreams(hubId: string, streams: { id: string; position: number; category_id: string | null }[]) {
     return this.request<void>(`/hubs/${hubId}/streams/reorder`, { method: 'PUT', body: JSON.stringify({ streams }) });

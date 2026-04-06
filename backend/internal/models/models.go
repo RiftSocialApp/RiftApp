@@ -61,6 +61,9 @@ type Stream struct {
 	Position   int       `json:"position"`
 	IsPrivate  bool      `json:"is_private"`
 	CategoryID *string   `json:"category_id"`
+	Bitrate    int       `json:"bitrate"`
+	UserLimit  int       `json:"user_limit"`
+	Region     string    `json:"region"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 

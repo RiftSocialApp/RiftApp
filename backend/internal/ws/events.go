@@ -40,6 +40,8 @@ const (
 	OpVoiceSpeakingUpdate    = "voice_speaking_update"
 	OpVoiceScreenShareUpdate = "voice_screen_share_update"
 	OpRoleUpdate             = "role_update"
+	OpStreamUpdate           = "stream_update"
+	OpCategoryUpdate         = "category_update"
 )
 
 type SubscribeData struct {

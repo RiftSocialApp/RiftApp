@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import type { HubNotificationSettings, Stream } from '../../types';
 import { useStreamStore } from '../../stores/streamStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
 import ConfirmModal from '../modals/ConfirmModal';
 
 const DEFAULT_HUB_NOTIFICATION: HubNotificationSettings = {
@@ -68,6 +69,7 @@ export default function ChannelContextMenu({
 
   const hideNames = useVoiceChannelUiStore((s) => s.hideNamesByStream[stream.id] ?? false);
   const toggleHideNames = useVoiceChannelUiStore((s) => s.toggleHideNames);
+  const developerMode = useAppSettingsStore((s) => s.developerMode);
 
   const [hubNotifSettings, setHubNotifSettings] = useState<HubNotificationSettings | null>(null);
   const [muteSubOpen, setMuteSubOpen] = useState(false);
@@ -408,6 +410,7 @@ export default function ChannelContextMenu({
 
         {menuDivider()}
 
+        {developerMode && (
         <button
           type="button"
           onClick={copyChannelId}
@@ -416,6 +419,7 @@ export default function ChannelContextMenu({
           <span>Copy Channel ID</span>
           <span className="text-[10px] font-mono font-semibold px-1 py-0.5 rounded bg-[#1e1f22] border border-[#3f4147] text-[#b5bac1]">ID</span>
         </button>
+        )}
         </div>
       </MenuOverlay>
 

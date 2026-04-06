@@ -103,8 +103,8 @@ func normalizeStreamName(raw string) string {
 	return b.String()
 }
 
-// Patch updates editable stream fields (name). Requires manage channels permission.
-func (s *StreamService) Patch(ctx context.Context, streamID, userID string, name *string) (*models.Stream, error) {
+// Patch updates editable stream fields (name, bitrate, user_limit, region). Requires manage channels permission.
+func (s *StreamService) Patch(ctx context.Context, streamID, userID string, name *string, bitrate *int, userLimit *int, region *string) (*models.Stream, error) {
 	hubID, err := s.streamRepo.GetHubID(ctx, streamID)
 	if err != nil {
 		return nil, apperror.NotFound("stream not found")
@@ -119,6 +119,34 @@ func (s *StreamService) Patch(ctx context.Context, streamID, userID string, name
 		}
 		if err := s.streamRepo.UpdateName(ctx, streamID, n); err != nil {
 			return nil, apperror.Internal("failed to update stream", err)
+		}
+	}
+	// Voice-channel settings
+	if bitrate != nil || userLimit != nil || region != nil {
+		current, err := s.streamRepo.GetByID(ctx, streamID)
+		if err != nil {
+			return nil, apperror.Internal("failed to read stream", err)
+		}
+		b := current.Bitrate
+		ul := current.UserLimit
+		rg := current.Region
+		if bitrate != nil {
+			b = *bitrate
+			if b < 8000 || b > 96000 {
+				return nil, apperror.BadRequest("bitrate must be between 8000 and 96000")
+			}
+		}
+		if userLimit != nil {
+			ul = *userLimit
+			if ul < 0 || ul > 99 {
+				return nil, apperror.BadRequest("user_limit must be between 0 and 99")
+			}
+		}
+		if region != nil {
+			rg = *region
+		}
+		if err := s.streamRepo.UpdateSettings(ctx, streamID, b, ul, rg); err != nil {
+			return nil, apperror.Internal("failed to update stream settings", err)
 		}
 	}
 	return s.streamRepo.GetByID(ctx, streamID)

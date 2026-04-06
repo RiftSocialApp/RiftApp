@@ -55,6 +55,9 @@ export interface Stream {
   position: number;
   is_private: boolean;
   category_id?: string | null;
+  bitrate: number;
+  user_limit: number;
+  region: string;
   created_at: string;
 }
 

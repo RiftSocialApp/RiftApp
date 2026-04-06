@@ -32,13 +32,16 @@ interface StreamState {
 
   loadStreams: (hubId: string) => Promise<void>;
   loadCategories: (hubId: string) => Promise<void>;
+  /** Reload streams + categories without changing active stream (for WS-triggered updates). */
+  reloadLayout: (hubId: string) => Promise<void>;
   setActiveStream: (streamId: string) => Promise<void>;
   createStream: (hubId: string, name: string, type?: number, categoryId?: string) => Promise<Stream>;
-  patchStream: (streamId: string, name: string) => Promise<Stream>;
+  patchStream: (streamId: string, name: string, voiceSettings?: { bitrate?: number; user_limit?: number; region?: string }) => Promise<Stream>;
   deleteStream: (streamId: string) => Promise<void>;
   /** Mark a text channel read using latest message on server (works when channel not open). */
   markStreamRead: (streamId: string) => Promise<void>;
   createCategory: (hubId: string, name: string) => Promise<Category>;
+  patchCategory: (hubId: string, categoryId: string, name: string) => Promise<Category>;
   deleteCategory: (hubId: string, categoryId: string) => Promise<void>;
   reorderStreams: (hubId: string, streams: Stream[]) => Promise<void>;
   reorderCategories: (hubId: string, categories: Category[]) => Promise<void>;
@@ -147,6 +150,29 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     set({ categories });
   },
 
+  reloadLayout: async (hubId) => {
+    const [streams, categories] = await Promise.all([
+      api.getStreams(hubId),
+      api.getCategories(hubId),
+    ]);
+    set((s) => {
+      const streamHubMap = { ...s.streamHubMap };
+      for (const st of streams) {
+        streamHubMap[st.id] = hubId;
+      }
+      const hubLayoutCache = {
+        ...s.hubLayoutCache,
+        [hubId]: {
+          at: Date.now(),
+          streams,
+          categories,
+          voiceMembers: s.voiceMembers,
+        },
+      };
+      return { streams, categories, streamHubMap, hubLayoutCache };
+    });
+  },
+
   setActiveStream: async (streamId) => {
     const { useMessageStore } = await import('./messageStore');
     const { useNotificationStore } = await import('./notificationStore');
@@ -176,8 +202,8 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     return stream;
   },
 
-  patchStream: async (streamId, name) => {
-    const updated = await api.patchStream(streamId, { name });
+  patchStream: async (streamId, name, voiceSettings) => {
+    const updated = await api.patchStream(streamId, { name, ...voiceSettings });
     set((s) => {
       const streams = s.streams.map((st) => (st.id === streamId ? updated : st));
       const hubLayoutCache = { ...s.hubLayoutCache };
@@ -288,6 +314,20 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       return { categories, hubLayoutCache };
     });
     return cat;
+  },
+
+  patchCategory: async (hubId, categoryId, name) => {
+    const updated = await api.patchCategory(hubId, categoryId, { name });
+    set((s) => {
+      const categories = s.categories.map((c) => (c.id === categoryId ? updated : c));
+      const hubLayoutCache = { ...s.hubLayoutCache };
+      const prev = hubLayoutCache[hubId];
+      if (prev) {
+        hubLayoutCache[hubId] = { ...prev, at: Date.now(), categories };
+      }
+      return { categories, hubLayoutCache };
+    });
+    return updated;
   },
 
   deleteCategory: async (hubId, categoryId) => {

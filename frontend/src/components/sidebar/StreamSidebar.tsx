@@ -28,13 +28,16 @@ import { VoiceChannelIcon } from '../voice/VoiceIcons';
 import CreateChannelModal from '../modals/CreateChannelModal';
 import CreateCategoryModal from '../modals/CreateCategoryModal';
 import EditChannelModal from '../modals/EditChannelModal';
+import EditCategoryModal from '../modals/EditCategoryModal';
 import InviteToServerModal from '../modals/InviteToServerModal';
 import VoiceUserItem from '../voice/VoiceUserItem';
 import ChannelContextMenu, { type ChannelMenuTarget } from '../context-menus/ChannelContextMenu';
+import CategoryContextMenu, { type CategoryMenuTarget } from '../context-menus/CategoryContextMenu';
 import { MenuOverlay } from '../context-menus/MenuOverlay';
 import type { User, Stream } from '../../types';
 import { api } from '../../api/client';
 import { canModerateVoice, hasPermission, PermManageStreams } from '../../utils/permissions';
+import { useAppSettingsStore } from '../../stores/appSettingsStore';
 
 export default function StreamSidebar() {
   const streams = useStreamStore((s) => s.streams);
@@ -46,6 +49,7 @@ export default function StreamSidebar() {
   const hubPermissions = useHubStore((s) => (activeHubId ? s.hubPermissions[activeHubId] : undefined));
   const canManageChannels = hasPermission(hubPermissions, PermManageStreams);
   const canModerateUsers = canModerateVoice(hubPermissions);
+  const developerMode = useAppSettingsStore((s) => s.developerMode);
   const streamUnreads = useStreamStore((s) => s.streamUnreads);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const [showHubSettings, setShowHubSettings] = useState(false);
@@ -70,7 +74,9 @@ export default function StreamSidebar() {
   const [showCreateCategory, setShowCreateCategory] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [channelMenu, setChannelMenu] = useState<ChannelMenuTarget | null>(null);
+  const [categoryMenu, setCategoryMenu] = useState<CategoryMenuTarget | null>(null);
   const [editChannelStream, setEditChannelStream] = useState<Stream | null>(null);
+  const [editCategoryTarget, setEditCategoryTarget] = useState<import('../../types').Category | null>(null);
   const [createChannelInitialType, setCreateChannelInitialType] = useState<number | undefined>(undefined);
   const [draggedVoiceUser, setDraggedVoiceUser] = useState<{ userId: string; sourceStreamId: string } | null>(null);
   const [voiceDropTargetId, setVoiceDropTargetId] = useState<string | null>(null);
@@ -124,6 +130,10 @@ export default function StreamSidebar() {
       else next.add(catId);
       return next;
     });
+  };
+
+  const collapseAll = () => {
+    setCollapsed(new Set(categoriesForHub.map((c) => c.id)));
   };
 
   const handleVoiceClick = useCallback(
@@ -311,6 +321,22 @@ export default function StreamSidebar() {
               </svg>
               Invite to Server
             </button>
+            {developerMode && activeHubId && (
+              <>
+                <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(activeHubId);
+                    setHeaderMenu(null);
+                  }}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+                >
+                  <span>Copy Server ID</span>
+                  <span className="text-[10px] font-mono font-semibold px-1 py-0.5 rounded bg-[#1e1f22] border border-[#3f4147] text-[#b5bac1]">ID</span>
+                </button>
+              </>
+            )}
           </div>
         </MenuOverlay>
       )}
@@ -335,6 +361,29 @@ export default function StreamSidebar() {
             setShowCreateChannel(true);
           }}
           onEditChannel={(s) => setEditChannelStream(s)}
+        />
+      )}
+
+      {categoryMenu && activeHubId && (
+        <CategoryContextMenu
+          hubId={activeHubId}
+          target={categoryMenu}
+          isCollapsed={collapsed.has(categoryMenu.category.id)}
+          canManageChannels={canManageChannels}
+          onClose={() => setCategoryMenu(null)}
+          onToggleCollapse={toggleCollapse}
+          onCollapseAll={collapseAll}
+          onEditCategory={(cat) => setEditCategoryTarget(cat)}
+          onCreateTextChannel={(catId) => {
+            setCreateChannelInitialType(0);
+            setCreateChannelFor(catId);
+            setShowCreateChannel(true);
+          }}
+          onCreateVoiceChannel={(catId) => {
+            setCreateChannelInitialType(1);
+            setCreateChannelFor(catId);
+            setShowCreateChannel(true);
+          }}
         />
       )}
 
@@ -422,6 +471,11 @@ export default function StreamSidebar() {
           e.stopPropagation();
           setChannelMenu({ stream, x: e.clientX, y: e.clientY });
         }}
+        onCategoryContext={(category, e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setCategoryMenu({ category, x: e.clientX, y: e.clientY });
+        }}
         onContextMenu={handleChannelListContext}
       />
 
@@ -437,6 +491,9 @@ export default function StreamSidebar() {
         />
       )}
       {editChannelStream && <EditChannelModal stream={editChannelStream} onClose={() => setEditChannelStream(null)} />}
+      {editCategoryTarget && activeHubId && (
+        <EditCategoryModal hubId={activeHubId} category={editCategoryTarget} onClose={() => setEditCategoryTarget(null)} />
+      )}
       {showCreateCategory && activeHubId && (
         <CreateCategoryModal hubId={activeHubId} onClose={closeCreateCategory} />
       )}
@@ -476,6 +533,7 @@ interface DndChannelListProps {
   canManageChannels: boolean;
   streamsForHub: Stream[];
   onChannelContext: (stream: Stream, e: React.MouseEvent) => void;
+  onCategoryContext: (category: import('../../types').Category, e: React.MouseEvent) => void;
   onContextMenu: (e: React.MouseEvent<HTMLDivElement>) => void;
 }
 
@@ -504,6 +562,7 @@ function DndChannelList({
   canManageChannels,
   streamsForHub,
   onChannelContext,
+  onCategoryContext,
   onContextMenu,
 }: DndChannelListProps) {
   const reorderStreams = useStreamStore((s) => s.reorderStreams);
@@ -772,6 +831,7 @@ function DndChannelList({
                 toggleCollapse={toggleCollapse}
                 isOver={isOverThis}
                 draggable={canManageChannels}
+                onCategoryContext={onCategoryContext}
               >
                 <SortableContext items={catItemIds} strategy={verticalListSortingStrategy}>
                   {!isCollapsed && (
@@ -844,10 +904,11 @@ interface SortableCategoryProps {
   toggleCollapse: (catId: string) => void;
   isOver: boolean;
   draggable: boolean;
+  onCategoryContext: (category: import('../../types').Category, e: React.MouseEvent) => void;
   children: React.ReactNode;
 }
 
-function SortableCategory({ cat, isCollapsed, toggleCollapse, isOver, draggable, children }: SortableCategoryProps) {
+function SortableCategory({ cat, isCollapsed, toggleCollapse, isOver, draggable, onCategoryContext, children }: SortableCategoryProps) {
   const {
     attributes,
     listeners,
@@ -871,6 +932,7 @@ function SortableCategory({ cat, isCollapsed, toggleCollapse, isOver, draggable,
     <div ref={setNodeRef} style={style} className={`mt-2 rounded-md transition-colors ${isOver ? 'bg-riftapp-accent/10 ring-1 ring-riftapp-accent/30' : ''}`}>
       <button
         onClick={() => toggleCollapse(cat.id)}
+        onContextMenu={(e) => onCategoryContext(cat, e)}
         className={`flex items-center gap-0.5 flex-1 min-w-0 section-label px-1 mb-1 hover:text-riftapp-text transition-colors ${draggable ? 'cursor-grab active:cursor-grabbing' : ''}`}
         {...(draggable ? { ...attributes, ...listeners } : {})}
       >

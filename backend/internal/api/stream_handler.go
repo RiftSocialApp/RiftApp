@@ -8,14 +8,16 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
 	"github.com/riftapp-cloud/riftapp/internal/service"
+	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
 
 type StreamHandler struct {
 	svc *service.StreamService
+	hub *ws.Hub
 }
 
-func NewStreamHandler(svc *service.StreamService) *StreamHandler {
-	return &StreamHandler{svc: svc}
+func NewStreamHandler(svc *service.StreamService, hub *ws.Hub) *StreamHandler {
+	return &StreamHandler{svc: svc, hub: hub}
 }
 
 func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -36,6 +38,7 @@ func (h *StreamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
+	h.hub.BroadcastToHubMembers(hubID, ws.NewEvent(ws.OpStreamUpdate, map[string]string{"hub_id": hubID}))
 	writeData(w, http.StatusCreated, stream)
 }
 
@@ -62,9 +65,13 @@ func (h *StreamHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *StreamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	streamID := chi.URLParam(r, "streamID")
 	userID := middleware.GetUserID(r.Context())
+	hubID, _ := h.svc.GetHubID(r.Context(), streamID)
 	if err := h.svc.Delete(r.Context(), streamID, userID); err != nil {
 		writeAppError(w, err)
 		return
+	}
+	if hubID != "" {
+		h.hub.BroadcastToHubMembers(hubID, ws.NewEvent(ws.OpStreamUpdate, map[string]string{"hub_id": hubID}))
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -73,21 +80,25 @@ func (h *StreamHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	streamID := chi.URLParam(r, "streamID")
 	userID := middleware.GetUserID(r.Context())
 	var body struct {
-		Name *string `json:"name"`
+		Name      *string `json:"name"`
+		Bitrate   *int    `json:"bitrate"`
+		UserLimit *int    `json:"user_limit"`
+		Region    *string `json:"region"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if body.Name == nil {
+	if body.Name == nil && body.Bitrate == nil && body.UserLimit == nil && body.Region == nil {
 		writeError(w, http.StatusBadRequest, "no fields to update")
 		return
 	}
-	stream, err := h.svc.Patch(r.Context(), streamID, userID, body.Name)
+	stream, err := h.svc.Patch(r.Context(), streamID, userID, body.Name, body.Bitrate, body.UserLimit, body.Region)
 	if err != nil {
 		writeAppError(w, err)
 		return
 	}
+	h.hub.BroadcastToHubMembers(stream.HubID, ws.NewEvent(ws.OpStreamUpdate, map[string]string{"hub_id": stream.HubID}))
 	writeData(w, http.StatusOK, stream)
 }
 
@@ -137,6 +148,7 @@ func (h *StreamHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 		writeAppError(w, err)
 		return
 	}
+	h.hub.BroadcastToHubMembers(hubID, ws.NewEvent(ws.OpStreamUpdate, map[string]string{"hub_id": hubID}))
 	w.WriteHeader(http.StatusNoContent)
 }
 

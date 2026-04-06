@@ -248,6 +248,22 @@ export function useWebSocket() {
             }
             break;
           }
+          case 'stream_update': {
+            const { hub_id } = evt.d as { hub_id: string };
+            if (hub_id && useHubStore.getState().activeHubId === hub_id) {
+              useStreamStore.getState().invalidateHubLayoutCache(hub_id);
+              void useStreamStore.getState().reloadLayout(hub_id);
+            }
+            break;
+          }
+          case 'category_update': {
+            const { hub_id } = evt.d as { hub_id: string };
+            if (hub_id && useHubStore.getState().activeHubId === hub_id) {
+              useStreamStore.getState().invalidateHubLayoutCache(hub_id);
+              void useStreamStore.getState().reloadLayout(hub_id);
+            }
+            break;
+          }
           case 'user_update': {
             const user = evt.d as User;
             const authState = useAuthStore.getState();

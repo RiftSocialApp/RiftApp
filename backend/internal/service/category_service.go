@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"strings"
 
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/models"
@@ -50,6 +51,23 @@ func (s *CategoryService) Delete(ctx context.Context, hubID, userID, categoryID 
 		return apperror.Internal("failed to delete category", err)
 	}
 	return nil
+}
+
+// Update renames a category.
+func (s *CategoryService) Update(ctx context.Context, hubID, userID, categoryID string, name *string) (*models.Category, error) {
+	if !s.hubService.HasPermission(ctx, hubID, userID, models.PermManageStreams) {
+		return nil, apperror.Forbidden("you do not have permission to manage channels")
+	}
+	if name != nil {
+		n := strings.TrimSpace(*name)
+		if n == "" {
+			return nil, apperror.BadRequest("name is required")
+		}
+		if err := s.catRepo.UpdateName(ctx, categoryID, n); err != nil {
+			return nil, apperror.Internal("failed to update category", err)
+		}
+	}
+	return s.catRepo.GetByID(ctx, categoryID)
 }
 
 // ReorderCategories bulk-updates category positions.

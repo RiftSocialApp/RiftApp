@@ -55,6 +55,25 @@ func (r *CategoryRepo) Delete(ctx context.Context, categoryID string) error {
 	return err
 }
 
+// UpdateName renames a category.
+func (r *CategoryRepo) UpdateName(ctx context.Context, categoryID, name string) error {
+	_, err := r.db.Exec(ctx, `UPDATE categories SET name = $1 WHERE id = $2`, name, categoryID)
+	return err
+}
+
+// GetByID returns a single category by ID.
+func (r *CategoryRepo) GetByID(ctx context.Context, categoryID string) (*models.Category, error) {
+	var c models.Category
+	err := r.db.QueryRow(ctx,
+		`SELECT id, hub_id, name, position, created_at FROM categories WHERE id = $1`,
+		categoryID,
+	).Scan(&c.ID, &c.HubID, &c.Name, &c.Position, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
 // BulkUpdatePositions updates position for multiple categories in a single transaction.
 func (r *CategoryRepo) BulkUpdatePositions(ctx context.Context, hubID string, items []struct {
 	ID       string
