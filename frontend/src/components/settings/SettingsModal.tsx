@@ -32,7 +32,7 @@ function SettingsModal() {
 
   return (
     <ModalOverlay isOpen onClose={closeSettings} center={false} backdropClose zIndex={200}>
-      <div className="h-full w-full text-riftapp-text">
+      <div className="h-full w-full text-riftapp-text" onClick={(e) => { if (e.target === e.currentTarget) closeSettings(); }}>
         <div className="mx-auto flex h-full w-full max-w-[1240px] flex-col overflow-hidden md:flex-row">
             <nav className="w-full shrink-0 overflow-y-auto border-b border-riftapp-border/40 px-4 py-5 md:w-[272px] md:border-b-0 md:border-r md:px-5 md:py-8 bg-[#1e1f22]">
             <div className="mx-auto flex w-full max-w-[232px] flex-col gap-5">
@@ -45,8 +45,8 @@ function SettingsModal() {
                       onClick={() => setSettingsTab(tab.id)}
                       className={`w-full rounded-md px-3 py-2 text-left text-sm transition-all duration-150 ${
                         activeTab === tab.id
-                          ? 'bg-riftapp-panel text-riftapp-text font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]'
-                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text'
+                          ? 'bg-riftapp-accent/20 text-white font-medium border-l-2 border-riftapp-accent'
+                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text border-l-2 border-transparent'
                       }`}
                     >
                       {tab.label}
@@ -64,8 +64,8 @@ function SettingsModal() {
                       onClick={() => setSettingsTab(tab.id)}
                       className={`w-full rounded-md px-3 py-2 text-left text-sm transition-all duration-150 ${
                         activeTab === tab.id
-                          ? 'bg-riftapp-panel text-riftapp-text font-medium shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]'
-                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text'
+                          ? 'bg-riftapp-accent/20 text-white font-medium border-l-2 border-riftapp-accent'
+                          : 'text-riftapp-text-muted hover:bg-riftapp-panel/55 hover:text-riftapp-text border-l-2 border-transparent'
                       }`}
                     >
                       {tab.label}
@@ -109,8 +109,8 @@ function SettingsModal() {
             <div className="mx-auto flex min-h-full w-full max-w-[960px] flex-col px-6 py-6 md:px-10 md:py-8">
               <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-riftapp-border/40 bg-[#313338] px-6 pb-4 pt-1 md:-mx-10 md:px-10 md:pb-5">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-dim">User Settings</p>
-                  <h2 className="mt-2 text-[26px] font-black tracking-tight">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-riftapp-accent">User Settings</p>
+                  <h2 className="mt-2 text-[26px] font-black tracking-tight text-white">
                     {activeTab === 'profile'
                       ? 'Profile'
                       : activeTab === 'account'
@@ -121,12 +121,12 @@ function SettingsModal() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="hidden text-[11px] uppercase tracking-[0.16em] text-riftapp-text-dim sm:inline">Esc</span>
                   <button
                     onClick={closeSettings}
-                    className="flex h-9 w-9 items-center justify-center rounded-full border border-riftapp-border/50 text-riftapp-text-dim transition-all duration-150 hover:border-riftapp-text-dim hover:bg-riftapp-panel/60 hover:text-riftapp-text"
-                    title="Close settings"
+                    className="group flex items-center gap-2 rounded-full border border-riftapp-border/70 bg-riftapp-panel/60 px-3 py-1.5 text-riftapp-text-muted transition-all duration-150 hover:border-riftapp-text-dim hover:bg-riftapp-danger/20 hover:text-white"
+                    title="Close settings (Esc)"
                   >
+                    <span className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-70 group-hover:opacity-100">Esc</span>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <line x1="18" y1="6" x2="6" y2="18" />
                       <line x1="6" y1="6" x2="18" y2="18" />
