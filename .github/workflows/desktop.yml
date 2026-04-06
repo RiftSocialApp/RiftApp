@@ -32,8 +32,10 @@ jobs:
         shell: pwsh
         working-directory: .
         run: |
-          $tag = git describe --tags --abbrev=0 --match "v*" 2>$null
-          if ($LASTEXITCODE -ne 0 -or -not $tag) {
+          $ErrorActionPreference = "SilentlyContinue"
+          $tag = git describe --tags --abbrev=0 --match "v*" 2>&1
+          $ErrorActionPreference = "Stop"
+          if (-not $tag -or $tag -like "fatal:*") {
             $version = "0.1.0"
           } else {
             $parts = $tag.TrimStart("v").Split(".")
@@ -43,7 +45,8 @@ jobs:
             $version = "$major.$minor.$patch"
           }
           Write-Host "Version: $version"
-          echo "value=$version" >> $env:GITHUB_OUTPUT
+          "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          exit 0
 
       # Write computed version into package.json
       - name: Patch package.json version
