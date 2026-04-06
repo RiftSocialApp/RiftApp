@@ -51,7 +51,7 @@ services:
       - "7881:7881"
       - "3478:3478/udp"
       - "5349:5349"
-      - "55000-55100:55000-55100/udp"
+      - "50000-60000:50000-60000/udp"
     configs:
       - source: livekit_config
         target: /etc/livekit.yaml
