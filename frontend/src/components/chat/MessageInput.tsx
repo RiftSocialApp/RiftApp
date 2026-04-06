@@ -12,6 +12,13 @@ import { EMOJI_AUTOCOMPLETE_LIST } from '../../utils/emojiNames';
 import { api } from '../../api/client';
 import type { Attachment, HubSticker, User } from '../../types';
 
+interface PendingMedia {
+  type: 'gif' | 'sticker';
+  url: string;
+  previewUrl: string;
+  name?: string;
+}
+
 const TYPING_THROTTLE_MS = 500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
 
@@ -44,6 +51,7 @@ export default function MessageInput({
   const [content, setContent] = useState('');
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [pendingMedia, setPendingMedia] = useState<PendingMedia | null>(null);
   const sendMessage = useMessageStore((s) => s.sendMessage);
   const replyTo = useReplyDraftStore((s) => s.replyTo);
   const setReplyTo = useReplyDraftStore((s) => s.setReplyTo);
@@ -260,24 +268,35 @@ export default function MessageInput({
     requestAnimationFrame(() => textareaRef.current?.focus());
   }, [trackEmojiUsage]);
 
-  const handleGifSelect = useCallback(async (url: string) => {
-    // Send the GIF URL as a message
-    if (isDMMode && onSendDM) {
-      await onSendDM(url);
-    } else {
-      await sendMessage(url);
-    }
-  }, [isDMMode, onSendDM, sendMessage]);
+  const handleGifSelect = useCallback((url: string, previewUrl: string, _width?: number, _height?: number) => {
+    setPendingMedia({ type: 'gif', url, previewUrl });
+    closeMediaPicker();
+  }, [closeMediaPicker]);
 
-  const handleStickerSelect = useCallback(async (sticker: HubSticker) => {
-    // Send the sticker as a message with the image URL
-    const stickerUrl = publicAssetUrl(sticker.file_url);
+  const handleStickerSelect = useCallback((sticker: HubSticker) => {
+    setPendingMedia({
+      type: 'sticker',
+      url: publicAssetUrl(sticker.file_url),
+      previewUrl: publicAssetUrl(sticker.file_url),
+      name: sticker.name,
+    });
+    closeMediaPicker();
+  }, [closeMediaPicker]);
+
+  const sendPendingMedia = useCallback(async () => {
+    if (!pendingMedia) return;
+    const mediaUrl = pendingMedia.url;
+    setPendingMedia(null);
     if (isDMMode && onSendDM) {
-      await onSendDM(stickerUrl);
+      await onSendDM(mediaUrl);
     } else {
-      await sendMessage(stickerUrl);
+      await sendMessage(mediaUrl);
     }
-  }, [isDMMode, onSendDM, sendMessage]);
+  }, [pendingMedia, isDMMode, onSendDM, sendMessage]);
+
+  const cancelPendingMedia = useCallback(() => {
+    setPendingMedia(null);
+  }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Mention autocomplete navigation
@@ -404,9 +423,6 @@ export default function MessageInput({
     }
   };
 
-  const hasUploading = pendingFiles.some((f) => f.uploading);
-  const canSend = (content.trim() || pendingFiles.some((f) => f.attachment)) && !hasUploading;
-
   return (
     <div
       className="px-4 pb-6 pt-1 flex-shrink-0"
@@ -490,6 +506,73 @@ export default function MessageInput({
           </button>
         </div>
       )}
+
+      {/* Pending GIF / Sticker preview */}
+      {pendingMedia && (
+        <div className="mb-2 animate-slide-up">
+          <div className="relative inline-block bg-riftapp-surface border border-riftapp-border/60 rounded-xl overflow-hidden shadow-elevation-low group/media">
+            <img
+              src={pendingMedia.previewUrl}
+              alt={pendingMedia.name ?? pendingMedia.type}
+              className={`object-contain ${pendingMedia.type === 'sticker' ? 'w-32 h-32 p-2' : 'max-w-[240px] max-h-[180px]'}`}
+            />
+            <div className="absolute top-1.5 right-1.5 flex gap-1">
+              <button
+                type="button"
+                onClick={cancelPendingMedia}
+                className="w-6 h-6 bg-black/60 hover:bg-riftapp-danger rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all"
+                title="Cancel"
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/60 to-transparent px-2 py-1.5 flex items-center justify-between">
+              <span className="text-[11px] text-white/70 font-medium uppercase tracking-wide">
+                {pendingMedia.type === 'gif' ? 'GIF' : pendingMedia.name ?? 'Sticker'}
+              </span>
+              <button
+                type="button"
+                onClick={sendPendingMedia}
+                className="text-[11px] font-semibold text-white bg-riftapp-accent hover:bg-riftapp-accent-hover px-2.5 py-1 rounded-md transition-colors active:scale-95"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom emoji visual preview — shows rendered emojis when :name: patterns are in the input */}
+      {content && hubEmojis && hubEmojis.length > 0 && (() => {
+        const emojiRe = /:([a-zA-Z0-9_\-]+):/g;
+        const emojiMap = new Map(hubEmojis.map((e) => [e.name.toLowerCase(), e]));
+        const matches: { name: string; fileUrl: string }[] = [];
+        let m;
+        while ((m = emojiRe.exec(content)) !== null) {
+          const emoji = emojiMap.get(m[1].toLowerCase());
+          if (emoji && !matches.some((x) => x.name === emoji.name)) {
+            matches.push({ name: emoji.name, fileUrl: emoji.file_url });
+          }
+        }
+        if (matches.length === 0) return null;
+        return (
+          <div className="mb-1 flex items-center gap-1 px-1">
+            <span className="text-[10px] text-riftapp-text-dim/60 mr-1">Preview:</span>
+            {matches.map((em) => (
+              <img
+                key={em.name}
+                src={publicAssetUrl(em.fileUrl)}
+                alt={`:${em.name}:`}
+                title={`:${em.name}:`}
+                className="w-6 h-6 object-contain"
+              />
+            ))}
+          </div>
+        );
+      })()}
 
       <div className={`bg-riftapp-surface rounded-xl border flex items-end transition-all duration-200 relative ${
         dragging ? 'border-riftapp-accent shadow-glow' : 'border-riftapp-border/60 hover:border-riftapp-border'
@@ -591,7 +674,7 @@ export default function MessageInput({
           <button
             data-media-btn
             onClick={() => toggleMediaPicker('gifs')}
-            className={`px-1.5 py-3 text-[13px] font-bold transition-all duration-150 active:scale-95 rounded ${
+            className={`px-1.5 py-3 transition-all duration-150 active:scale-95 ${
               mediaPickerOpen && useMediaPickerStore.getState().activeTab === 'gifs'
                 ? 'text-[#dbdee1]'
                 : 'text-[#b5bac1] hover:text-[#dbdee1]'
@@ -599,7 +682,10 @@ export default function MessageInput({
             title="GIFs"
             type="button"
           >
-            <span className="px-1 py-0.5 rounded text-[12px] font-extrabold border border-current leading-none">GIF</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="4" width="20" height="16" rx="2" />
+              <text x="12" y="15" textAnchor="middle" fill="currentColor" stroke="none" fontSize="8" fontWeight="bold" fontFamily="sans-serif">GIF</text>
+            </svg>
           </button>
           <button
             data-media-btn
@@ -641,21 +727,6 @@ export default function MessageInput({
             onStickerSelect={handleStickerSelect}
           />
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={!canSend}
-          className={`px-3 py-3 transition-all duration-150 ${
-            canSend
-              ? 'text-riftapp-accent hover:text-riftapp-accent-hover active:scale-95 scale-100'
-              : 'text-riftapp-text-dim/40 scale-95 cursor-not-allowed'
-          }`}
-          title="Send message"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
       </div>
     </div>
   );

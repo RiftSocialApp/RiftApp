@@ -13,7 +13,7 @@ const TABS: { key: MediaTab; label: string }[] = [
 
 interface MediaPickerProps {
   onEmojiSelect: (selection: EmojiSelection) => void;
-  onGifSelect: (url: string) => void;
+  onGifSelect: (url: string, previewUrl: string, width: number, height: number) => void;
   onStickerSelect: (sticker: HubSticker) => void;
 }
 
@@ -57,8 +57,8 @@ export default function MediaPicker({ onEmojiSelect, onGifSelect, onStickerSelec
     close();
   }, [onEmojiSelect, close, trackEmojiUsage]);
 
-  const handleGifSelect = useCallback((url: string) => {
-    onGifSelect(url);
+  const handleGifSelect = useCallback((url: string, previewUrl: string, width: number, height: number) => {
+    onGifSelect(url, previewUrl, width, height);
     close();
   }, [onGifSelect, close]);
 
