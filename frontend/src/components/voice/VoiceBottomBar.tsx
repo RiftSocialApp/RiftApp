@@ -277,6 +277,14 @@ export default function VoiceBottomBar() {
           {/* Voice control buttons row */}
           <div className="flex items-center justify-center gap-1 px-2 pb-2">
             <VoiceControlBtn
+              title={voiceIsCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
+              onClick={voiceToggleCamera}
+              disabled={controlsDisabled}
+              active={voiceIsCameraOn}
+            >
+              <CameraIcon enabled={voiceIsCameraOn} size={20} />
+            </VoiceControlBtn>
+            <VoiceControlBtn
               title={voiceIsScreenSharing ? 'Stop Sharing' : 'Share Your Screen'}
               onClick={voiceToggleScreenShare}
               disabled={controlsDisabled || voiceScreenShareRequesting}
@@ -287,14 +295,6 @@ export default function VoiceBottomBar() {
               ) : (
                 <ScreenShareIcon active={voiceIsScreenSharing} size={20} />
               )}
-            </VoiceControlBtn>
-            <VoiceControlBtn
-              title={voiceIsCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}
-              onClick={voiceToggleCamera}
-              disabled={controlsDisabled}
-              active={voiceIsCameraOn}
-            >
-              <CameraIcon enabled={voiceIsCameraOn} size={20} />
             </VoiceControlBtn>
             <VoiceControlBtn title="Activities" disabled>
               <ActivitiesIcon size={20} />

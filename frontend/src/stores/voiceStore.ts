@@ -183,6 +183,7 @@ export interface VoiceParticipant {
   identity: string;
   isSpeaking: boolean;
   isMuted: boolean;
+  isDeafened?: boolean;
   isCameraOn: boolean;
   isScreenSharing: boolean;
   videoTrack?: Track;
@@ -870,6 +871,24 @@ function playLeaveSound() {
   setTimeout(() => playTone(440, 0.2, 0.1), 100);
 }
 
+function playMuteSound() {
+  playTone(480, 0.1, 0.1);
+}
+
+function playUnmuteSound() {
+  playTone(640, 0.1, 0.1);
+}
+
+function playDeafenSound() {
+  playTone(400, 0.12, 0.1);
+  setTimeout(() => playTone(300, 0.15, 0.08), 80);
+}
+
+function playUndeafenSound() {
+  playTone(500, 0.12, 0.1);
+  setTimeout(() => playTone(700, 0.12, 0.08), 80);
+}
+
 function detachAllRoomMedia(room: Room) {
   room.remoteParticipants.forEach((rp) => {
     rp.trackPublications.forEach((pub) => {
@@ -906,7 +925,9 @@ function buildParticipants(room: Room): VoiceParticipant[] {
     videoTrack: getTrackForSource(p, Track.Source.Camera),
     screenTrack: getTrackForSource(p, Track.Source.ScreenShare),
   });
-  const list: VoiceParticipant[] = [toVP(room.localParticipant)];
+  const localVP = toVP(room.localParticipant);
+  localVP.isDeafened = useVoiceStore.getState().isDeafened;
+  const list: VoiceParticipant[] = [localVP];
   room.remoteParticipants.forEach((rp) => list.push(toVP(rp)));
   return list;
 }
@@ -1170,9 +1191,11 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       await room.localParticipant.setMicrophoneEnabled(false);
       stopMicProcessing({ broadcast: true, identity: room.localParticipant.identity });
       set({ isMuted: true });
+      playMuteSound();
     } else {
       const microphoneEnabled = await enableLocalMicrophone(room);
       set({ isMuted: !microphoneEnabled });
+      if (microphoneEnabled) playUnmuteSound();
     }
     syncParticipants();
   },
@@ -1255,6 +1278,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       set({ isMuted: !microphoneEnabled });
     }
     set({ isDeafened: next });
+    if (next) playDeafenSound(); else playUndeafenSound();
     syncParticipants();
   },
 

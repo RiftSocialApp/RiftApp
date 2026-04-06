@@ -11,6 +11,7 @@ type HubLayoutCacheEntry = {
   streams: Stream[];
   categories: Category[];
   voiceMembers: Record<string, string[]>;
+  voiceScreenSharers: Record<string, string[]>;
 };
 
 interface StreamState {
@@ -81,6 +82,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           streams: cached.streams,
           categories: cached.categories,
           voiceMembers: cached.voiceMembers,
+          voiceScreenSharers: cached.voiceScreenSharers ?? {},
           activeStreamId: null,
           streamHubMap,
         };
@@ -134,6 +136,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           streams,
           categories,
           voiceMembers: voiceStates,
+          voiceScreenSharers: s.voiceScreenSharers,
         },
       };
       return { streams, categories, voiceMembers: voiceStates, streamHubMap, hubLayoutCache };
@@ -167,6 +170,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           streams,
           categories,
           voiceMembers: s.voiceMembers,
+          voiceScreenSharers: s.voiceScreenSharers,
         },
       };
       return { streams, categories, streamHubMap, hubLayoutCache };
@@ -238,6 +242,8 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       delete streamHubMap[streamId];
       const voiceMembers = { ...s.voiceMembers };
       delete voiceMembers[streamId];
+      const voiceScreenSharers = { ...s.voiceScreenSharers };
+      delete voiceScreenSharers[streamId];
       let activeStreamId = s.activeStreamId;
       if (activeStreamId === streamId) activeStreamId = null;
       const hubLayoutCache = { ...s.hubLayoutCache };
@@ -250,6 +256,9 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           voiceMembers: Object.fromEntries(
             Object.entries(prev.voiceMembers).filter(([k]) => k !== streamId),
           ),
+          voiceScreenSharers: Object.fromEntries(
+            Object.entries(prev.voiceScreenSharers ?? {}).filter(([k]) => k !== streamId),
+          ),
         };
       }
       return {
@@ -258,6 +267,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         lastReadMessageIds,
         streamHubMap,
         voiceMembers,
+        voiceScreenSharers,
         activeStreamId,
         hubLayoutCache,
       };
@@ -484,8 +494,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       streams: [],
       categories: [],
       activeStreamId: null,
-      voiceMembers: {},
-      voiceScreenSharers: {},
     });
   },
 

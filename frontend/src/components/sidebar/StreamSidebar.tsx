@@ -1157,7 +1157,7 @@ function SortableVoiceItem({
   memberIds: string[];
   hasMembers: boolean;
   hideVcNames: boolean;
-  voiceParticipants: { identity: string; isSpeaking: boolean; isMuted: boolean; isScreenSharing: boolean }[];
+  voiceParticipants: { identity: string; isSpeaking: boolean; isMuted: boolean; isCameraOn: boolean; isScreenSharing: boolean }[];
   speakingSignals: Record<string, boolean>;
   hubMembers: Record<string, User>;
   hubId: string | null;
@@ -1245,7 +1245,7 @@ function SortableVoiceItem({
             return (
               <VoiceUserItem
                 key={p.identity}
-                participant={{ ...p, isCameraOn: false, videoTrack: undefined, screenTrack: undefined }}
+                participant={{ ...p, videoTrack: undefined, screenTrack: undefined }}
                 member={member}
                 streamId={stream.id}
                 hubId={hubId}
