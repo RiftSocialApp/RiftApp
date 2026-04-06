@@ -34,6 +34,12 @@ export default {
           'voice-speaking': '#43b581',
           'discord-blurple': '#5865f2',
         },
+        marketing: {
+          hero: '#5865f2',
+          'hero-dark': '#3c45a5',
+          light: '#f6f6fe',
+          'light-accent': '#e8e6fd',
+        },
       },
       fontFamily: {
         sans: ['"gg sans"', '"Noto Sans"', '"Helvetica Neue"', 'Helvetica', 'Arial', 'sans-serif'],

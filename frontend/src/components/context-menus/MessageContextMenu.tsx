@@ -158,9 +158,9 @@ export default function MessageContextMenu({
   const copyLink = () => {
     let url: string;
     if (isDM && message.conversation_id) {
-      url = `${window.location.origin}/dms/${message.conversation_id}`;
+      url = `${window.location.origin}/app/dms/${message.conversation_id}`;
     } else if (hubId && message.stream_id) {
-      url = `${window.location.origin}/hubs/${hubId}/${message.stream_id}`;
+      url = `${window.location.origin}/app/hubs/${hubId}/${message.stream_id}`;
     } else {
       void navigator.clipboard.writeText(message.id);
       onClose();

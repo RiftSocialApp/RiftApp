@@ -9,6 +9,10 @@ const AuthPage = lazy(() => import('./components/auth/AuthPage'));
 const AppLayout = lazy(() => import('./components/layout/AppLayout'));
 const InviteJoinPage = lazy(() => import('./components/invite/InviteJoinPage'));
 const SettingsModal = lazy(() => import('./components/settings/SettingsModal'));
+const MarketingLayout = lazy(() => import('./components/marketing/MarketingLayout'));
+const LandingPage = lazy(() => import('./components/marketing/LandingPage'));
+const DiscoverPage = lazy(() => import('./components/marketing/DiscoverPage'));
+const SupportPage = lazy(() => import('./components/marketing/SupportPage'));
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -48,7 +52,7 @@ function RequireGuest({ children }: { children: React.ReactNode }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return <>{children}</>;
@@ -71,34 +75,47 @@ export default function App() {
   }, [closeSettings, isAuthenticated, settingsOpen]);
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <TitleBar />
-      <UpdateBar />
-      <div className="flex-1 min-h-0">
     <BrowserRouter>
-      <Suspense fallback={
-        <div className="h-full flex items-center justify-center bg-riftapp-bg">
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-riftapp-accent mb-4 font-display tracking-tight">riftapp</h1>
-            <div className="w-8 h-8 border-2 border-riftapp-accent border-t-transparent rounded-full animate-spin mx-auto" />
-          </div>
+      <div className="flex flex-col h-screen">
+        <TitleBar />
+        <UpdateBar />
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <Suspense fallback={
+            <div className="h-full flex items-center justify-center bg-riftapp-bg">
+              <div className="text-center">
+                <h1 className="text-3xl font-bold text-riftapp-accent mb-4 font-display tracking-tight">riftapp</h1>
+                <div className="w-8 h-8 border-2 border-riftapp-accent border-t-transparent rounded-full animate-spin mx-auto" />
+              </div>
+            </div>
+          }>
+            <Routes>
+              {/* Public marketing pages */}
+              <Route element={<MarketingLayout />}>
+                <Route index element={<LandingPage />} />
+                <Route path="discover" element={<DiscoverPage />} />
+                <Route path="support" element={<SupportPage />} />
+              </Route>
+
+              {/* Auth (guest-only) */}
+              <Route path="/login" element={<RequireGuest><AuthPage /></RequireGuest>} />
+              <Route path="/register" element={<RequireGuest><AuthPage /></RequireGuest>} />
+
+              {/* Invite (top-level for clean share URLs) */}
+              <Route path="/invite/:code" element={<RequireAuth><InviteJoinPage /></RequireAuth>} />
+
+              {/* Authenticated app under /app */}
+              <Route path="/app/hubs/:hubId/:streamId" element={<RequireAuth><AppLayout /></RequireAuth>} />
+              <Route path="/app/hubs/:hubId" element={<RequireAuth><AppLayout /></RequireAuth>} />
+              <Route path="/app/dms/:conversationId" element={<RequireAuth><AppLayout /></RequireAuth>} />
+              <Route path="/app/dms" element={<RequireAuth><AppLayout /></RequireAuth>} />
+              <Route path="/app" element={<RequireAuth><AppLayout /></RequireAuth>} />
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+            {settingsOpen && isAuthenticated && <SettingsModal />}
+          </Suspense>
         </div>
-      }>
-        <Routes>
-          <Route path="/login" element={<RequireGuest><AuthPage /></RequireGuest>} />
-          <Route path="/register" element={<RequireGuest><AuthPage /></RequireGuest>} />
-          <Route path="/invite/:code" element={<RequireAuth><InviteJoinPage /></RequireAuth>} />
-          <Route path="/hubs/:hubId/:streamId" element={<RequireAuth><AppLayout /></RequireAuth>} />
-          <Route path="/hubs/:hubId" element={<RequireAuth><AppLayout /></RequireAuth>} />
-          <Route path="/dms/:conversationId" element={<RequireAuth><AppLayout /></RequireAuth>} />
-          <Route path="/dms" element={<RequireAuth><AppLayout /></RequireAuth>} />
-          <Route path="/" element={<RequireAuth><AppLayout /></RequireAuth>} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-        {settingsOpen && isAuthenticated && <SettingsModal />}
-      </Suspense>
-    </BrowserRouter>
       </div>
-    </div>
+    </BrowserRouter>
   );
 }

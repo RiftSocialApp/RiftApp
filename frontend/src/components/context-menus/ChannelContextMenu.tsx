@@ -99,7 +99,7 @@ export default function ChannelContextMenu({
   };
 
   const copyLink = () => {
-    const url = `${window.location.origin}/hubs/${hubId}/${stream.id}`;
+    const url = `${window.location.origin}/app/hubs/${hubId}/${stream.id}`;
     void navigator.clipboard.writeText(url);
     onClose();
   };

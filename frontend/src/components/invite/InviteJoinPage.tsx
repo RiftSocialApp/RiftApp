@@ -40,7 +40,7 @@ export default function InviteJoinPage() {
     try {
       await api.joinInvite(code);
       await loadHubs();
-      navigate(`/hubs/${info.hub_id}`);
+      navigate(`/app/hubs/${info.hub_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to join');
     } finally {
@@ -49,7 +49,7 @@ export default function InviteJoinPage() {
   };
 
   const handleGoTo = () => {
-    if (info) navigate(`/hubs/${info.hub_id}`);
+    if (info) navigate(`/app/hubs/${info.hub_id}`);
   };
 
   if (loading) {
@@ -75,7 +75,7 @@ export default function InviteJoinPage() {
           </div>
           <h2 className="text-xl font-bold mb-2">Invalid Invite</h2>
           <p className="text-riftapp-text-dim text-sm mb-6">{error || 'This invite is invalid or has expired.'}</p>
-          <button onClick={() => navigate('/')} className="btn-primary px-6 py-2.5">
+          <button onClick={() => navigate('/app')} className="btn-primary px-6 py-2.5">
             Go Home
           </button>
         </div>
@@ -121,7 +121,7 @@ export default function InviteJoinPage() {
         )}
 
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/app')}
           className="block mx-auto mt-3 text-sm text-riftapp-text-dim hover:text-riftapp-text transition-colors"
         >
           No thanks

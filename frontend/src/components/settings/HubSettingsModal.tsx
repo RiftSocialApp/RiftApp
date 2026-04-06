@@ -605,9 +605,9 @@ function DeleteServerTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner:
       onCloseSettings();
       const nextHubId = useHubStore.getState().activeHubId;
       if (nextHubId) {
-        navigate(`/hubs/${nextHubId}`, { replace: true });
+        navigate(`/app/hubs/${nextHubId}`, { replace: true });
       } else {
-        navigate('/', { replace: true });
+        navigate('/app', { replace: true });
       }
     } catch (err: unknown) {
       setDeleteError(err instanceof Error ? err.message : 'Failed to delete server');

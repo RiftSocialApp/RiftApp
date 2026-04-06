@@ -12,7 +12,7 @@ import fs from "fs";
 import { autoUpdater } from "electron-updater";
 
 const VITE_DEV_URL = "http://localhost:5173";
-const PRODUCTION_WEB_APP_URL = "https://riftapp.io/";
+const PRODUCTION_WEB_APP_URL = "https://riftapp.io/login";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
 const appVersion = app.getVersion();

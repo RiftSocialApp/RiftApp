@@ -94,7 +94,7 @@ export default function FullProfileModal() {
     closeModal();
     await openDM(user.id);
     const conversationId = useDMStore.getState().activeConversationId;
-    if (conversationId) navigate(`/dms/${conversationId}`);
+    if (conversationId) navigate(`/app/dms/${conversationId}`);
   };
 
   const handleAddFriend = async () => {

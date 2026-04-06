@@ -136,7 +136,7 @@ export default function VoiceParticipantContextMenu({
     closeVoiceView();
     await openDM(member.id);
     const convId = useDMStore.getState().activeConversationId;
-    if (convId) navigate(`/dms/${convId}`);
+    if (convId) navigate(`/app/dms/${convId}`);
   }, [closeVoiceView, member?.id, navigate, onClose, openDM]);
 
   const handleMention = useCallback(() => {
