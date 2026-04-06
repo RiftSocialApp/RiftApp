@@ -489,35 +489,6 @@ export default function MessageInput({
       )}
 
 
-      {/* Custom emoji visual preview — shows rendered emojis when :name: patterns are in the input */}
-      {content && hubEmojis && hubEmojis.length > 0 && (() => {
-        const emojiRe = /:([a-zA-Z0-9_\-]+):/g;
-        const emojiMap = new Map(hubEmojis.map((e) => [e.name.toLowerCase(), e]));
-        const matches: { name: string; fileUrl: string }[] = [];
-        let m;
-        while ((m = emojiRe.exec(content)) !== null) {
-          const emoji = emojiMap.get(m[1].toLowerCase());
-          if (emoji && !matches.some((x) => x.name === emoji.name)) {
-            matches.push({ name: emoji.name, fileUrl: emoji.file_url });
-          }
-        }
-        if (matches.length === 0) return null;
-        return (
-          <div className="mb-1 flex items-center gap-1 px-1">
-            <span className="text-[10px] text-riftapp-text-dim/60 mr-1">Preview:</span>
-            {matches.map((em) => (
-              <img
-                key={em.name}
-                src={publicAssetUrl(em.fileUrl)}
-                alt={`:${em.name}:`}
-                title={`:${em.name}:`}
-                className="w-6 h-6 object-contain"
-              />
-            ))}
-          </div>
-        );
-      })()}
-
       <div className={`bg-riftapp-surface rounded-xl border flex items-end transition-all duration-200 relative ${
         dragging ? 'border-riftapp-accent shadow-glow' : 'border-riftapp-border/60 hover:border-riftapp-border'
       }`}>

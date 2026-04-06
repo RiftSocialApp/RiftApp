@@ -487,6 +487,105 @@ function MicrophoneTestCard({
   );
 }
 
+/** Live microphone volume meter displayed behind the sensitivity slider. */
+function SensitivityMeter({ deviceId, threshold, max, disabled }: { deviceId: string | null; threshold: number; max: number; disabled: boolean }) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const stateRef = useRef<{ stream: MediaStream | null; ctx: AudioContext | null; analyser: AnalyserNode | null; frame: number | null; samples: Uint8Array<ArrayBuffer> | null }>({ stream: null, ctx: null, analyser: null, frame: null, samples: null });
+
+  useEffect(() => {
+    if (disabled) return;
+
+    let cancelled = false;
+    const s = stateRef.current;
+
+    (async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
+          video: false,
+        });
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        const ctx = new AudioContext();
+        const source = ctx.createMediaStreamSource(stream);
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.3;
+        source.connect(analyser);
+        s.stream = stream;
+        s.ctx = ctx;
+        s.analyser = analyser;
+        s.samples = new Uint8Array(analyser.fftSize);
+
+        const draw = () => {
+          if (cancelled) return;
+          s.frame = requestAnimationFrame(draw);
+          const canvas = canvasRef.current;
+          if (!canvas || !s.analyser || !s.samples) return;
+          s.analyser.getByteTimeDomainData(s.samples);
+          let sumSq = 0;
+          for (let i = 0; i < s.samples.length; i++) {
+            const v = (s.samples[i] - 128) / 128;
+            sumSq += v * v;
+          }
+          const rms = Math.sqrt(sumSq / s.samples.length);
+          const c = canvas.getContext('2d');
+          if (!c) return;
+          const dpr = window.devicePixelRatio || 1;
+          const cssW = canvas.clientWidth;
+          const cssH = canvas.clientHeight;
+          if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
+            canvas.width = cssW * dpr;
+            canvas.height = cssH * dpr;
+          }
+          c.clearRect(0, 0, canvas.width, canvas.height);
+          // Volume bar
+          const pct = Math.min(rms / max, 1);
+          const barW = pct * canvas.width;
+          const aboveThreshold = max > 0 && rms >= threshold;
+          c.fillStyle = aboveThreshold ? 'rgba(67, 181, 129, 0.35)' : 'rgba(255, 255, 255, 0.08)';
+          c.beginPath();
+          c.roundRect(0, 0, barW, canvas.height, 4 * dpr);
+          c.fill();
+          // Threshold line
+          if (threshold > 0 && max > 0) {
+            const tx = (threshold / max) * canvas.width;
+            c.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+            c.lineWidth = 1.5 * dpr;
+            c.beginPath();
+            c.moveTo(tx, 0);
+            c.lineTo(tx, canvas.height);
+            c.stroke();
+          }
+        };
+        s.frame = requestAnimationFrame(draw);
+      } catch { /* mic permission denied or unavailable */ }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (s.frame != null) cancelAnimationFrame(s.frame);
+      s.analyser?.disconnect();
+      s.stream?.getTracks().forEach((t) => t.stop());
+      if (s.ctx && s.ctx.state !== 'closed') void s.ctx.close().catch(() => {});
+      s.stream = null;
+      s.ctx = null;
+      s.analyser = null;
+      s.frame = null;
+      s.samples = null;
+    };
+  }, [deviceId, disabled, threshold, max]);
+
+  if (disabled) return null;
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="absolute inset-0 pointer-events-none rounded"
+      style={{ width: '100%', height: '100%' }}
+    />
+  );
+}
+
 function VoiceVideoSettingsTab() {
   const inputDeviceId = useVoiceStore((s) => s.inputDeviceId);
   const outputDeviceId = useVoiceStore((s) => s.outputDeviceId);
@@ -568,16 +667,24 @@ function VoiceVideoSettingsTab() {
                   <span>{automaticInputSensitivity ? 'Automatic sensitivity is active' : formatSensitivity(manualInputSensitivity)}</span>
                   {!automaticInputSensitivity && <span className="text-riftapp-text-dim">Set to 0 to keep the mic open</span>}
                 </div>
-                <input
-                  type="range"
-                  min={MANUAL_SENSITIVITY_MIN}
-                  max={MANUAL_SENSITIVITY_MAX}
-                  step={MANUAL_SENSITIVITY_STEP}
-                  value={manualInputSensitivity}
-                  disabled={automaticInputSensitivity}
-                  onChange={(event) => setManualInputSensitivity(Number(event.target.value))}
-                  className="w-full accent-riftapp-accent disabled:cursor-not-allowed"
-                />
+                <div className="relative">
+                  <SensitivityMeter
+                    deviceId={inputDeviceId}
+                    threshold={manualInputSensitivity}
+                    max={MANUAL_SENSITIVITY_MAX}
+                    disabled={automaticInputSensitivity}
+                  />
+                  <input
+                    type="range"
+                    min={MANUAL_SENSITIVITY_MIN}
+                    max={MANUAL_SENSITIVITY_MAX}
+                    step={MANUAL_SENSITIVITY_STEP}
+                    value={manualInputSensitivity}
+                    disabled={automaticInputSensitivity}
+                    onChange={(event) => setManualInputSensitivity(Number(event.target.value))}
+                    className="w-full accent-riftapp-accent disabled:cursor-not-allowed relative z-10 bg-transparent"
+                  />
+                </div>
                 <div className="flex items-center justify-between text-[11px] text-riftapp-text-dim">
                   <span>More sensitive</span>
                   <span>Less sensitive</span>
