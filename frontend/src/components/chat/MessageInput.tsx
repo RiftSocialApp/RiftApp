@@ -5,10 +5,12 @@ import { useReplyDraftStore } from '../../stores/replyDraftStore';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useHubStore } from '../../stores/hubStore';
 import { useEmojiStore } from '../../stores/emojiStore';
-import EmojiPicker, { type EmojiSelection } from '../shared/EmojiPicker';
+import { useMediaPickerStore } from '../../stores/mediaPickerStore';
+import MediaPicker from '../media/MediaPicker';
+import type { EmojiSelection } from '../media/EmojiTab';
 import { EMOJI_AUTOCOMPLETE_LIST } from '../../utils/emojiNames';
 import { api } from '../../api/client';
-import type { Attachment, User } from '../../types';
+import type { Attachment, HubSticker, User } from '../../types';
 
 const TYPING_THROTTLE_MS = 500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
@@ -51,8 +53,11 @@ export default function MessageInput({
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const activeHubId = useHubStore((s) => s.activeHubId);
 
-  // Emoji picker state
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  // Media picker store
+  const mediaPickerOpen = useMediaPickerStore((s) => s.isOpen);
+  const toggleMediaPicker = useMediaPickerStore((s) => s.toggle);
+  const closeMediaPicker = useMediaPickerStore((s) => s.close);
+  const trackEmojiUsage = useMediaPickerStore((s) => s.trackEmojiUsage);
 
   // Mention autocomplete state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -185,6 +190,7 @@ export default function MessageInput({
 
     setContent('');
     setPendingFiles([]);
+    closeMediaPicker();
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
@@ -250,9 +256,28 @@ export default function MessageInput({
       const after = prev.slice(cursorPos);
       return before + insert + after;
     });
-    setEmojiPickerOpen(false);
+    trackEmojiUsage(sel.emoji, sel.emojiId, sel.fileUrl);
     requestAnimationFrame(() => textareaRef.current?.focus());
-  }, []);
+  }, [trackEmojiUsage]);
+
+  const handleGifSelect = useCallback(async (url: string) => {
+    // Send the GIF URL as a message
+    if (isDMMode && onSendDM) {
+      await onSendDM(url);
+    } else {
+      await sendMessage(url);
+    }
+  }, [isDMMode, onSendDM, sendMessage]);
+
+  const handleStickerSelect = useCallback(async (sticker: HubSticker) => {
+    // Send the sticker as a message with the image URL
+    const stickerUrl = publicAssetUrl(sticker.file_url);
+    if (isDMMode && onSendDM) {
+      await onSendDM(stickerUrl);
+    } else {
+      await sendMessage(stickerUrl);
+    }
+  }, [isDMMode, onSendDM, sendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Mention autocomplete navigation
@@ -561,10 +586,45 @@ export default function MessageInput({
           className="flex-1 px-1 py-3 bg-transparent text-[15px] text-riftapp-text placeholder:text-riftapp-text-dim/60 resize-none focus:outline-none max-h-[200px] leading-relaxed"
           maxLength={4000}
         />
-        <div className="relative">
+        {/* Media buttons: GIF, Stickers, Emoji */}
+        <div className="relative flex items-center">
           <button
-            onClick={() => setEmojiPickerOpen((v) => !v)}
-            className="px-2 py-3 text-riftapp-text-dim hover:text-riftapp-text active:scale-95 transition-all duration-150"
+            data-media-btn
+            onClick={() => toggleMediaPicker('gifs')}
+            className={`px-1.5 py-3 text-[13px] font-bold transition-all duration-150 active:scale-95 rounded ${
+              mediaPickerOpen && useMediaPickerStore.getState().activeTab === 'gifs'
+                ? 'text-[#dbdee1]'
+                : 'text-[#b5bac1] hover:text-[#dbdee1]'
+            }`}
+            title="GIFs"
+            type="button"
+          >
+            <span className="px-1 py-0.5 rounded text-[12px] font-extrabold border border-current leading-none">GIF</span>
+          </button>
+          <button
+            data-media-btn
+            onClick={() => toggleMediaPicker('stickers')}
+            className={`px-1.5 py-3 transition-all duration-150 active:scale-95 ${
+              mediaPickerOpen && useMediaPickerStore.getState().activeTab === 'stickers'
+                ? 'text-[#dbdee1]'
+                : 'text-[#b5bac1] hover:text-[#dbdee1]'
+            }`}
+            title="Stickers"
+            type="button"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15.5 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8.5L15.5 3z" />
+              <polyline points="14 3 14 8 21 8" />
+            </svg>
+          </button>
+          <button
+            data-media-btn
+            onClick={() => toggleMediaPicker('emojis')}
+            className={`px-1.5 py-3 transition-all duration-150 active:scale-95 ${
+              mediaPickerOpen && useMediaPickerStore.getState().activeTab === 'emojis'
+                ? 'text-[#dbdee1]'
+                : 'text-[#b5bac1] hover:text-[#dbdee1]'
+            }`}
             title="Emoji"
             type="button"
           >
@@ -575,15 +635,11 @@ export default function MessageInput({
               <line x1="15" y1="9" x2="15.01" y2="9" />
             </svg>
           </button>
-          {emojiPickerOpen && (
-            <div className="absolute bottom-full right-0 mb-2 z-50">
-              <EmojiPicker
-                hubId={isDMMode ? null : activeHubId}
-                onSelect={handleEmojiSelect}
-                onClose={() => setEmojiPickerOpen(false)}
-              />
-            </div>
-          )}
+          <MediaPicker
+            onEmojiSelect={handleEmojiSelect}
+            onGifSelect={handleGifSelect}
+            onStickerSelect={handleStickerSelect}
+          />
         </div>
         <button
           onClick={handleSubmit}

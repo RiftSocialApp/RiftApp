@@ -21,7 +21,6 @@ import (
 )
 
 const maxUploadSize = 2 << 30 // 2 GB
-const maxAttachmentsPerMessage = 10
 
 // Allowed MIME type prefixes/types for uploads
 var allowedContentTypes = map[string]bool{
