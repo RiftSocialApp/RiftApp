@@ -2,7 +2,7 @@
 
 <p align="center">
   <br/>
-  <b>Fast Â· Clean Â· Yours</b>
+  <b>Fast · Clean · Yours</b>
   <br/><br/>
   <i>Real-time communication, built for clarity and control.</i>
   <br/><br/>
@@ -10,11 +10,11 @@
 
 <p align="center">
   <sub><b>Chat</b></sub>
-  &nbsp;&nbsp;Â·&nbsp;&nbsp;
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <sub><b>Voice</b></sub>
-  &nbsp;&nbsp;Â·&nbsp;&nbsp;
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <sub><b>DMs</b></sub>
-  &nbsp;&nbsp;Â·&nbsp;&nbsp;
+  &nbsp;&nbsp;·&nbsp;&nbsp;
   <sub><b>Your infrastructure</b></sub>
 </p>
 
@@ -54,7 +54,7 @@ Self-host so **your** conversations stay **your** business.
 
 <br/>
 
-**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**, not someone elseâ€™s product roadmap.
+**RiftApp** is a communication home for teams and communities: **chat**, **voice**, **DMs**, and **shared spaces** in one calm, fast experience. Host it yourself so **your conversations and files stay on your terms**, not someone else's product roadmap.
 
 > *We believe great software should feel **light**, **responsive**, and **yours**.*
 
@@ -78,7 +78,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 <br/>
 
 <p align="center">
-  <i>Creative crews Â· Gaming circles Â· Internal squads Â· Your crew here</i>
+  <i>Creative crews · Gaming circles · Internal squads · Your crew here</i>
 </p>
 
 <p align="center">
@@ -106,7 +106,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 <br/>
 
 > **Show up fully**  
-> Profiles, avatars, and shared media help people recognize each other and celebrate the groupâ€™s personality.
+> Profiles, avatars, and shared media help people recognize each other and celebrate the group's personality.
 
 <br/>
 
@@ -128,7 +128,7 @@ RiftApp is built for people who want the energy of a modern community app **with
 
 We use clear names so the app feels **intentional**, not borrowed.
 
-| You might sayâ€¦ | In RiftApp |
+| You might say… | In RiftApp |
 |:--------------:|:----------:|
 | Server | **`Hub`** |
 | Channel | **`Stream`** |
@@ -178,7 +178,7 @@ Technical depth lives in **[ARCHITECTURE.md](ARCHITECTURE.md)** (diagrams, data 
 ## ⟨ Try it locally ⟩
 
 <details>
-<summary><b>Prerequisites &amp; first-time setup</b> (click to expand)</summary>
+<summary><b>Prerequisites & first-time setup</b> (click to expand)</summary>
 
 <br/>
 
