@@ -39,6 +39,7 @@ const (
 	OpVoiceDisconnect        = "voice_disconnect"
 	OpVoiceSpeakingUpdate    = "voice_speaking_update"
 	OpVoiceScreenShareUpdate = "voice_screen_share_update"
+	OpVoiceDeafenUpdate      = "voice_deafen_update"
 	OpRoleUpdate             = "role_update"
 	OpStreamUpdate           = "stream_update"
 	OpCategoryUpdate         = "category_update"
@@ -106,6 +107,17 @@ type VoiceScreenShareData struct {
 type VoiceScreenShareClientData struct {
 	StreamID string `json:"stream_id"`
 	Sharing  bool   `json:"sharing"`
+}
+
+type VoiceDeafenData struct {
+	StreamID string `json:"stream_id"`
+	UserID   string `json:"user_id"`
+	Deafened bool   `json:"deafened"`
+}
+
+type VoiceDeafenClientData struct {
+	StreamID string `json:"stream_id"`
+	Deafened bool   `json:"deafened"`
 }
 
 func NewEvent(op string, data interface{}) []byte {

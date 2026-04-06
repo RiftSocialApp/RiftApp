@@ -1157,7 +1157,7 @@ function SortableVoiceItem({
   memberIds: string[];
   hasMembers: boolean;
   hideVcNames: boolean;
-  voiceParticipants: { identity: string; isSpeaking: boolean; isMuted: boolean; isCameraOn: boolean; isScreenSharing: boolean }[];
+  voiceParticipants: { identity: string; isSpeaking: boolean; isMuted: boolean; isCameraOn: boolean; isScreenSharing: boolean; isDeafened?: boolean }[];
   speakingSignals: Record<string, boolean>;
   hubMembers: Record<string, User>;
   hubId: string | null;
@@ -1195,6 +1195,7 @@ function SortableVoiceItem({
   );
   const isVoiceDropTarget = voiceDropTargetId === stream.id && canAcceptVoiceDrop;
   const screenSharers = useStreamStore((s) => s.voiceScreenSharers[stream.id]);
+  const deafenedUsers = useStreamStore((s) => s.voiceDeafenedUsers[stream.id]);
 
   return (
     <div
@@ -1272,6 +1273,7 @@ function SortableVoiceItem({
                   isMuted: false,
                   isCameraOn: false,
                   isScreenSharing: Boolean(screenSharers?.includes(uid)),
+                  isDeafened: Boolean(deafenedUsers?.includes(uid)),
                 }}
                 member={member}
                 streamId={stream.id}

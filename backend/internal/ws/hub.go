@@ -11,14 +11,15 @@ import (
 )
 
 type Hub struct {
-	clients    map[string]map[string]*Client // userID -> sessionID -> client
-	streamSubs map[string]map[string]*Client // streamID -> sessionKey -> client
-	voiceState map[string]map[string]bool    // streamID -> set of userIDs in voice
-	register   chan *Client
-	unregister chan *Client
-	broadcast  chan *BroadcastMessage
-	mu         sync.RWMutex
-	db         *pgxpool.Pool
+	clients       map[string]map[string]*Client // userID -> sessionID -> client
+	streamSubs    map[string]map[string]*Client // streamID -> sessionKey -> client
+	voiceState    map[string]map[string]bool    // streamID -> set of userIDs in voice
+	voiceDeafened map[string]map[string]bool    // streamID -> set of deafened userIDs
+	register      chan *Client
+	unregister    chan *Client
+	broadcast     chan *BroadcastMessage
+	mu            sync.RWMutex
+	db            *pgxpool.Pool
 }
 
 type BroadcastMessage struct {
@@ -29,13 +30,14 @@ type BroadcastMessage struct {
 
 func NewHub(db *pgxpool.Pool) *Hub {
 	return &Hub{
-		clients:    make(map[string]map[string]*Client),
-		streamSubs: make(map[string]map[string]*Client),
-		voiceState: make(map[string]map[string]bool),
-		register:   make(chan *Client),
-		unregister: make(chan *Client),
-		broadcast:  make(chan *BroadcastMessage, 256),
-		db:         db,
+		clients:       make(map[string]map[string]*Client),
+		streamSubs:    make(map[string]map[string]*Client),
+		voiceState:    make(map[string]map[string]bool),
+		voiceDeafened: make(map[string]map[string]bool),
+		register:      make(chan *Client),
+		unregister:    make(chan *Client),
+		broadcast:     make(chan *BroadcastMessage, 256),
+		db:            db,
 	}
 }
 
@@ -367,6 +369,13 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 			return
 		}
 		go h.handleVoiceScreenShare(c.userID, data.StreamID, data.Sharing)
+
+	case OpVoiceDeafenUpdate:
+		var data VoiceDeafenClientData
+		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+			return
+		}
+		go h.handleVoiceDeafen(c.userID, data.StreamID, data.Deafened)
 	}
 }
 
@@ -399,6 +408,12 @@ func (h *Hub) handleVoiceState(userID, streamID, action string) {
 			delete(users, userID)
 			if len(users) == 0 {
 				delete(h.voiceState, streamID)
+			}
+		}
+		if deafened, ok := h.voiceDeafened[streamID]; ok {
+			delete(deafened, userID)
+			if len(deafened) == 0 {
+				delete(h.voiceDeafened, streamID)
 			}
 		}
 		h.mu.Unlock()
@@ -478,6 +493,36 @@ func (h *Hub) handleVoiceScreenShare(userID, streamID string, sharing bool) {
 	}))
 }
 
+func (h *Hub) handleVoiceDeafen(userID, streamID string, deafened bool) {
+	h.mu.Lock()
+	inVoice := h.voiceState[streamID] != nil && h.voiceState[streamID][userID]
+	if inVoice {
+		if deafened {
+			if h.voiceDeafened[streamID] == nil {
+				h.voiceDeafened[streamID] = make(map[string]bool)
+			}
+			h.voiceDeafened[streamID][userID] = true
+		} else {
+			if h.voiceDeafened[streamID] != nil {
+				delete(h.voiceDeafened[streamID], userID)
+				if len(h.voiceDeafened[streamID]) == 0 {
+					delete(h.voiceDeafened, streamID)
+				}
+			}
+		}
+	}
+	h.mu.Unlock()
+	if !inVoice {
+		return
+	}
+
+	h.broadcastToHubMembers(streamID, NewEvent(OpVoiceDeafenUpdate, VoiceDeafenData{
+		StreamID: streamID,
+		UserID:   userID,
+		Deafened: deafened,
+	}))
+}
+
 // removeUserFromAllVoice removes a user from all voice channels on disconnect
 func (h *Hub) removeUserFromAllVoice(userID string) {
 	h.mu.Lock()
@@ -488,6 +533,14 @@ func (h *Hub) removeUserFromAllVoice(userID string) {
 			affectedStreams = append(affectedStreams, streamID)
 			if len(users) == 0 {
 				delete(h.voiceState, streamID)
+			}
+		}
+	}
+	for streamID, deafened := range h.voiceDeafened {
+		if deafened[userID] {
+			delete(deafened, userID)
+			if len(deafened) == 0 {
+				delete(h.voiceDeafened, streamID)
 			}
 		}
 	}

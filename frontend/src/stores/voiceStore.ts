@@ -17,6 +17,7 @@ import {
 } from 'livekit-client';
 import { api } from '../api/client';
 import { wsSend } from '../hooks/useWebSocket';
+import { useStreamStore } from './streamStore';
 import {
   DEFAULT_MANUAL_MIC_THRESHOLD,
   DEFAULT_MIC_GATE_RELEASE_MS,
@@ -989,6 +990,8 @@ function getTrackForSource(p: Participant, source: Track.Source): Track | undefi
 function buildParticipants(room: Room): VoiceParticipant[] {
   if (room.state !== ConnectionState.Connected) return [];
   const speakingSignals = useVoiceStore.getState().speakingSignals;
+  const streamId = useVoiceStore.getState().streamId;
+  const deafenedUsers = streamId ? (useStreamStore.getState().voiceDeafenedUsers[streamId] ?? []) : [];
   const toVP = (p: Participant): VoiceParticipant => ({
     identity: p.identity,
     isSpeaking: (hasOwnKey(speakingSignals, p.identity) ? speakingSignals[p.identity] : false) || isTransientSpeaking(p.identity) || p.isSpeaking,
@@ -1001,7 +1004,11 @@ function buildParticipants(room: Room): VoiceParticipant[] {
   const localVP = toVP(room.localParticipant);
   localVP.isDeafened = useVoiceStore.getState().isDeafened;
   const list: VoiceParticipant[] = [localVP];
-  room.remoteParticipants.forEach((rp) => list.push(toVP(rp)));
+  room.remoteParticipants.forEach((rp) => {
+    const vp = toVP(rp);
+    vp.isDeafened = deafenedUsers.includes(rp.identity);
+    list.push(vp);
+  });
   return list;
 }
 
@@ -1390,6 +1397,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     }
     set({ isDeafened: next });
     if (next) playDeafenSound(); else playUndeafenSound();
+    const sid = get().streamId;
+    if (sid) wsSend('voice_deafen_update', { stream_id: sid, deafened: next });
     syncParticipants();
   },
 

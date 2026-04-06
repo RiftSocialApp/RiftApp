@@ -12,6 +12,7 @@ type HubLayoutCacheEntry = {
   categories: Category[];
   voiceMembers: Record<string, string[]>;
   voiceScreenSharers: Record<string, string[]>;
+  voiceDeafenedUsers: Record<string, string[]>;
 };
 
 interface StreamState {
@@ -25,6 +26,8 @@ interface StreamState {
   voiceMembers: Record<string, string[]>; // streamId -> userIds currently in voice
   /** streamId → Set of userIds currently screen-sharing (tracked via WS for non-connected viewers). */
   voiceScreenSharers: Record<string, string[]>;
+  /** streamId → Set of userIds currently deafened (tracked via WS for non-connected viewers). */
+  voiceDeafenedUsers: Record<string, string[]>;
   /** Last known channel layout per hub (instant restore when switching). */
   hubLayoutCache: Record<string, HubLayoutCacheEntry>;
 
@@ -55,6 +58,7 @@ interface StreamState {
   loadVoiceStates: (hubId: string) => Promise<void>;
   applyVoiceState: (streamId: string, userId: string, action: 'join' | 'leave') => void;
   applyVoiceScreenShare: (streamId: string, userId: string, sharing: boolean) => void;
+  applyVoiceDeafen: (streamId: string, userId: string, deafened: boolean) => void;
   /** Clear hub layout cache + stream UI (logout / account switch). */
   clearSessionCaches: () => void;
 }
@@ -68,6 +72,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
   streamHubMap: {},
   voiceMembers: {},
   voiceScreenSharers: {},
+  voiceDeafenedUsers: {},
   hubLayoutCache: {},
 
   applyHubLayoutOrClear: (hubId) => {
@@ -83,6 +88,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           categories: cached.categories,
           voiceMembers: cached.voiceMembers,
           voiceScreenSharers: cached.voiceScreenSharers ?? {},
+          voiceDeafenedUsers: cached.voiceDeafenedUsers ?? {},
           activeStreamId: null,
           streamHubMap,
         };
@@ -137,6 +143,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           categories,
           voiceMembers: voiceStates,
           voiceScreenSharers: s.voiceScreenSharers,
+          voiceDeafenedUsers: s.voiceDeafenedUsers,
         },
       };
       return { streams, categories, voiceMembers: voiceStates, streamHubMap, hubLayoutCache };
@@ -171,6 +178,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           categories,
           voiceMembers: s.voiceMembers,
           voiceScreenSharers: s.voiceScreenSharers,
+          voiceDeafenedUsers: s.voiceDeafenedUsers,
         },
       };
       return { streams, categories, streamHubMap, hubLayoutCache };
@@ -244,6 +252,8 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       delete voiceMembers[streamId];
       const voiceScreenSharers = { ...s.voiceScreenSharers };
       delete voiceScreenSharers[streamId];
+      const voiceDeafenedUsers = { ...s.voiceDeafenedUsers };
+      delete voiceDeafenedUsers[streamId];
       let activeStreamId = s.activeStreamId;
       if (activeStreamId === streamId) activeStreamId = null;
       const hubLayoutCache = { ...s.hubLayoutCache };
@@ -259,6 +269,9 @@ export const useStreamStore = create<StreamState>((set, get) => ({
           voiceScreenSharers: Object.fromEntries(
             Object.entries(prev.voiceScreenSharers ?? {}).filter(([k]) => k !== streamId),
           ),
+          voiceDeafenedUsers: Object.fromEntries(
+            Object.entries(prev.voiceDeafenedUsers ?? {}).filter(([k]) => k !== streamId),
+          ),
         };
       }
       return {
@@ -268,6 +281,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         streamHubMap,
         voiceMembers,
         voiceScreenSharers,
+        voiceDeafenedUsers,
         activeStreamId,
         hubLayoutCache,
       };
@@ -518,7 +532,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         } else {
           next[streamId] = filtered;
         }
-        // Also clear screen share state for this user
+        // Also clear screen share and deafen state for this user
         const sharers = (s.voiceScreenSharers[streamId] || []).filter((id) => id !== userId);
         const nextSharers = { ...s.voiceScreenSharers };
         if (sharers.length === 0) {
@@ -526,7 +540,14 @@ export const useStreamStore = create<StreamState>((set, get) => ({
         } else {
           nextSharers[streamId] = sharers;
         }
-        return { voiceMembers: next, voiceScreenSharers: nextSharers };
+        const deafened = (s.voiceDeafenedUsers[streamId] || []).filter((id) => id !== userId);
+        const nextDeafened = { ...s.voiceDeafenedUsers };
+        if (deafened.length === 0) {
+          delete nextDeafened[streamId];
+        } else {
+          nextDeafened[streamId] = deafened;
+        }
+        return { voiceMembers: next, voiceScreenSharers: nextSharers, voiceDeafenedUsers: nextDeafened };
       }
     });
   },
@@ -550,6 +571,25 @@ export const useStreamStore = create<StreamState>((set, get) => ({
     });
   },
 
+  applyVoiceDeafen: (streamId, userId, deafened) => {
+    set((s) => {
+      const current = s.voiceDeafenedUsers[streamId] || [];
+      if (deafened) {
+        if (current.includes(userId)) return s;
+        return { voiceDeafenedUsers: { ...s.voiceDeafenedUsers, [streamId]: [...current, userId] } };
+      } else {
+        const filtered = current.filter((id) => id !== userId);
+        const next = { ...s.voiceDeafenedUsers };
+        if (filtered.length === 0) {
+          delete next[streamId];
+        } else {
+          next[streamId] = filtered;
+        }
+        return { voiceDeafenedUsers: next };
+      }
+    });
+  },
+
   clearSessionCaches: () => {
     set({
       streams: [],
@@ -560,6 +600,7 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       streamHubMap: {},
       voiceMembers: {},
       voiceScreenSharers: {},
+      voiceDeafenedUsers: {},
       hubLayoutCache: {},
     });
   },

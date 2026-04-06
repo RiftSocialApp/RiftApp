@@ -206,6 +206,11 @@ export function useWebSocket() {
             useStreamStore.getState().applyVoiceScreenShare(stream_id, user_id, sharing);
             break;
           }
+          case 'voice_deafen_update': {
+            const { stream_id, user_id, deafened } = evt.d as { stream_id: string; user_id: string; deafened: boolean };
+            useStreamStore.getState().applyVoiceDeafen(stream_id, user_id, deafened);
+            break;
+          }
           case 'voice_speaking_update': {
             const { user_id, speaking } = evt.d as { stream_id: string; user_id: string; speaking: boolean };
             useVoiceStore.getState().applySpeakingSignal(user_id, speaking);
