@@ -6,7 +6,7 @@ const NOISE_FLOOR_RISE_SMOOTHING = 0.05;
 const NOISE_FLOOR_FALL_SMOOTHING = 0.012;
 
 export const DEFAULT_MANUAL_MIC_THRESHOLD = 0.025;
-export const DEFAULT_MIC_GATE_RELEASE_MS = 90;
+export const DEFAULT_MIC_GATE_RELEASE_MS = 30;
 
 export interface MicNoiseGateSettings {
   automaticSensitivity: boolean;

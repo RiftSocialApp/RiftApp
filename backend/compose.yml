@@ -43,23 +43,13 @@ services:
   livekit:
     image: livekit/livekit-server:latest
     restart: unless-stopped
+    network_mode: host
     command: --config /etc/livekit.yaml --bind 0.0.0.0
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}"
-    ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "3478:3478/udp"
-      - "5349:5349"
-      - "50000-60000:50000-60000/udp"
     configs:
       - source: livekit_config
         target: /etc/livekit.yaml
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:7880"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
 
   backend:
     image: ghcr.io/skila1/riftapp/backend:latest
@@ -84,8 +74,6 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_healthy
-      livekit:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/api/health"]
@@ -124,9 +112,3 @@ configs:
         min_percentile: 1
         update_interval: 400
         smooth_intervals: 2
-
-      turn:
-        enabled: true
-        domain: livekit.riftapp.io
-        tls_port: 5349
-        udp_port: 3478

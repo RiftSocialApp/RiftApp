@@ -161,6 +161,11 @@ export default function VoiceBottomBar() {
   const voiceConnecting = useVoiceStore((s) => s.connecting);
   const voiceIsMuted = useVoiceStore((s) => s.isMuted);
   const voiceIsDeafened = useVoiceStore((s) => s.isDeafened);
+  const voiceIsSpeaking = useVoiceStore((s) => {
+    if (!s.connected || !user) return false;
+    const p = s.participants.find((p) => p.identity === user.id);
+    return p?.isSpeaking ?? false;
+  });
   const voiceIsCameraOn = useVoiceStore((s) => s.isCameraOn);
   const voiceIsScreenSharing = useVoiceStore((s) => s.isScreenSharing);
   const voiceToggleMute = useVoiceStore((s) => s.toggleMute);
@@ -334,7 +339,9 @@ export default function VoiceBottomBar() {
           title="View Profile"
         >
           <div className="relative flex-shrink-0">
-            <div className="w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center text-xs font-semibold text-white overflow-hidden">
+            <div className={`w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center text-xs font-semibold text-white overflow-hidden ${
+              voiceIsSpeaking ? 'ring-2 ring-riftapp-success ring-offset-1 ring-offset-[#232428]' : ''
+            }`}>
               {user.avatar_url ? (
                 <img src={publicAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
               ) : (
