@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import { useAppSettingsStore } from './stores/appSettingsStore';
+import TitleBar from './components/layout/TitleBar';
 
 const AuthPage = lazy(() => import('./components/auth/AuthPage'));
 const AppLayout = lazy(() => import('./components/layout/AppLayout'));
@@ -69,9 +70,12 @@ export default function App() {
   }, [closeSettings, isAuthenticated, settingsOpen]);
 
   return (
+    <div className="flex flex-col h-screen overflow-hidden">
+      <TitleBar />
+      <div className="flex-1 min-h-0">
     <BrowserRouter>
       <Suspense fallback={
-        <div className="h-screen flex items-center justify-center bg-riftapp-bg">
+        <div className="h-full flex items-center justify-center bg-riftapp-bg">
           <div className="text-center">
             <h1 className="text-3xl font-bold text-riftapp-accent mb-4 font-display tracking-tight">riftapp</h1>
             <div className="w-8 h-8 border-2 border-riftapp-accent border-t-transparent rounded-full animate-spin mx-auto" />
@@ -92,5 +96,7 @@ export default function App() {
         {settingsOpen && isAuthenticated && <SettingsModal />}
       </Suspense>
     </BrowserRouter>
+      </div>
+    </div>
   );
 }
