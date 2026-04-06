@@ -24,7 +24,9 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
 
-    let res = await fetch(`${BASE}${path}`, { ...options, headers });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    let res = await fetch(`${BASE}${path}`, { ...options, headers, signal: controller.signal }).finally(() => clearTimeout(timer));
 
     if (res.status === 401 && this.refreshTokenValue && !path.includes('/auth/')) {
       const refreshed = await this.tryRefresh();
@@ -255,11 +257,23 @@ class ApiClient {
   playSoundboard(hubId: string, soundId: string) { return this.request<{ status: string }>(`/hubs/${hubId}/sounds/${soundId}/play`, { method: 'POST' }); }
 
   async uploadFile(file: File): Promise<Attachment> {
-    const formData = new FormData();
-    formData.append('file', file);
-    const headers: Record<string, string> = {};
-    if (this.token) { headers['Authorization'] = `Bearer ${this.token}`; }
-    const res = await fetch(`${BASE}/upload`, { method: 'POST', headers, body: formData });
+    const doUpload = async (): Promise<Response> => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const headers: Record<string, string> = {};
+      if (this.token) { headers['Authorization'] = `Bearer ${this.token}`; }
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 60000);
+      return fetch(`${BASE}/upload`, { method: 'POST', headers, body: formData, signal: controller.signal }).finally(() => clearTimeout(timer));
+    };
+
+    let res = await doUpload();
+    if (res.status === 401 && this.refreshTokenValue) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        res = await doUpload();
+      }
+    }
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || 'Upload failed');
     return body.data as Attachment;

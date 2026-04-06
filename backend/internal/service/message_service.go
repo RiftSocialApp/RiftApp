@@ -110,7 +110,11 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 	s.hub.BroadcastToStream(streamID, evt, "")
 
 	if s.notifSvc != nil && input.Content != "" {
-		go s.createMentionNotifications(ctx, msg, hubID, streamID, userID, author)
+		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		go func() {
+			defer cancel()
+			s.createMentionNotifications(notifCtx, msg, hubID, streamID, userID, author)
+		}()
 	}
 
 	return msg, nil
@@ -310,7 +314,11 @@ func (s *MessageService) createMentionNotifications(ctx context.Context, msg *mo
 			continue
 		}
 		mID, hID, sID, aID := msg.ID, hubID, streamID, authorID
-		go s.notifSvc.Create(mentionedID, "mention", title, &bodyStr, &mID, &hID, &sID, &aID)
+		go func() {
+			mentionCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			s.notifSvc.Create(mentionCtx, mentionedID, "mention", title, &bodyStr, &mID, &hID, &sID, &aID)
+		}()
 	}
 }
 

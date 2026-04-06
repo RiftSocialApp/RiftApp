@@ -3,6 +3,7 @@ package user
 import (
 	"context"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -67,22 +68,22 @@ func (r *Repo) UpdateProfile(ctx context.Context, id string, updates ProfileUpda
 	argIdx := 3
 
 	if updates.Username != nil {
-		setClauses += `, username = $` + itoa(argIdx)
+		setClauses += `, username = $` + strconv.Itoa(argIdx)
 		args = append(args, *updates.Username)
 		argIdx++
 	}
 	if updates.DisplayName != nil {
-		setClauses += `, display_name = $` + itoa(argIdx)
+		setClauses += `, display_name = $` + strconv.Itoa(argIdx)
 		args = append(args, *updates.DisplayName)
 		argIdx++
 	}
 	if updates.AvatarURL != nil {
-		setClauses += `, avatar_url = $` + itoa(argIdx)
+		setClauses += `, avatar_url = $` + strconv.Itoa(argIdx)
 		args = append(args, *updates.AvatarURL)
 		argIdx++
 	}
 	if updates.Bio != nil {
-		setClauses += `, bio = $` + itoa(argIdx)
+		setClauses += `, bio = $` + strconv.Itoa(argIdx)
 		args = append(args, *updates.Bio)
 		argIdx++
 	}
@@ -109,13 +110,6 @@ func (r *Repo) UsernameExists(ctx context.Context, username string, excludeUserI
 		username, excludeUserID,
 	).Scan(&exists)
 	return exists, err
-}
-
-func itoa(n int) string {
-	if n < 10 {
-		return string(rune('0' + n))
-	}
-	return itoa(n/10) + string(rune('0'+n%10))
 }
 
 // SetStatus updates a user's status (0=offline, 1=online, 2=idle, 3=dnd).

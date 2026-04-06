@@ -180,9 +180,14 @@ func (s *DMService) SendMessage(ctx context.Context, convID, userID string, inpu
 
 	if s.notifSvc != nil && author != nil {
 		for _, recipientID := range others {
+			rid := recipientID
 			title := author.DisplayName + " sent you a message"
 			bodyStr := input.Content
-			go s.notifSvc.Create(recipientID, "dm", title, &bodyStr, &msg.ID, nil, nil, &userID)
+			notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			go func() {
+				defer cancel()
+				s.notifSvc.Create(notifCtx, rid, "dm", title, &bodyStr, &msg.ID, nil, nil, &userID)
+			}()
 		}
 	}
 

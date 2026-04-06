@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -91,17 +92,17 @@ func (r *HubRepo) Update(ctx context.Context, hubID string, name *string, iconUR
 	argIdx := 2
 
 	if name != nil {
-		setClauses = append(setClauses, "name = $"+itoa(argIdx))
+		setClauses = append(setClauses, "name = $"+strconv.Itoa(argIdx))
 		args = append(args, *name)
 		argIdx++
 	}
 	if iconURL != nil {
-		setClauses = append(setClauses, "icon_url = $"+itoa(argIdx))
+		setClauses = append(setClauses, "icon_url = $"+strconv.Itoa(argIdx))
 		args = append(args, *iconURL)
 		argIdx++
 	}
 	if bannerURL != nil {
-		setClauses = append(setClauses, "banner_url = $"+itoa(argIdx))
+		setClauses = append(setClauses, "banner_url = $"+strconv.Itoa(argIdx))
 		args = append(args, *bannerURL)
 		argIdx++
 	}
@@ -130,9 +131,12 @@ func (r *HubRepo) Update(ctx context.Context, hubID string, name *string, iconUR
 
 func (r *HubRepo) IsMember(ctx context.Context, hubID, userID string) bool {
 	var exists bool
-	r.db.QueryRow(ctx,
+	err := r.db.QueryRow(ctx,
 		`SELECT EXISTS(SELECT 1 FROM hub_members WHERE hub_id = $1 AND user_id = $2)`,
 		hubID, userID).Scan(&exists)
+	if err != nil {
+		return false
+	}
 	return exists
 }
 
@@ -221,11 +225,4 @@ func (r *HubRepo) GetDB() *pgxpool.Pool {
 
 func (r *HubRepo) BeginTx(ctx context.Context) (pgx.Tx, error) {
 	return r.db.Begin(ctx)
-}
-
-func itoa(n int) string {
-	if n < 10 {
-		return string(rune('0' + n))
-	}
-	return itoa(n/10) + string(rune('0'+n%10))
 }

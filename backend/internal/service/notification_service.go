@@ -33,12 +33,10 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) er
 	return s.notifRepo.MarkAllRead(ctx, userID)
 }
 
-func (s *NotificationService) Create(userID, ntype, title string, body, referenceID, hubID, streamID, actorID *string) {
+func (s *NotificationService) Create(ctx context.Context, userID, ntype, title string, body, referenceID, hubID, streamID, actorID *string) {
 	if actorID != nil && *actorID == userID {
 		return
 	}
-
-	ctx := context.Background()
 
 	if referenceID != nil {
 		exists, _ := s.notifRepo.ExistsByReference(ctx, userID, ntype, *referenceID)

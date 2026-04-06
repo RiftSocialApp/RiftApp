@@ -179,8 +179,8 @@ func (s *Service) RefreshTokens(ctx context.Context, refreshToken string) (*Auth
 
 func (s *Service) Logout(ctx context.Context, refreshToken string) error {
 	tokenHash := hashToken(refreshToken)
-	s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash)
-	return nil
+	_, err := s.db.Exec(ctx, `DELETE FROM refresh_tokens WHERE token_hash = $1`, tokenHash)
+	return err
 }
 
 func (s *Service) ValidateToken(token string) (*Claims, error) {

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strings"
 )
@@ -22,7 +23,7 @@ type Config struct {
 }
 
 func Load() *Config {
-	return &Config{
+	cfg := &Config{
 		Port:           getEnv("PORT", "8080"),
 		DatabaseURL:    getEnv("DATABASE_URL", "postgres://riftapp:riftapp_dev@localhost:5432/riftapp?sslmode=disable"),
 		RedisURL:       getEnv("REDIS_URL", "redis://localhost:6379"),
@@ -37,6 +38,13 @@ func Load() *Config {
 		LiveKitKey:     getEnv("LIVEKIT_API_KEY", "devkey"),
 		LiveKitSecret:  getEnv("LIVEKIT_API_SECRET", "devsecret"),
 	}
+	if cfg.JWTSecret == "dev-secret-change-me" {
+		log.Println("WARNING: JWT_SECRET is set to the default dev value. Set a strong secret in production.")
+	}
+	if cfg.LiveKitKey == "devkey" || cfg.LiveKitSecret == "devsecret" {
+		log.Println("WARNING: LiveKit API key/secret are set to default dev values. Set real credentials in production.")
+	}
+	return cfg
 }
 
 func getEnv(key, fallback string) string {

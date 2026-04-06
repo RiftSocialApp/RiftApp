@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -75,22 +76,22 @@ func (r *RankRepo) Update(ctx context.Context, rankID string, name *string, colo
 	argIdx := 2
 
 	if name != nil {
-		setClauses = append(setClauses, "name = $"+itoa(argIdx))
+		setClauses = append(setClauses, "name = $"+strconv.Itoa(argIdx))
 		args = append(args, *name)
 		argIdx++
 	}
 	if color != nil {
-		setClauses = append(setClauses, "color = $"+itoa(argIdx))
+		setClauses = append(setClauses, "color = $"+strconv.Itoa(argIdx))
 		args = append(args, *color)
 		argIdx++
 	}
 	if permissions != nil {
-		setClauses = append(setClauses, "permissions = $"+itoa(argIdx))
+		setClauses = append(setClauses, "permissions = $"+strconv.Itoa(argIdx))
 		args = append(args, *permissions)
 		argIdx++
 	}
 	if position != nil {
-		setClauses = append(setClauses, "position = $"+itoa(argIdx))
+		setClauses = append(setClauses, "position = $"+strconv.Itoa(argIdx))
 		args = append(args, *position)
 		argIdx++
 	}

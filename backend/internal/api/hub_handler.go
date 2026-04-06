@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -162,7 +164,11 @@ func (h *HubHandler) JoinViaInvite(w http.ResponseWriter, r *http.Request) {
 	if creatorID != userID && h.notifSvc != nil && hub != nil && h.svc.ShouldDeliverInviteJoinNotif(r.Context(), creatorID, hub.ID) {
 		joinerName, _ := h.notifRepo.GetDisplayName(r.Context(), userID)
 		title := joinerName + " joined " + hub.Name + " via your invite"
-		go h.notifSvc.Create(creatorID, "invite", title, nil, nil, &hub.ID, nil, &userID)
+		go func() {
+			notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			h.notifSvc.Create(notifCtx, creatorID, "invite", title, nil, nil, &hub.ID, nil, &userID)
+		}()
 	}
 
 	writeData(w, http.StatusOK, map[string]interface{}{"status": "joined", "hub": hub})
