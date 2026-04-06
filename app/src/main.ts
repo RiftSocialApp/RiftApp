@@ -15,6 +15,9 @@ const VITE_DEV_URL = "http://localhost:5173";
 const PRODUCTION_WEB_APP_URL = "https://riftapp.io/";
 
 const isDev = process.env.NODE_ENV === "development" || !app.isPackaged;
+const appVersion = app.getVersion();
+
+console.log(`[Rift] v${appVersion} — ${isDev ? "dev" : "production"}`);
 
 app.setAppUserModelId("io.riftapp.desktop");
 
@@ -127,7 +130,7 @@ function createWindow(show: boolean): void {
     frame: false,
     show,
     center: true,
-    title: "Rift",
+    title: `Rift v${appVersion}`,
     icon: getAppIcon(),
     backgroundColor: "#0f1117",
     webPreferences: {
