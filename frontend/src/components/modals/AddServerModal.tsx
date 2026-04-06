@@ -234,7 +234,7 @@ export default function AddServerModal({ onClose }: Props) {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void handleCreate();
                 }}
-                placeholder="Ape Enclosure"
+                placeholder="Enter server name"
                 maxLength={100}
                 className="settings-input text-base"
               />
@@ -259,7 +259,7 @@ export default function AddServerModal({ onClose }: Props) {
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') void handleJoin();
                 }}
-                placeholder="https://riftapp.io/invite/htKzmak"
+                placeholder="Enter invite link or code"
                 maxLength={256}
                 className="settings-input text-base"
               />
@@ -267,7 +267,6 @@ export default function AddServerModal({ onClose }: Props) {
                 <p>Invites can look like:</p>
                 <div className="flex flex-wrap gap-2">
                   <span className="rounded-md bg-riftapp-bg px-2 py-1 text-riftapp-text-muted">htKzmak</span>
-                  <span className="rounded-md bg-riftapp-bg px-2 py-1 text-riftapp-text-muted">discord.gg/htKzmak</span>
                   <span className="rounded-md bg-riftapp-bg px-2 py-1 text-riftapp-text-muted">riftapp.io/invite/htKzmak</span>
                 </div>
               </div>
