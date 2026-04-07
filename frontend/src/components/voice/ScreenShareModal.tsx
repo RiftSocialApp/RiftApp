@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useVoiceStore } from '../../stores/voiceStore';
 import ModalOverlay from '../shared/ModalOverlay';
+import ModalCloseButton from '../shared/ModalCloseButton';
 
 /**
  * Active screen-share panel.
@@ -54,17 +55,7 @@ export default function ScreenShareModal() {
               Sharing {surfaceLabel ?? 'Screen'}
             </h2>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b5bac1] hover:text-white hover:bg-[#404249] transition-colors"
-            title="Close"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <ModalCloseButton onClick={handleClose} size="sm" />
         </div>
 
         {/* Live preview */}

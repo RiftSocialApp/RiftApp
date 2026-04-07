@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import ModalCloseButton from '../shared/ModalCloseButton';
 import { HS, hsTw } from './hubSettingsTokens';
 
 export function SettingsDivider() {
@@ -129,21 +130,7 @@ export function SelectField({
 
 export function CloseButtonEsc({ onClose }: { onClose: () => void }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 shrink-0">
-      <button
-        type="button"
-        onClick={onClose}
-        className="w-9 h-9 rounded-full flex items-center justify-center text-[#b5bac1] hover:text-white hover:bg-[#404249] transition-colors"
-        title="Close (Esc)"
-        aria-label="Close settings"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-          <line x1="18" y1="6" x2="6" y2="18" />
-          <line x1="6" y1="6" x2="18" y2="18" />
-        </svg>
-      </button>
-      <span className="text-[10px] font-bold text-[#949ba4] uppercase tracking-wide">ESC</span>
-    </div>
+    <ModalCloseButton onClick={onClose} title="Close settings" ariaLabel="Close settings" />
   );
 }
 

@@ -10,6 +10,7 @@ import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSe
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
 import type { DesktopBuildInfo } from '../../types/desktop';
+import ModalCloseButton from '@/components/shared/ModalCloseButton';
 
 export type SettingsModalTab = SettingsOverlayTab;
 
@@ -237,17 +238,11 @@ function SettingsModal() {
                   </h2>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
+                  <ModalCloseButton
                     onClick={closeSettings}
-                    className="group flex items-center gap-2 rounded-full border border-riftapp-border/70 bg-riftapp-panel/60 px-3 py-1.5 text-riftapp-text-muted transition-all duration-150 hover:border-riftapp-text-dim hover:bg-riftapp-danger/20 hover:text-white"
-                    title="Close settings (Esc)"
-                  >
-                    <span className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-70 group-hover:opacity-100">Esc</span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <line x1="18" y1="6" x2="6" y2="18" />
-                      <line x1="6" y1="6" x2="18" y2="18" />
-                    </svg>
-                  </button>
+                    title="Close settings"
+                    ariaLabel="Close settings"
+                  />
                 </div>
               </div>
 

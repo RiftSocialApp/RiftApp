@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import type { Hub, Friendship } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import ModalOverlay from '../shared/ModalOverlay';
+import ModalCloseButton from '../shared/ModalCloseButton';
 import StatusDot from '../shared/StatusDot';
 
 interface Props {
@@ -166,14 +167,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
                 Recipients will land in <span className="font-medium text-[#dbdee1]">#{firstChannelName}</span>
               </p>
             </div>
-            <button
-              onClick={onClose}
-              className="text-[#b5bac1] hover:text-white p-1 -mr-1 -mt-1 transition-colors rounded-md hover:bg-white/[0.06]"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+            <ModalCloseButton onClick={onClose} className="-mr-1 -mt-1" />
           </div>
 
           {/* Search */}
@@ -367,14 +361,7 @@ function InviteSettingsModal({
               </p>
             </div>
           </div>
-          <button
-            onClick={onBack}
-            className="text-[#b5bac1] hover:text-white p-1 -mr-1 -mt-1 transition-colors rounded-md hover:bg-white/[0.06]"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <ModalCloseButton onClick={onBack} className="-mr-1 -mt-1" title="Close invite settings" ariaLabel="Close invite settings" />
         </div>
 
         <div className="px-5 pb-5 space-y-4">

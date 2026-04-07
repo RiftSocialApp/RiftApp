@@ -11,6 +11,7 @@ import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
 import { useHubStore } from '../../stores/hubStore';
 import type { HubRole, RelationshipType, User } from '../../types';
+import ModalCloseButton from './ModalCloseButton';
 import StatusDot, { statusLabel } from './StatusDot';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 
@@ -169,17 +170,7 @@ export default function FullProfileModal() {
         transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="h-36 relative" style={{ background: `linear-gradient(135deg, ${accent} 0%, ${accent}99 100%)` }}>
-          <button
-            type="button"
-            onClick={closeModal}
-            className="absolute right-4 top-4 w-9 h-9 rounded-full bg-black/25 text-white hover:bg-black/40 transition-colors flex items-center justify-center"
-            title="Close"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" />
-              <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
+          <ModalCloseButton onClick={closeModal} variant="overlay" className="absolute right-4 top-4" />
           <div className="absolute -bottom-14 left-8">
             <div className="relative w-28 h-28 rounded-full border-[6px] border-riftapp-surface bg-black/20 overflow-hidden flex items-center justify-center">
               {user.avatar_url ? (

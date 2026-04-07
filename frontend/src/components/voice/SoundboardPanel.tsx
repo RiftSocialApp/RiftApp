@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../../api/client';
 import type { HubSound } from '../../types';
+import ModalCloseButton from '../shared/ModalCloseButton';
 
 interface SoundboardPanelProps {
   hubId: string;
@@ -59,16 +60,7 @@ export default function SoundboardPanel({ hubId, onClose }: SoundboardPanelProps
           </svg>
           <span className="text-[13px] font-semibold text-riftapp-text">Soundboard</span>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          className="w-6 h-6 rounded-md flex items-center justify-center text-riftapp-text-dim hover:text-riftapp-text hover:bg-riftapp-surface-hover transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+        <ModalCloseButton onClick={onClose} size="sm" />
       </div>
 
       {/* Error banner */}

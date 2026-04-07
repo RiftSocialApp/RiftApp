@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useStreamStore } from '../../stores/streamStore';
 import ModalOverlay from '../shared/ModalOverlay';
+import ModalCloseButton from '../shared/ModalCloseButton';
 
 interface Props {
   hubId: string;
@@ -34,11 +35,7 @@ export default function CreateCategoryModal({ hubId, onClose }: Props) {
         <div className="px-6 pt-6 pb-4">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold">Create Category</h2>
-            <button onClick={onClose} className="text-riftapp-text-dim hover:text-riftapp-text transition-colors p-1">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+            <ModalCloseButton onClick={onClose} />
           </div>
 
           <label className="text-xs font-bold uppercase tracking-wide text-riftapp-text-dim block mb-2">Category Name</label>

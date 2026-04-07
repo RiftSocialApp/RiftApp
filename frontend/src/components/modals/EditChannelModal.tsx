@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useStreamStore } from '../../stores/streamStore';
 import { useHubStore } from '../../stores/hubStore';
 import ModalOverlay from '../shared/ModalOverlay';
+import ModalCloseButton from '../shared/ModalCloseButton';
 import ConfirmModal from './ConfirmModal';
 import type { Stream, HubRole } from '../../types';
 import { api } from '../../api/client';
@@ -619,17 +620,7 @@ export default function EditChannelModal({ stream, onClose }: Props) {
             <h2 className="text-[18px] font-bold text-[#f2f3f5]">
               {activeTab === 'overview' ? 'Overview' : activeTab === 'permissions' ? 'Channel Permissions' : 'Delete Channel'}
             </h2>
-            <button
-              type="button"
-              onClick={onClose}
-              className="group flex items-center gap-2 rounded-full border border-[#3f4147] bg-transparent px-3 py-1.5 text-[#949ba4] transition-all duration-150 hover:border-[#dbdee1]/40 hover:text-white"
-              title="Close (Esc)"
-            >
-              <span className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-70 group-hover:opacity-100">Esc</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
+            <ModalCloseButton onClick={onClose} title="Close channel settings" ariaLabel="Close channel settings" />
           </div>
 
           {/* Scrollable content */}
