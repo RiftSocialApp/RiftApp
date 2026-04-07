@@ -21,6 +21,44 @@ const emptyDesktopBuildInfo: DesktopBuildInfo = {
   osVersion: '',
 };
 
+function formatDeployAge(deployedAt: string, now: number) {
+  const deployedAtMs = Date.parse(deployedAt);
+  if (Number.isNaN(deployedAtMs)) return '';
+
+  const elapsedMs = Math.max(0, now - deployedAtMs);
+  const elapsedHours = elapsedMs / (60 * 60 * 1000);
+
+  if (elapsedHours >= 24) {
+    return `${Math.max(1, Math.floor(elapsedHours / 24))}D`;
+  }
+
+  if (elapsedHours >= 1) {
+    return `${Math.floor(elapsedHours)}h`;
+  }
+
+  return '<1h';
+}
+
+function formatDesktopOsLabel(info: DesktopBuildInfo) {
+  const archLabel = info.arch ? info.arch.toLowerCase() : '';
+
+  if (info.osVersion) {
+    return archLabel ? `${info.osVersion} (${archLabel})` : info.osVersion;
+  }
+
+  if (!info.platform) return '';
+
+  const platformLabel = info.platform === 'win32'
+    ? 'Windows'
+    : info.platform === 'darwin'
+      ? 'macOS'
+      : info.platform === 'linux'
+        ? 'Linux'
+        : info.platform;
+
+  return archLabel ? `${platformLabel} (${archLabel})` : platformLabel;
+}
+
 function SettingsModal() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -31,6 +69,20 @@ function SettingsModal() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [desktopBuildInfo, setDesktopBuildInfo] = useState<DesktopBuildInfo>(emptyDesktopBuildInfo);
   const [appVersionLabel, setAppVersionLabel] = useState('Web App');
+  const [deployAgeLabel, setDeployAgeLabel] = useState(() => formatDeployAge(__RIFT_DEPLOYED_AT__, Date.now()));
+
+  useEffect(() => {
+    const updateDeployAge = () => {
+      setDeployAgeLabel(formatDeployAge(__RIFT_DEPLOYED_AT__, Date.now()));
+    };
+
+    updateDeployAge();
+    const intervalId = window.setInterval(updateDeployAge, 60 * 1000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -64,6 +116,8 @@ function SettingsModal() {
       setAppVersionLabel('Rift Desktop');
     }
   }, []);
+
+  const desktopOsLabel = formatDesktopOsLabel(desktopBuildInfo);
 
   if (!user) return null;
 
@@ -157,9 +211,9 @@ function SettingsModal() {
                   <p className="mt-1 text-[12px] font-semibold text-riftapp-text">{appVersionLabel}</p>
                   {desktopBuildInfo.electronVersion && (
                     <div className="mt-2 space-y-1 text-[11px] leading-5 text-riftapp-text-muted">
+                      {deployAgeLabel && <p>Deployed {deployAgeLabel}</p>}
                       <p>Electron {desktopBuildInfo.electronVersion}</p>
-                      <p>{desktopBuildInfo.platform} {desktopBuildInfo.arch.toUpperCase()}</p>
-                      <p>{desktopBuildInfo.osVersion}</p>
+                      {desktopOsLabel && <p>{desktopOsLabel}</p>}
                     </div>
                   )}
                 </div>

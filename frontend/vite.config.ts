@@ -10,9 +10,13 @@ const vendorChunks: Record<string, string[]> = {
 };
 
 const electronEmbed = process.env.VITE_ELECTRON_EMBED === '1';
+const deployedAt = new Date().toISOString();
 
 export default defineConfig({
   base: electronEmbed ? './' : '/',
+  define: {
+    __RIFT_DEPLOYED_AT__: JSON.stringify(deployedAt),
+  },
   plugins: [react()],
   resolve: {
     alias: {
