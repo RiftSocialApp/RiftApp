@@ -7,6 +7,7 @@ import {
   ipcMain,
   shell,
 } from "electron";
+import os from "os";
 import path from "path";
 import fs from "fs";
 import { autoUpdater } from "electron-updater";
@@ -240,6 +241,21 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("app:get-version", () => appVersion);
+  ipcMain.handle("app:get-build-info", () => ({
+    appVersion,
+    electronVersion: process.versions.electron ?? "",
+    platform: process.platform === "win32"
+      ? "Windows"
+      : process.platform === "darwin"
+        ? "macOS"
+        : process.platform === "linux"
+          ? "Linux"
+          : process.platform,
+    arch: process.arch,
+    osVersion: process.platform === "win32"
+      ? `${os.version()} (${os.release()})`
+      : os.release(),
+  }));
   ipcMain.handle("app:is-update-ready", () => updateReady);
 
   ipcMain.on("app:restart-to-update", () => {

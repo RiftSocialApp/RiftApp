@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import type { DesktopAPI } from '@/types/desktop';
+import type { DesktopAPI, DesktopBuildInfo } from '@/types/desktop';
 
 function getDesktop(): DesktopAPI | undefined {
   if (typeof window === 'undefined') return undefined;
@@ -17,6 +17,13 @@ function getDesktop(): DesktopAPI | undefined {
       },
       isMaximized: () => d.isMaximized?.() ?? Promise.resolve(false),
       getVersion: () => d.getVersion?.() ?? Promise.resolve(''),
+      getBuildInfo: () => d.getBuildInfo?.() ?? Promise.resolve({
+        appVersion: '',
+        electronVersion: '',
+        platform: '',
+        arch: '',
+        osVersion: '',
+      } satisfies DesktopBuildInfo),
       isUpdateReady: () => d.isUpdateReady?.() ?? Promise.resolve(false),
       onMaximizedChange: (cb) => d.onMaximizedChange?.(cb) ?? (() => {}),
       onUpdateReady: (cb) => d.onUpdateReady?.(cb) ?? (() => {}),
@@ -40,6 +47,13 @@ function getDesktop(): DesktopAPI | undefined {
     },
     isMaximized: () => r.isMaximized(),
     getVersion: async () => '',
+    getBuildInfo: async () => ({
+      appVersion: '',
+      electronVersion: '',
+      platform: '',
+      arch: '',
+      osVersion: '',
+    }),
     isUpdateReady: async () => false,
     onMaximizedChange: r.onMaximizedChange,
     onUpdateReady: () => () => {},

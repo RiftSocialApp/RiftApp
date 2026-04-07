@@ -1,9 +1,18 @@
+export interface DesktopBuildInfo {
+  appVersion: string;
+  electronVersion: string;
+  platform: string;
+  arch: string;
+  osVersion: string;
+}
+
 export interface DesktopAPI {
   minimize: () => void;
   maximize: () => void;
   close: () => void;
   isMaximized: () => Promise<boolean>;
   getVersion: () => Promise<string>;
+  getBuildInfo: () => Promise<DesktopBuildInfo>;
   isUpdateReady: () => Promise<boolean>;
   onMaximizedChange: (cb: (maximized: boolean) => void) => () => void;
   onUpdateReady: (cb: () => void) => () => void;

@@ -12,6 +12,14 @@ const desktop = {
   },
   isMaximized: () => ipcRenderer.invoke("window:is-maximized") as Promise<boolean>,
   getVersion: () => ipcRenderer.invoke("app:get-version") as Promise<string>,
+  getBuildInfo: () =>
+    ipcRenderer.invoke("app:get-build-info") as Promise<{
+      appVersion: string;
+      electronVersion: string;
+      platform: string;
+      arch: string;
+      osVersion: string;
+    }>,
   isUpdateReady: () => ipcRenderer.invoke("app:is-update-ready") as Promise<boolean>,
   onMaximizedChange: (cb: (maximized: boolean) => void) => {
     const handler = (_e: Electron.IpcRendererEvent, v: boolean) => cb(v);

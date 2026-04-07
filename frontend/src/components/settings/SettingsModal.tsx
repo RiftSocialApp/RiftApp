@@ -9,8 +9,17 @@ import { useVoiceStore, type VoiceMediaDevice } from '../../stores/voiceStore';
 import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSettingsStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
+import type { DesktopBuildInfo } from '../../types/desktop';
 
 export type SettingsModalTab = SettingsOverlayTab;
+
+const emptyDesktopBuildInfo: DesktopBuildInfo = {
+  appVersion: '',
+  electronVersion: '',
+  platform: '',
+  arch: '',
+  osVersion: '',
+};
 
 function SettingsModal() {
   const user = useAuthStore((s) => s.user);
@@ -20,10 +29,24 @@ function SettingsModal() {
   const closeSettings = useAppSettingsStore((s) => s.closeSettings);
   const setSettingsTab = useAppSettingsStore((s) => s.setSettingsTab);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [desktopBuildInfo, setDesktopBuildInfo] = useState<DesktopBuildInfo>(emptyDesktopBuildInfo);
   const [appVersionLabel, setAppVersionLabel] = useState('Web App');
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    if (window.desktop && typeof window.desktop.getBuildInfo === 'function') {
+      void window.desktop
+        .getBuildInfo()
+        .then((info) => {
+          setDesktopBuildInfo(info);
+          setAppVersionLabel(info.appVersion ? `Rift Desktop v${info.appVersion}` : 'Rift Desktop');
+        })
+        .catch(() => {
+          setAppVersionLabel('Rift Desktop');
+        });
+      return;
+    }
 
     if (window.desktop && typeof window.desktop.getVersion === 'function') {
       void window.desktop
@@ -53,7 +76,7 @@ function SettingsModal() {
 
   return (
     <ModalOverlay isOpen onClose={closeSettings} backdropClose zIndex={200} className="p-4 md:p-8">
-      <div className="flex h-[min(88vh,820px)] w-full max-w-[1120px] flex-col overflow-hidden rounded-[24px] border border-riftapp-border/40 bg-[#1e1f22] text-riftapp-text shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:flex-row">
+      <div className="flex h-[min(92vh,880px)] w-full max-w-[min(1320px,calc(100vw-2rem))] flex-col overflow-hidden rounded-[28px] border border-riftapp-border/40 bg-[#1e1f22] text-riftapp-text shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:h-[min(90vh,900px)] md:flex-row">
             <nav className="flex w-full shrink-0 flex-col overflow-y-auto border-b border-riftapp-border/40 bg-[#1e1f22] px-4 py-5 md:w-[280px] md:border-b-0 md:border-r md:px-5 md:py-7">
             <div className="mx-auto flex w-full max-w-[232px] flex-col gap-5">
               <div>
@@ -122,16 +145,23 @@ function SettingsModal() {
                   </button>
                 )}
 
-                <div className="mt-4 rounded-xl border border-riftapp-border/30 bg-riftapp-panel/25 px-3 py-2.5">
+                <div className="mt-4 rounded-xl border border-riftapp-border/30 bg-riftapp-panel/25 px-3 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-dim">App Version</p>
-                  <p className="mt-1 text-[12px] font-medium text-riftapp-text-muted">{appVersionLabel}</p>
+                  <p className="mt-1 text-[12px] font-semibold text-riftapp-text">{appVersionLabel}</p>
+                  {desktopBuildInfo.electronVersion && (
+                    <div className="mt-2 space-y-1 text-[11px] leading-5 text-riftapp-text-muted">
+                      <p>Electron {desktopBuildInfo.electronVersion}</p>
+                      <p>{desktopBuildInfo.platform} {desktopBuildInfo.arch.toUpperCase()}</p>
+                      <p>{desktopBuildInfo.osVersion}</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </nav>
 
           <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-[#313338] [contain:content]">
-            <div className="mx-auto flex min-h-full w-full max-w-[920px] flex-col px-6 py-6 md:px-10 md:py-8">
+            <div className="mx-auto flex min-h-full w-full max-w-[1040px] flex-col px-6 py-6 md:px-10 md:py-8 lg:px-12">
               <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-riftapp-border/40 bg-[#313338] px-6 pb-4 pt-1 md:-mx-10 md:px-10 md:pb-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-riftapp-accent">User Settings</p>
