@@ -349,9 +349,12 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     () => message.content ? renderContent(message.content, knownUsernames, handleMentionClick, emojiMap) : null,
     [message.content, knownUsernames, handleMentionClick, emojiMap],
   );
+  const replyTargetId = message.reply_to?.id ?? message.reply_to_message_id ?? null;
+  const hasReplyPreview = Boolean(message.reply_to || message.reply_to_message_id);
+  const replyAuthor = message.reply_to?.author;
   const replyAuthorLabel = useMemo(() => getReplyAuthorLabel(message.reply_to), [message.reply_to]);
   const replyPreview = useMemo(() => getReplyPreviewMeta(message.reply_to), [message.reply_to]);
-  const replyAuthorColor = useMemo(() => nameColor(replyAuthorLabel), [replyAuthorLabel]);
+  const replyAuthorBg = useMemo(() => avatarBg(replyAuthorLabel), [replyAuthorLabel]);
 
   // Detect whether the current user is mentioned in this message
   const mentionsSelf = useMemo(() => {
@@ -361,10 +364,50 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   }, [message.content, currentUsername]);
 
   const handleReplyPreviewClick = useCallback(() => {
-    const replyId = message.reply_to?.id ?? message.reply_to_message_id;
-    if (!replyId) return;
-    jumpToMessageId(replyId);
-  }, [message.reply_to?.id, message.reply_to_message_id]);
+    if (!replyTargetId) return;
+    jumpToMessageId(replyTargetId);
+  }, [replyTargetId]);
+
+  const replyPreviewBlock = hasReplyPreview ? (
+    <button
+      type="button"
+      onClick={handleReplyPreviewClick}
+      disabled={interactionsDisabled || !replyTargetId}
+      className="group/reply mb-0.5 flex max-w-[580px] min-w-0 items-center gap-1.5 pr-2 text-left disabled:cursor-default disabled:opacity-80"
+    >
+      <span
+        aria-hidden
+        className="mt-[9px] h-[10px] w-6 shrink-0 rounded-tl-[6px] border-l-2 border-t-2 border-riftapp-border/35"
+      />
+      <span
+        className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full ${
+          replyAuthor ? replyAuthorBg : 'bg-riftapp-content-elevated text-riftapp-text-dim/75'
+        }`}
+      >
+        {replyAuthor?.avatar_url ? (
+          <img src={publicAssetUrl(replyAuthor.avatar_url)} alt={replyAuthorLabel} className="h-full w-full object-cover" />
+        ) : (
+          <span className={`text-[9px] font-semibold uppercase leading-none ${replyAuthor ? 'text-white/90' : 'text-riftapp-text-dim/75'}`}>
+            {replyAuthor ? replyAuthorLabel.slice(0, 1).toUpperCase() : '?'}
+          </span>
+        )}
+      </span>
+      <span className="max-w-[38%] shrink-0 truncate text-[12px] font-semibold leading-4 text-riftapp-text-dim/90 transition-colors group-hover/reply:text-riftapp-text">
+        {replyAuthorLabel}
+      </span>
+      <span
+        className={`min-w-0 truncate text-[12px] leading-4 transition-colors ${
+          replyPreview.tone === 'default'
+            ? 'text-riftapp-text-dim/75 group-hover/reply:text-riftapp-text-dim'
+            : replyPreview.tone === 'attachment'
+              ? 'text-riftapp-text-dim/65 group-hover/reply:text-riftapp-text-dim/85'
+              : 'text-riftapp-text-dim/55 group-hover/reply:text-riftapp-text-dim/70'
+        }`}
+      >
+        {replyPreview.text}
+      </span>
+    </button>
+  ) : null;
 
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
     if (interactionsDisabled) return;
@@ -538,27 +581,6 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       </div>
     ) : (
       <div className={interactionsDisabled ? 'pointer-events-none' : undefined}>
-        {(message.reply_to || message.reply_to_message_id) && (
-          <button
-            type="button"
-            onClick={handleReplyPreviewClick}
-            disabled={!message.reply_to?.id && !message.reply_to_message_id}
-            className="group/reply mb-1.5 flex max-w-[560px] min-w-0 items-center gap-1.5 pr-2 text-left text-[12px] leading-4 text-riftapp-text-dim/85 transition-colors hover:text-riftapp-text disabled:cursor-default disabled:opacity-80"
-          >
-            <span className={`max-w-[48%] shrink-0 truncate font-semibold ${replyAuthorColor} underline-offset-2 group-hover/reply:underline`}>
-              @{replyAuthorLabel}
-            </span>
-            <span
-              className={`min-w-0 truncate transition-colors ${
-                replyPreview.tone === 'default'
-                  ? 'text-riftapp-text-dim group-hover/reply:text-riftapp-text-muted'
-                  : 'text-riftapp-text-dim/75 group-hover/reply:text-riftapp-text-dim'
-              }`}
-            >
-              {replyPreview.text}
-            </span>
-          </button>
-        )}
         {inlineMedia ? (
           <InlineMediaImage url={inlineMedia.url} type={inlineMedia.type} />
         ) : (
@@ -653,6 +675,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
             )}
           </div>
           <div className="flex-1 min-w-0">
+            {replyPreviewBlock}
             <div className="flex items-baseline gap-2 mb-0.5">
               <span onClick={interactionsDisabled ? undefined : handleProfileClick} onContextMenu={interactionsDisabled ? undefined : handleUserContextMenu} className={`font-semibold text-[15px] ${interactionsDisabled ? '' : 'cursor-pointer hover:underline'} ${isOwn ? 'text-riftapp-accent-hover' : color}`}>
                 {authorName}
@@ -668,7 +691,10 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
           </div>
         </div>
       ) : (
-        <div className="pl-[52px]">{contentBlock}</div>
+        <div className="pl-[52px]">
+          {replyPreviewBlock}
+          {contentBlock}
+        </div>
       )}
 
       {!isPreview && messageMenu && (
