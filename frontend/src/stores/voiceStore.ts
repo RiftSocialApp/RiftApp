@@ -1237,15 +1237,20 @@ function buildParticipants(room: Room): VoiceParticipant[] {
   const speakingSignals = useVoiceStore.getState().speakingSignals;
   const streamId = useVoiceStore.getState().streamId;
   const deafenedUsers = streamId ? (useStreamStore.getState().voiceDeafenedUsers[streamId] ?? []) : [];
-  const toVP = (p: Participant): VoiceParticipant => ({
-    identity: p.identity,
-    isSpeaking: (hasOwnKey(speakingSignals, p.identity) ? speakingSignals[p.identity] : false) || isTransientSpeaking(p.identity) || p.isSpeaking,
+  const toVP = (p: Participant): VoiceParticipant => {
+    const hasExplicitSpeakingSignal = hasOwnKey(speakingSignals, p.identity);
+    const explicitSpeakingSignal = hasExplicitSpeakingSignal ? speakingSignals[p.identity] : false;
+
+    return ({
+      identity: p.identity,
+      isSpeaking: isTransientSpeaking(p.identity) || (hasExplicitSpeakingSignal ? explicitSpeakingSignal : p.isSpeaking),
     isMuted: !p.isMicrophoneEnabled,
     isCameraOn: p.isCameraEnabled,
     isScreenSharing: p.isScreenShareEnabled,
     videoTrack: getTrackForSource(p, Track.Source.Camera),
     screenTrack: getTrackForSource(p, Track.Source.ScreenShare),
-  });
+    });
+  };
   const localVP = toVP(room.localParticipant);
   localVP.isDeafened = useVoiceStore.getState().isDeafened;
   const list: VoiceParticipant[] = [localVP];

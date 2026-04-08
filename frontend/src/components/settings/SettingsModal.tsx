@@ -746,31 +746,31 @@ function useAutomaticVoiceSensitivityMeter({
   const initialThreshold = normalizeMicMeterLevel(estimateAutomaticMicThreshold(AUTO_THRESHOLD_MIN));
   const targetThresholdRef = useRef(initialThreshold);
   const renderedThresholdRef = useRef(initialThreshold);
-  const speakingRef = useRef(false);
+  const aboveThresholdRef = useRef(false);
 
-  const applyIndicatorStyles = useCallback((level: number, threshold: number, speaking: boolean) => {
+  const applyIndicatorStyles = useCallback((level: number, threshold: number, aboveThreshold: boolean) => {
     const fillElement = fillRef.current;
     if (fillElement) {
       fillElement.style.transform = `scaleX(${level.toFixed(4)})`;
       fillElement.style.opacity = level > 0.002 ? '1' : '0';
-      fillElement.style.boxShadow = speaking && level >= threshold
+      fillElement.style.boxShadow = aboveThreshold
         ? '0 0 12px rgba(59,165,93,0.28)'
         : 'none';
-      fillElement.style.backgroundColor = speaking ? 'rgba(72, 183, 106, 0.98)' : 'rgba(59, 165, 93, 0.94)';
+      fillElement.style.backgroundColor = aboveThreshold ? 'rgba(72, 183, 106, 0.98)' : 'rgba(59, 165, 93, 0.92)';
     }
 
     const thresholdElement = thresholdRef.current;
     if (thresholdElement) {
       thresholdElement.style.left = `${(threshold * 100).toFixed(2)}%`;
-      thresholdElement.style.opacity = speaking ? '0.58' : '0.3';
-      thresholdElement.style.boxShadow = speaking ? '0 0 8px rgba(59,165,93,0.18)' : 'none';
+      thresholdElement.style.opacity = aboveThreshold ? '0.58' : '0.32';
+      thresholdElement.style.boxShadow = aboveThreshold ? '0 0 8px rgba(59,165,93,0.18)' : 'none';
     }
   }, [fillRef, thresholdRef]);
 
   const resetIndicator = useCallback(() => {
     targetLevelRef.current = 0;
     renderedLevelRef.current = 0;
-    speakingRef.current = false;
+    aboveThresholdRef.current = false;
     targetThresholdRef.current = initialThreshold;
     renderedThresholdRef.current = initialThreshold;
     applyIndicatorStyles(0, initialThreshold, false);
@@ -791,7 +791,7 @@ function useAutomaticVoiceSensitivityMeter({
     const nextThreshold = Math.min(1, Math.max(0, renderedThresholdRef.current));
     renderedLevelRef.current = nextLevel;
     renderedThresholdRef.current = nextThreshold;
-    applyIndicatorStyles(nextLevel, nextThreshold, speakingRef.current);
+    applyIndicatorStyles(nextLevel, nextThreshold, aboveThresholdRef.current);
 
     if (
       Math.abs(targetLevelRef.current - nextLevel) > 0.0015
@@ -883,11 +883,11 @@ function useAutomaticVoiceSensitivityMeter({
 
               const threshold = normalizeMicMeterLevel(nextMetrics.threshold);
               const liveLevel = normalizeMicMeterLevel(nextMetrics.level);
-              const idleFloor = Math.min(0.08, threshold * 0.45);
+              const idleFloor = 0.01;
 
               targetThresholdRef.current = threshold;
               targetLevelRef.current = liveLevel <= idleFloor ? 0 : liveLevel;
-              speakingRef.current = nextMetrics.aboveThreshold || nextMetrics.speaking;
+              aboveThresholdRef.current = nextMetrics.aboveThreshold;
               scheduleIndicator();
             },
           },
@@ -1037,7 +1037,7 @@ function ManualVoiceSensitivityIndicator({
         />
         <div
           className={`absolute inset-y-0 left-0 rounded-full transition-[width,background-color] duration-75 ${
-            aboveThreshold ? 'bg-[#1f7a46]' : 'bg-[#8d5e1b]'
+            speaking || aboveThreshold ? 'bg-[#1f7a46]' : 'bg-[#8d5e1b]'
           }`}
           style={{ width: `${inputLevelPercent}%` }}
         />
@@ -2104,22 +2104,11 @@ function VoiceVideoSettingsTab() {
                 label="Noise Suppression"
                 description="Reduces background noise from your mic. Powered by RNNoise."
                 control={(
-                  <div className="relative w-[190px] max-w-full">
-                    <select
-                      value={noiseSuppressionEnabled ? 'rnnoise' : 'none'}
-                      onChange={(event) => void setNoiseSuppressionEnabled(event.target.value === 'rnnoise')}
-                      className="h-9 w-full cursor-pointer rounded-[10px] border border-riftapp-border/70 bg-riftapp-surface px-3 pr-10 text-[14px] font-medium text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2]"
-                      aria-label="Noise suppression"
-                    >
-                      <option value="none">None</option>
-                      <option value="rnnoise">RNNoise</option>
-                    </select>
-                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-riftapp-text-muted">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </span>
-                  </div>
+                  <VoiceToggleSwitch
+                    enabled={noiseSuppressionEnabled}
+                    onToggle={() => void setNoiseSuppressionEnabled(!noiseSuppressionEnabled)}
+                    ariaLabel="Noise suppression"
+                  />
                 )}
               />
 
