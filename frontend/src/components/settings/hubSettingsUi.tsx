@@ -3,12 +3,12 @@ import ModalCloseButton from '../shared/ModalCloseButton';
 import { HS, hsTw } from './hubSettingsTokens';
 
 export function SettingsDivider() {
-  return <div className="h-px bg-[#3f4147] my-5" role="separator" />;
+  return <div className="my-5 h-px bg-riftapp-border/60" role="separator" />;
 }
 
 export function InfoBanner({ children, action }: { children: ReactNode; action?: { label: string; onClick?: () => void } }) {
   return (
-    <div className="rounded-lg border border-[#0068da]/40 bg-[#0068da]/12 px-4 py-3 text-[13px] text-[#dbdee1] flex flex-wrap items-start justify-between gap-2">
+    <div className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-[#0068da]/40 bg-[#0068da]/12 px-4 py-3 text-[13px] text-riftapp-text">
       <div className="min-w-0">{children}</div>
       {action && (
         <button type="button" onClick={action.onClick} className="text-[#00a8fc] font-medium hover:underline shrink-0">
@@ -43,7 +43,7 @@ export function ToggleRow({
             <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-[#5865f2] text-white">{badge}</span>
           )}
         </div>
-        {description && <p className="text-[13px] text-[#b5bac1] mt-1 leading-snug">{description}</p>}
+        {description && <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">{description}</p>}
       </div>
       <button
         type="button"
@@ -86,7 +86,7 @@ export function RadioRow({
         {checked && <span className="w-2.5 h-2.5 rounded-full bg-[#5865f2]" />}
       </span>
       <input type="radio" name={name} className="sr-only" checked={checked} onChange={onChange} />
-      <span className="text-[15px] text-[#dbdee1]">{label}</span>
+      <span className="text-[15px] text-riftapp-text">{label}</span>
     </label>
   );
 }
@@ -108,14 +108,14 @@ export function SelectField({
     <div className="space-y-2">
       {(label || description) && (
         <div>
-          {label ? <p className="text-[12px] font-bold uppercase tracking-wider text-[#b5bac1]">{label}</p> : null}
-          {description && <p className="text-[13px] text-[#949ba4] mt-1">{description}</p>}
+          {label ? <p className="text-[12px] font-bold uppercase tracking-wider text-riftapp-text-muted">{label}</p> : null}
+          {description && <p className="mt-1 text-[13px] text-riftapp-text-dim">{description}</p>}
         </div>
       )}
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full max-w-md px-3 py-2.5 rounded-[4px] bg-[#1e1f22] text-[#dbdee1] text-[13px] border border-[#1e1f22] focus:outline-none focus:ring-1 focus:ring-[#5865f2] appearance-none cursor-pointer"
+        className="w-full max-w-md cursor-pointer appearance-none rounded-[4px] border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-[13px] text-riftapp-text focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
         style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23949ba4' viewBox='0 0 24 24'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center', paddingRight: '36px' }}
       >
         {options.map((o) => (
@@ -180,11 +180,11 @@ export function EmptyStateBlock({
 }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
-      <div className="w-28 h-28 rounded-2xl bg-[#2b2d31] border border-[#1e1f22] mb-6 flex items-center justify-center opacity-90">
+      <div className="mb-6 flex h-28 w-28 items-center justify-center rounded-2xl border border-riftapp-border/60 bg-riftapp-panel opacity-90">
         <div className="grid grid-cols-3 gap-1 text-lg grayscale opacity-60 select-none">😀👻👑😈💀🎭</div>
       </div>
-      <p className="text-[15px] font-bold text-[#949ba4] uppercase tracking-wide mb-2">{title}</p>
-      <p className="text-[13px] text-[#949ba4] max-w-sm leading-relaxed mb-6">{subtitle}</p>
+      <p className="mb-2 text-[15px] font-bold uppercase tracking-wide text-riftapp-text-dim">{title}</p>
+      <p className="mb-6 max-w-sm text-[13px] leading-relaxed text-riftapp-text-dim">{subtitle}</p>
       {action}
     </div>
   );

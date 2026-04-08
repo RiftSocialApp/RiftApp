@@ -7,17 +7,26 @@ import {
   AudioPresets,
   ScreenSharePresets,
   type AudioCaptureOptions,
+  type VideoCaptureOptions,
   type RemoteParticipant,
   type RemoteTrack,
   type RemoteTrackPublication,
   type LocalTrackPublication,
+  type LocalVideoTrack,
   type Participant,
   ConnectionQuality,
   ConnectionState,
 } from 'livekit-client';
+import {
+  BackgroundProcessor,
+  supportsBackgroundProcessors,
+  type BackgroundProcessorWrapper,
+  type SwitchBackgroundProcessorOptions,
+} from '@livekit/track-processors';
 import { api } from '../api/client';
 import { wsSend } from '../hooks/useWebSocket';
 import { useStreamStore } from './streamStore';
+import { publicAssetUrl } from '../utils/publicAssetUrl';
 import {
   DEFAULT_MANUAL_MIC_THRESHOLD,
   DEFAULT_MIC_GATE_RELEASE_MS,
@@ -48,6 +57,7 @@ const SPEAKING_BROADCAST_INTERVAL_MS = 30;
 const CONNECTION_STATS_POLL_INTERVAL_MS = 1000;
 const MANUAL_INPUT_SENSITIVITY_MIN = 0;
 const MANUAL_INPUT_SENSITIVITY_MAX = 0.08;
+const CAMERA_BACKGROUND_BLUR_RADIUS = 12;
 
 type VoiceConnectionTone = 'good' | 'medium' | 'bad' | 'neutral';
 type VoiceConnectionSource = 'webrtc' | 'livekit' | 'unknown';
@@ -339,14 +349,110 @@ function micAudioCaptureOptions(
   return base;
 }
 
-function cameraCaptureOptions(cameraDeviceId: string | null) {
+function resolveCameraBackgroundImagePath(asset: CameraBackgroundAsset | null) {
+  if (!asset || asset.kind === 'video') {
+    return null;
+  }
+
+  const rawPath = asset.kind === 'image' ? asset.url : asset.previewUrl ?? asset.url;
+  const resolvedPath = publicAssetUrl(rawPath).trim();
+  return resolvedPath.length > 0 ? resolvedPath : null;
+}
+
+function cameraBackgroundProcessorOptions(
+  state: Pick<VoiceStore, 'cameraBackgroundMode' | 'cameraBackgroundAsset'>,
+): SwitchBackgroundProcessorOptions {
+  if (state.cameraBackgroundMode === 'blur') {
+    return {
+      mode: 'background-blur',
+      blurRadius: CAMERA_BACKGROUND_BLUR_RADIUS,
+    };
+  }
+
+  if (state.cameraBackgroundMode === 'custom') {
+    const imagePath = resolveCameraBackgroundImagePath(state.cameraBackgroundAsset);
+    if (imagePath) {
+      return {
+        mode: 'virtual-background',
+        imagePath,
+      };
+    }
+  }
+
+  return { mode: 'disabled' };
+}
+
+function createCameraBackgroundProcessor(
+  state: Pick<VoiceStore, 'cameraBackgroundMode' | 'cameraBackgroundAsset'>,
+): BackgroundProcessorWrapper | undefined {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return undefined;
+  }
+
+  if (!supportsBackgroundProcessors()) {
+    return undefined;
+  }
+
+  try {
+    return BackgroundProcessor(cameraBackgroundProcessorOptions(state), 'rift-camera-background');
+  } catch (error) {
+    console.warn('Unable to create camera background processor.', error);
+    return undefined;
+  }
+}
+
+function getLocalCameraTrack(room: Room): LocalVideoTrack | null {
+  const publication = room.localParticipant.getTrackPublication(Track.Source.Camera) as LocalTrackPublication | undefined;
+  return publication?.videoTrack ?? null;
+}
+
+function isBackgroundProcessorWrapper(value: unknown): value is BackgroundProcessorWrapper {
+  return typeof value === 'object'
+    && value !== null
+    && 'switchTo' in value
+    && typeof (value as { switchTo?: unknown }).switchTo === 'function';
+}
+
+async function syncLocalCameraBackground(
+  room: Room,
+  state: Pick<VoiceStore, 'cameraBackgroundMode' | 'cameraBackgroundAsset'> = useVoiceStore.getState(),
+) {
+  const cameraTrack = getLocalCameraTrack(room);
+  if (!cameraTrack) {
+    return;
+  }
+
+  const desiredOptions = cameraBackgroundProcessorOptions(state);
+  const existingProcessor = cameraTrack.getProcessor();
+
+  if (isBackgroundProcessorWrapper(existingProcessor)) {
+    await existingProcessor.switchTo(desiredOptions);
+    return;
+  }
+
+  if (desiredOptions.mode === 'disabled') {
+    return;
+  }
+
+  const processor = createCameraBackgroundProcessor(state);
+  if (!processor) {
+    return;
+  }
+
+  await cameraTrack.setProcessor(processor);
+}
+
+function cameraCaptureOptions(
+  state: Pick<VoiceStore, 'cameraDeviceId' | 'cameraBackgroundMode' | 'cameraBackgroundAsset'>,
+): VideoCaptureOptions {
   return {
-    deviceId: cameraDeviceId ?? undefined,
+    deviceId: state.cameraDeviceId ?? undefined,
     resolution: {
       width: 2560,
       height: 1440,
       frameRate: 60,
     },
+    processor: createCameraBackgroundProcessor(state),
   };
 }
 
@@ -1207,7 +1313,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       const room = new Room({
         adaptiveStream: true,
         dynacast: true,
-        videoCaptureDefaults: cameraCaptureOptions(voiceState.cameraDeviceId),
+        videoCaptureDefaults: cameraCaptureOptions(voiceState),
         audioCaptureDefaults: micAudioCaptureOptions(voiceState),
         publishDefaults: {
           videoEncoding: {
@@ -1344,10 +1450,14 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   toggleCamera: async () => {
     if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
     const wasEnabled = roomRef.localParticipant.isCameraEnabled;
+    const currentState = get();
     await roomRef.localParticipant.setCameraEnabled(
       !wasEnabled,
-      !wasEnabled ? cameraCaptureOptions(get().cameraDeviceId) : undefined,
+      !wasEnabled ? cameraCaptureOptions(currentState) : undefined,
     );
+    if (!wasEnabled) {
+      await syncLocalCameraBackground(roomRef, currentState);
+    }
     set({ isCameraOn: !wasEnabled });
     syncParticipants();
   },
@@ -1557,9 +1667,16 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     set(nextState);
     persistVoiceSettingsFromStore({ ...current, ...nextState });
 
-    if (roomRef?.state === ConnectionState.Connected && roomRef.localParticipant.isCameraEnabled) {
-      await roomRef.localParticipant.setCameraEnabled(false);
-      await roomRef.localParticipant.setCameraEnabled(true, cameraCaptureOptions(nextDeviceId));
+    const room = roomRef;
+    if (room?.state === ConnectionState.Connected && room.localParticipant.isCameraEnabled) {
+      const nextCameraState = {
+        cameraDeviceId: nextDeviceId,
+        cameraBackgroundMode: current.cameraBackgroundMode,
+        cameraBackgroundAsset: current.cameraBackgroundAsset,
+      };
+      await room.localParticipant.setCameraEnabled(false);
+      await room.localParticipant.setCameraEnabled(true, cameraCaptureOptions(nextCameraState));
+      await syncLocalCameraBackground(room, nextCameraState);
       syncParticipants();
     }
   },
@@ -1668,6 +1785,17 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     };
     set(nextState);
     persistVoiceSettingsFromStore({ ...current, ...nextState });
+
+    const room = roomRef;
+    if (room?.state === ConnectionState.Connected && room.localParticipant.isCameraEnabled) {
+      const nextBackgroundState = {
+        cameraBackgroundMode: nextState.cameraBackgroundMode,
+        cameraBackgroundAsset: nextState.cameraBackgroundAsset,
+      };
+      void syncLocalCameraBackground(room, nextBackgroundState).catch((error) => {
+        console.warn('Unable to refresh camera background mode.', error);
+      });
+    }
   },
 
   setCameraBackgroundAsset: (asset) => {
@@ -1678,6 +1806,17 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     };
     set(nextState);
     persistVoiceSettingsFromStore({ ...current, ...nextState });
+
+    const room = roomRef;
+    if (room?.state === ConnectionState.Connected && room.localParticipant.isCameraEnabled) {
+      const nextBackgroundState = {
+        cameraBackgroundMode: nextState.cameraBackgroundMode,
+        cameraBackgroundAsset: nextState.cameraBackgroundAsset,
+      };
+      void syncLocalCameraBackground(room, nextBackgroundState).catch((error) => {
+        console.warn('Unable to refresh camera background asset.', error);
+      });
+    }
   },
 
   moveToStream: async (sid) => {

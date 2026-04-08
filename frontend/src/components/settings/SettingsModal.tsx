@@ -144,8 +144,8 @@ function SettingsModal() {
       className="p-3 md:p-5"
       contentClassName="w-full max-w-[1400px]"
     >
-      <div className="flex h-[min(94vh,920px)] w-full flex-col overflow-hidden rounded-[28px] border border-riftapp-border/40 bg-[#1e1f22] text-riftapp-text shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:h-[min(92vh,940px)] md:flex-row">
-        <nav className="flex w-full shrink-0 flex-col overflow-y-auto border-b border-riftapp-border/40 bg-[#1e1f22] px-5 py-5 md:w-[320px] md:border-b-0 md:border-r md:px-6 md:py-7">
+      <div className="flex h-[min(94vh,920px)] w-full flex-col overflow-hidden rounded-[28px] border border-riftapp-border/50 bg-riftapp-bg-alt text-riftapp-text shadow-[0_24px_80px_rgba(0,0,0,0.45)] md:h-[min(92vh,940px)] md:flex-row">
+        <nav className="flex w-full shrink-0 flex-col overflow-y-auto border-b border-riftapp-border/50 bg-riftapp-bg-alt px-5 py-5 md:w-[320px] md:border-b-0 md:border-r md:px-6 md:py-7">
           <div className="mx-auto flex w-full max-w-[232px] flex-col gap-5">
               <div>
                 <h3 className="section-label px-2 mb-3">User Settings</h3>
@@ -228,9 +228,9 @@ function SettingsModal() {
             </div>
           </nav>
 
-          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-[#313338] [contain:content]">
+          <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-riftapp-panel [contain:content]">
             <div className="mx-auto flex min-h-full w-full max-w-[1180px] flex-col px-6 py-6 md:px-10 md:py-8 lg:px-14">
-              <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-riftapp-border/40 bg-[#313338] px-6 pb-4 pt-1 md:-mx-10 md:px-10 md:pb-5">
+              <div className="sticky top-0 z-10 -mx-6 mb-6 flex items-center justify-between border-b border-riftapp-border/50 bg-riftapp-panel/95 px-6 pb-4 pt-1 backdrop-blur md:-mx-10 md:px-10 md:pb-5">
                 <div>
                   <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-riftapp-accent">User Settings</p>
                   <h2 className="mt-2 text-[26px] font-black tracking-tight text-white">
@@ -435,9 +435,10 @@ function backgroundModeDescription(mode: CameraBackgroundMode, asset: CameraBack
     if (asset?.source === 'tenor') {
       return 'Animated background selected from Tenor.';
     }
-    return asset?.kind === 'video'
-      ? 'Uploaded motion background ready to use.'
-      : 'Uploaded custom background ready to use.';
+    if (asset?.kind === 'video') {
+      return 'Legacy uploaded videos cannot be applied to the outgoing camera track. Choose an image or GIF instead.';
+    }
+    return 'Uploaded custom background ready to use.';
   }
 
   return 'Use the raw camera feed with no background treatment.';
@@ -599,16 +600,21 @@ function BackgroundPickerModal({
   }, [isOpen, loadTenorResults, query]);
 
   const handleUpload = useCallback(async (file: File) => {
+    if (file.type.startsWith('video/')) {
+      setError('Video backgrounds are not supported on the outgoing camera track. Upload an image or GIF instead.');
+      if (uploadInputRef.current) uploadInputRef.current.value = '';
+      if (gifInputRef.current) gifInputRef.current.value = '';
+      return;
+    }
+
     setUploading(true);
     setError(null);
 
     try {
       const upload = await api.uploadFile(file);
-      const kind = file.type.startsWith('video/')
-        ? 'video'
-        : file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif')
-          ? 'gif'
-          : 'image';
+      const kind = file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif')
+        ? 'gif'
+        : 'image';
 
       onSelectAsset({
         kind,
@@ -629,16 +635,16 @@ function BackgroundPickerModal({
 
   return (
     <ModalOverlay isOpen={isOpen} onClose={onClose} zIndex={340} className="p-4 sm:p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#101113] shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+      <div className="mx-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-bg shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+        <div className="flex items-center justify-between border-b border-riftapp-border/60 px-5 py-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8e97a8]">Video Background</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-riftapp-text-dim">Video Background</p>
             <h3 className="mt-1 text-lg font-semibold text-white">Choose a custom background</h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/10"
+            className="rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
           >
             Close
           </button>
@@ -646,25 +652,25 @@ function BackgroundPickerModal({
 
         <div className="grid gap-6 px-5 py-5 lg:grid-cols-[260px,minmax(0,1fr)]">
           <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-[#16181c] p-4">
+            <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-4">
               <p className="text-sm font-semibold text-white">Upload your own</p>
-              <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
-                Use a still image, a looping GIF, or a motion background clip.
+              <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
+                Use a still image or a looping GIF. Uploaded videos are not supported on the outgoing camera track.
               </p>
               <div className="mt-4 space-y-2">
                 <button
                   type="button"
                   onClick={() => uploadInputRef.current?.click()}
                   disabled={uploading}
-                  className="w-full rounded-lg border border-white/10 bg-[#111214] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1a1d21] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-sm font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  {uploading ? 'Uploading…' : 'Upload Image or Video'}
+                  {uploading ? 'Uploading…' : 'Upload Image'}
                 </button>
                 <button
                   type="button"
                   onClick={() => gifInputRef.current?.click()}
                   disabled={uploading}
-                  className="w-full rounded-lg border border-white/10 bg-[#111214] px-3 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#1a1d21] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-sm font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {uploading ? 'Uploading…' : 'Upload GIF'}
                 </button>
@@ -672,7 +678,7 @@ function BackgroundPickerModal({
               <input
                 ref={uploadInputRef}
                 type="file"
-                accept="image/*,video/*"
+                accept="image/png,image/jpeg,image/webp,image/avif,image/bmp,image/svg+xml"
                 className="hidden"
                 onChange={(event) => {
                   const file = event.target.files?.[0];
@@ -695,9 +701,9 @@ function BackgroundPickerModal({
               />
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-[#16181c] p-4">
+            <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-4">
               <p className="text-sm font-semibold text-white">Current selection</p>
-              <div className="mt-3 overflow-hidden rounded-xl border border-white/10 bg-[#0d0f12]">
+              <div className="mt-3 overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-bg">
                 {currentAsset ? (
                   <img
                     src={backgroundPreviewUrl(currentAsset)}
@@ -705,13 +711,15 @@ function BackgroundPickerModal({
                     className="aspect-[4/3] w-full object-cover"
                   />
                 ) : (
-                  <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_top,#20252d,transparent_58%),linear-gradient(135deg,#16181c,#0f1012)] text-[13px] text-[#9ca3af]">
+                  <div className="flex aspect-[4/3] items-center justify-center bg-[radial-gradient(circle_at_top,#2b3038,transparent_58%),linear-gradient(135deg,#1b1d21,#101114)] text-[13px] text-riftapp-text-muted">
                     No custom background selected
                   </div>
                 )}
               </div>
-              <p className="mt-3 text-[12px] leading-snug text-[#9ca3af]">
-                Powered by Tenor for GIF search.
+              <p className="mt-3 text-[12px] leading-snug text-riftapp-text-muted">
+                {currentAsset?.kind === 'video'
+                  ? 'This is a legacy video upload and will not be applied to the outgoing camera track.'
+                  : 'Powered by Tenor for GIF search.'}
               </p>
             </div>
           </div>
@@ -720,20 +728,20 @@ function BackgroundPickerModal({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-white">Browse GIF backgrounds</p>
-                <p className="mt-1 text-[13px] text-[#9ca3af]">Search Tenor or leave the box empty for trending picks.</p>
+                <p className="mt-1 text-[13px] text-riftapp-text-muted">Search Tenor or leave the box empty for trending picks.</p>
               </div>
               <div className="w-full sm:max-w-sm">
                 <input
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Search GIF backgrounds"
-                  className="w-full rounded-lg border border-white/10 bg-[#111214] px-3 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-[#7f8795] focus:border-[#5865f2]"
+                  className="w-full rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-[13px] text-white outline-none transition-colors placeholder:text-riftapp-text-dim focus:border-[#5865f2]"
                 />
               </div>
             </div>
 
             {error ? <p className="text-[13px] text-[#f87171]">{error}</p> : null}
-            {loading ? <p className="text-[13px] text-[#9ca3af]">Loading GIF backgrounds…</p> : null}
+            {loading ? <p className="text-[13px] text-riftapp-text-muted">Loading GIF backgrounds…</p> : null}
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {results.map((asset) => {
@@ -749,7 +757,7 @@ function BackgroundPickerModal({
                     className={`overflow-hidden rounded-xl border text-left transition-all ${
                       selected
                         ? 'border-[#5865f2] bg-[#1a1f2d] shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
-                        : 'border-white/10 bg-[#15171a] hover:border-white/20 hover:bg-[#1a1d21]'
+                        : 'border-riftapp-border/60 bg-riftapp-panel/70 hover:border-riftapp-border-light hover:bg-riftapp-panel-hover'
                     }`}
                   >
                     <img
@@ -760,7 +768,7 @@ function BackgroundPickerModal({
                     />
                     <div className="px-3 py-2.5">
                       <p className="truncate text-sm font-medium text-white">{asset.label ?? 'Tenor GIF'}</p>
-                      <p className="mt-1 text-[12px] text-[#9ca3af]">Use this GIF as your background</p>
+                      <p className="mt-1 text-[12px] text-riftapp-text-muted">Use this GIF as your background</p>
                     </div>
                   </button>
                 );
@@ -768,7 +776,7 @@ function BackgroundPickerModal({
             </div>
 
             {!loading && !error && results.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-white/10 bg-[#111214] px-4 py-8 text-center text-[13px] text-[#9ca3af]">
+              <div className="rounded-xl border border-dashed border-riftapp-border/60 bg-riftapp-surface px-4 py-8 text-center text-[13px] text-riftapp-text-muted">
                 No GIFs matched that search.
               </div>
             ) : null}

@@ -139,7 +139,7 @@ export default function HubSidebar() {
   };
 
   return (
-    <div className="w-[72px] flex-shrink-0 bg-[#232428] flex flex-col items-center py-3 gap-2 overflow-y-auto">
+    <div className="flex w-[72px] flex-shrink-0 flex-col items-center gap-2 overflow-y-auto bg-riftapp-bg-alt py-3">
       {/* DM Button */}
       <div
         className="relative flex items-center justify-center w-full"
@@ -165,7 +165,7 @@ export default function HubSidebar() {
           </svg>
           {dmTotalUnread > 0 && (
             <span
-              className="absolute -bottom-1 -right-1 z-20 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-[11px] font-bold text-white border-2 border-[#232428] leading-none"
+              className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-riftapp-bg-alt bg-red-600 px-1 text-[11px] font-bold leading-none text-white"
               aria-label={`${dmTotalUnread} unread direct messages`}
             >
               {formatMentionBadge(dmTotalUnread)}
@@ -233,7 +233,7 @@ export default function HubSidebar() {
               )}
               {mentions > 0 && (
                 <span
-                  className="absolute -bottom-1 -right-1 z-20 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full bg-red-600 text-[11px] font-bold text-white border-2 border-[#232428] leading-none"
+                  className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-riftapp-bg-alt bg-red-600 px-1 text-[11px] font-bold leading-none text-white"
                   aria-label={`${mentions} mentions`}
                 >
                   {formatMentionBadge(mentions)}
@@ -283,7 +283,7 @@ export default function HubSidebar() {
             style={{ left: contextMenu.x, top: contextMenu.y }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-[#111214] rounded-md border border-black/40 shadow-modal py-1.5 min-w-[220px] text-[13px] text-riftapp-text select-none">
+            <div className="min-w-[220px] select-none rounded-md border border-riftapp-border/60 bg-riftapp-bg py-1.5 text-[13px] text-riftapp-text shadow-modal">
               <button
                 type="button"
                 onClick={async () => {
@@ -295,7 +295,7 @@ export default function HubSidebar() {
                   } catch { /* ignore */ }
                   setContextMenu(null);
                 }}
-                className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+                className="flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface mx-1"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-riftapp-text-dim shrink-0">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
@@ -310,7 +310,7 @@ export default function HubSidebar() {
                   setInviteHub(contextMenu.hub);
                   setContextMenu(null);
                 }}
-                className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+                className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="text-riftapp-text-dim shrink-0">
                   <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -321,7 +321,7 @@ export default function HubSidebar() {
                 Invite to Server
               </button>
 
-              <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+              <div className="mx-2 my-1 h-px bg-riftapp-border/40" />
 
               <button
                 type="button"
@@ -341,7 +341,7 @@ export default function HubSidebar() {
                     }
                   }
                 }}
-                className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)] disabled:opacity-50"
+                className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface disabled:opacity-50"
               >
                 <span className="w-4 shrink-0" aria-hidden />
                 {hubNotifSettings?.server_muted ? 'Unmute Server' : 'Mute Server'}
@@ -353,7 +353,7 @@ export default function HubSidebar() {
                 onMouseLeave={() => setNotifSubmenuOpen(false)}
               >
                 <div
-                  className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-default ${notifSubmenuOpen ? 'bg-[#232428]' : 'hover:bg-[#232428]'}`}
+                  className={`flex items-center gap-2 rounded px-2 py-1.5 cursor-default ${notifSubmenuOpen ? 'bg-riftapp-surface' : 'hover:bg-riftapp-surface'}`}
                 >
                   <span className="w-4 shrink-0" aria-hidden />
                   <div className="flex-1 min-w-0">
@@ -372,7 +372,7 @@ export default function HubSidebar() {
                     className="absolute left-full top-0 pl-1 z-10"
                     onMouseEnter={() => setNotifSubmenuOpen(true)}
                   >
-                    <div className="bg-[#111214] rounded-md border border-black/40 shadow-modal py-1.5 min-w-[260px]">
+                    <div className="min-w-[260px] rounded-md border border-riftapp-border/60 bg-riftapp-bg py-1.5 shadow-modal">
                       {(['all', 'mentions_only', 'nothing'] as const).map((level) => (
                         <button
                           key={level}
@@ -390,7 +390,7 @@ export default function HubSidebar() {
                               } catch { /* ignore */ }
                             }
                           }}
-                          className="flex items-center gap-2.5 px-2.5 py-1.5 text-left hover:bg-[#232428] rounded-sm mx-1 w-[calc(100%-8px)]"
+                          className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-left hover:bg-riftapp-surface"
                         >
                           <span
                             className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${
@@ -407,7 +407,7 @@ export default function HubSidebar() {
                         </button>
                       ))}
 
-                      <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+                      <div className="mx-2 my-1 h-px bg-riftapp-border/40" />
 
                       {(
                         [
@@ -433,7 +433,7 @@ export default function HubSidebar() {
                               } catch { /* ignore */ }
                             }
                           }}
-                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-[#232428] rounded-sm mx-1 w-[calc(100%-8px)]"
+                          className="mx-1 flex w-[calc(100%-8px)] items-center justify-between gap-2 rounded-sm px-2.5 py-1.5 text-left hover:bg-riftapp-surface"
                         >
                           <span>{label}</span>
                           <span
@@ -452,7 +452,7 @@ export default function HubSidebar() {
                         </button>
                       ))}
 
-                      <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+                      <div className="mx-2 my-1 h-px bg-riftapp-border/40" />
 
                       <button
                         type="button"
@@ -469,7 +469,7 @@ export default function HubSidebar() {
                             } catch { /* ignore */ }
                           }
                         }}
-                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-left hover:bg-[#232428] rounded-sm mx-1 w-[calc(100%-8px)]"
+                        className="mx-1 flex w-[calc(100%-8px)] items-center justify-between gap-2 rounded-sm px-2.5 py-1.5 text-left hover:bg-riftapp-surface"
                       >
                         <span>Mobile Push Notifications</span>
                         <span
@@ -509,7 +509,7 @@ export default function HubSidebar() {
                     }
                   }
                 }}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)] disabled:opacity-50"
+                className="mx-1 flex w-[calc(100%-8px)] items-center justify-between gap-2 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface disabled:opacity-50"
               >
                 <span className="pl-6">Hide Muted Channels</span>
                 <span
@@ -527,7 +527,7 @@ export default function HubSidebar() {
                 </span>
               </button>
 
-              <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+              <div className="mx-2 my-1 h-px bg-riftapp-border/40" />
 
               <button
                 type="button"
@@ -535,7 +535,7 @@ export default function HubSidebar() {
                   navigator.clipboard.writeText(contextMenu.hub.id);
                   setContextMenu(null);
                 }}
-                className="flex items-center justify-between gap-2 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)] text-riftapp-text-dim hover:text-riftapp-text"
+                className="mx-1 flex w-[calc(100%-8px)] items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-riftapp-text-dim hover:bg-riftapp-surface hover:text-riftapp-text"
               >
                 <span className="flex items-center gap-2.5">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="shrink-0 opacity-70">
@@ -550,7 +550,7 @@ export default function HubSidebar() {
               {/* Leave Server – hidden for the hub owner */}
               {currentUserId && contextMenu.hub.owner_id !== currentUserId && (
                 <>
-                  <div className="mx-2 my-1 h-px bg-white/[0.06]" />
+                  <div className="mx-2 my-1 h-px bg-riftapp-border/40" />
                   <button
                     type="button"
                     onClick={() => {
@@ -583,7 +583,7 @@ export default function HubSidebar() {
       {/* Leave Server confirmation modal */}
       {leaveConfirmHub && (
         <ModalOverlay isOpen onClose={() => setLeaveConfirmHub(null)} zIndex={250}>
-          <div className="w-full max-w-[400px] rounded-xl bg-[#2b2d31] shadow-modal">
+          <div className="w-full max-w-[400px] rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal">
             <div className="px-5 pt-5 pb-2">
               <h3 className="text-lg font-semibold text-white">Leave Server</h3>
               <p className="mt-2 text-sm text-riftapp-text-muted">

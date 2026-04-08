@@ -44,7 +44,7 @@ export default function ScreenShareModal() {
 
   return (
     <ModalOverlay isOpen onClose={handleClose} zIndex={300}>
-      <div className="bg-[#313338] rounded-xl w-[520px] max-w-[calc(100vw-32px)] shadow-modal overflow-hidden">
+      <div className="w-[520px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <div className="flex items-center gap-2.5">
@@ -76,8 +76,8 @@ export default function ScreenShareModal() {
         </div>
 
         {/* Footer */}
-        <div className="px-5 py-4 bg-[#2b2d31] flex items-center justify-between">
-          <p className="text-[13px] text-[#b5bac1]">
+        <div className="flex items-center justify-between border-t border-riftapp-border/60 bg-riftapp-bg-alt px-5 py-4">
+          <p className="text-[13px] text-riftapp-text-muted">
             You are sharing your {(surfaceLabel ?? 'screen').toLowerCase()}.
           </p>
           <button

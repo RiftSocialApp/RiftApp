@@ -487,8 +487,8 @@ export default function MessageInput({
       )}
 
 
-      <div className={`bg-riftapp-surface rounded-xl border flex items-end transition-all duration-200 relative ${
-        dragging ? 'border-riftapp-accent shadow-glow' : 'border-riftapp-border/60 hover:border-riftapp-border'
+      <div className={`rounded-xl border bg-riftapp-panel/95 shadow-[0_6px_18px_rgba(0,0,0,0.22)] flex items-end transition-all duration-200 relative ${
+        dragging ? 'border-riftapp-accent shadow-glow' : 'border-riftapp-border/70 hover:border-riftapp-border-light'
       }`}>
         {/* Mention autocomplete dropdown */}
         {mentionQuery !== null && mentionResults.length > 0 && (

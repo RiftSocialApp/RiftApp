@@ -98,23 +98,23 @@ export default function ConfirmModal({
     >
       <div
         ref={panelRef}
-        className="bg-[#313338] rounded-2xl w-[440px] max-w-[calc(100vw-32px)] shadow-modal animate-scale-in overflow-hidden outline-none"
+        className="w-[440px] max-w-[calc(100vw-32px)] overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal animate-scale-in outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-5 pb-3">
           <h2 className="text-[18px] font-bold text-white">{title}</h2>
-          <div className="text-[14px] text-[#b5bac1] mt-1 leading-relaxed">{description}</div>
+          <div className="mt-1 text-[14px] leading-relaxed text-riftapp-text-muted">{description}</div>
         </div>
 
         {children && <div className="px-5 pb-4">{children}</div>}
 
-        <div className="px-5 py-4 bg-[#2b2d31] flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-3 border-t border-riftapp-border/60 bg-riftapp-bg-alt px-5 py-4">
           {cancelText ? (
             <button
               type="button"
               onClick={onCancel}
               disabled={loading}
-              className="px-4 py-2.5 text-[13px] font-medium text-[#dbdee1] hover:underline disabled:opacity-50"
+              className="px-4 py-2.5 text-[13px] font-medium text-riftapp-text hover:underline disabled:opacity-50"
             >
               {cancelText}
             </button>

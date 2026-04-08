@@ -154,7 +154,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
       {/* ───── Invite Friends View ───── */}
       {!showSettings && (
       <div
-        className="bg-[#313338] rounded-xl w-[440px] max-h-[620px] flex flex-col shadow-modal overflow-hidden"
+        className="flex max-h-[620px] w-[440px] flex-col overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal"
       >
         {/* ───── Header ───── */}
         <div className="px-5 pt-5 pb-0 flex-shrink-0">
@@ -184,8 +184,8 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search for friends"
-              className="w-full pl-10 pr-3 py-2.5 rounded-lg bg-[#1e1f22] border border-transparent text-sm text-white
-                placeholder-[#949ba4] focus:outline-none focus:ring-1 focus:ring-[#5865f2] transition-all"
+              className="w-full rounded-lg border border-riftapp-border/60 bg-riftapp-surface py-2.5 pl-10 pr-3 text-sm text-white
+                transition-all placeholder:text-riftapp-text-dim focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
             />
           </div>
         </div>
@@ -214,7 +214,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
               >
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  <div className="w-9 h-9 rounded-full bg-[#2b2d31] flex items-center justify-center overflow-hidden">
+                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-riftapp-bg-alt">
                     {u.avatar_url ? (
                       <img src={publicAssetUrl(u.avatar_url)} alt="" className="w-full h-full object-cover" />
                     ) : (
@@ -227,7 +227,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
                     userId={u.id}
                     fallbackStatus={u.status}
                     size="md"
-                    className="absolute -bottom-0.5 -right-0.5 border-2 border-[#313338]"
+                    className="absolute -bottom-0.5 -right-0.5 border-2 border-riftapp-panel"
                   />
                 </div>
 
@@ -263,7 +263,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
 
         {/* ───── Divider ───── */}
         <div className="mx-5">
-          <div className="h-px bg-[#3f4147]" />
+          <div className="h-px bg-riftapp-border/60" />
         </div>
 
         {/* ───── Footer: invite link ───── */}
@@ -272,11 +272,11 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
             Or send a server invite link
           </p>
           <div className="flex gap-2">
-            <div className="flex-1 px-3 py-2.5 rounded-[4px] bg-[#1e1f22] text-sm text-[#dbdee1] font-mono truncate select-all">
+            <div className="flex-1 truncate rounded-[4px] bg-riftapp-surface px-3 py-2.5 font-mono text-sm text-riftapp-text select-all">
               {generating ? (
-                <span className="text-[#949ba4]">Generating...</span>
+                <span className="text-riftapp-text-dim">Generating...</span>
               ) : inviteUrl || (
-                <span className="text-[#949ba4]">—</span>
+                <span className="text-riftapp-text-dim">—</span>
               )}
             </div>
             <button
@@ -339,7 +339,7 @@ function InviteSettingsModal({
 
   return (
       <div
-        className="bg-[#313338] rounded-xl w-[400px] shadow-modal animate-scale-in overflow-hidden"
+        className="w-[400px] overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -347,7 +347,7 @@ function InviteSettingsModal({
           <div className="flex items-center gap-2.5">
             <button
               onClick={onBack}
-              className="text-[#b5bac1] hover:text-white p-1 -ml-1 transition-colors rounded-md hover:bg-white/[0.06]"
+              className="-ml-1 rounded-md p-1 text-riftapp-text-muted transition-colors hover:bg-riftapp-surface/70 hover:text-white"
               title="Back"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -373,7 +373,7 @@ function InviteSettingsModal({
             <select
               value={expire}
               onChange={(e) => setExpire(Number(e.target.value))}
-              className="w-full px-3 py-2.5 rounded-[4px] bg-[#1e1f22] text-sm text-[#dbdee1] border-none
+              className="w-full rounded-[4px] bg-riftapp-surface px-3 py-2.5 text-sm text-riftapp-text border-none
                 focus:outline-none focus:ring-1 focus:ring-[#5865f2] appearance-none cursor-pointer"
             >
               {EXPIRE_OPTIONS.map((opt) => (
@@ -392,7 +392,7 @@ function InviteSettingsModal({
             <select
               value={maxUses}
               onChange={(e) => setMaxUses(Number(e.target.value))}
-              className="w-full px-3 py-2.5 rounded-[4px] bg-[#1e1f22] text-sm text-[#dbdee1] border-none
+              className="w-full rounded-[4px] bg-riftapp-surface px-3 py-2.5 text-sm text-riftapp-text border-none
                 focus:outline-none focus:ring-1 focus:ring-[#5865f2] appearance-none cursor-pointer"
             >
               {MAX_USES_OPTIONS.map((opt) => (
@@ -429,10 +429,10 @@ function InviteSettingsModal({
         </div>
 
         {/* Actions */}
-        <div className="px-5 py-4 bg-[#2b2d31] flex items-center justify-end gap-3">
+        <div className="flex items-center justify-end gap-3 border-t border-riftapp-border/60 bg-riftapp-bg-alt px-5 py-4">
           <button
             onClick={onBack}
-            className="px-4 py-2 text-[13px] font-medium text-[#dbdee1] hover:underline"
+            className="px-4 py-2 text-[13px] font-medium text-riftapp-text hover:underline"
           >
             Cancel
           </button>

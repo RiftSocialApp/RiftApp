@@ -89,29 +89,29 @@ function ConnectionQualityIndicator() {
       </div>
 
       <div
-        className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-max min-w-[180px] rounded-lg border border-black/50 bg-[#111214] px-3 py-2 text-[12px] leading-snug text-white shadow-[0_4px_16px_rgba(0,0,0,0.5)] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-max min-w-[180px] rounded-lg border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-2 text-[12px] leading-snug text-riftapp-text shadow-[0_4px_16px_rgba(0,0,0,0.5)] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
         role="tooltip"
       >
         <div className="font-semibold text-white">Connection Quality</div>
         {reconnecting ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Reconnecting...</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Reconnecting...</div>
         ) : connectionStats.state === ConnectionState.Connecting ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Connecting...</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Connecting...</div>
         ) : connectionStats.state === ConnectionState.Disconnected ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Disconnected</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Disconnected</div>
         ) : null}
-        {connectionStats.pingMs != null && <div className="mt-1 text-[#dbdee1]">Ping: {connectionStats.pingMs}ms</div>}
-        {connectionStats.jitterMs != null && <div className="text-[#dbdee1]">Jitter: {connectionStats.jitterMs}ms</div>}
-        {connectionStats.packetLossPct != null && <div className="text-[#dbdee1]">Packet Loss: {connectionStats.packetLossPct.toFixed(1)}%</div>}
+        {connectionStats.pingMs != null && <div className="mt-1 text-riftapp-text">Ping: {connectionStats.pingMs}ms</div>}
+        {connectionStats.jitterMs != null && <div className="text-riftapp-text">Jitter: {connectionStats.jitterMs}ms</div>}
+        {connectionStats.packetLossPct != null && <div className="text-riftapp-text">Packet Loss: {connectionStats.packetLossPct.toFixed(1)}%</div>}
         {!hasDetailedStats && connectionStats.state === ConnectionState.Connected && (
-          <div className="mt-1 text-[#b5bac1]">
+          <div className="mt-1 text-riftapp-text-muted">
             {connectionStats.source === 'livekit'
               ? `Quality: ${qualityLabel(connectionStats.quality)}`
               : 'Stats unavailable'}
           </div>
         )}
         <div
-          className="absolute right-4 top-full h-0 w-0 border-x-[6px] border-x-transparent border-t-[6px] border-t-[#111214]"
+          className="absolute right-4 top-full h-0 w-0 border-x-[6px] border-x-transparent border-t-[6px] border-t-riftapp-bg-alt"
           aria-hidden
         />
       </div>
@@ -246,7 +246,7 @@ export default function VoicePanel({
           <button
             type="button"
             onClick={onDismissScreenShareNotice}
-            className="text-[#dbdee1] hover:text-white transition-colors"
+            className="text-riftapp-text-muted transition-colors hover:text-white"
             aria-label="Dismiss screen share notice"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

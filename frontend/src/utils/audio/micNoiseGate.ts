@@ -1,4 +1,4 @@
-import { RnnoiseWorkletNode, loadRnnoise } from '@sapphi-red/web-noise-suppressor';
+import type { RnnoiseWorkletNode } from '@sapphi-red/web-noise-suppressor';
 import rnnoiseWorkletPath from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.js?url';
 import rnnoiseWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
@@ -29,15 +29,30 @@ interface MicNoiseGateInitOptions {
   audioContext: AudioContext;
 }
 
+type RnnoiseModule = typeof import('@sapphi-red/web-noise-suppressor');
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
 let rnnoiseBinaryPromise: Promise<ArrayBuffer> | null = null;
+let rnnoiseModulePromise: Promise<RnnoiseModule> | null = null;
 const rnnoiseLoadedContexts = new WeakSet<AudioContext>();
+
+async function loadRnnoiseModule() {
+  if (!rnnoiseModulePromise) {
+    rnnoiseModulePromise = import('@sapphi-red/web-noise-suppressor').catch((error) => {
+      rnnoiseModulePromise = null;
+      throw error;
+    });
+  }
+
+  return rnnoiseModulePromise;
+}
 
 async function loadRnnoiseBinary() {
   if (!rnnoiseBinaryPromise) {
+    const { loadRnnoise } = await loadRnnoiseModule();
     rnnoiseBinaryPromise = loadRnnoise({
       url: rnnoiseWasmPath,
       simdUrl: rnnoiseSimdWasmPath,
@@ -61,6 +76,7 @@ export async function createRnnoiseNode(audioContext: AudioContext, maxChannels 
   }
 
   const wasmBinary = await loadRnnoiseBinary();
+  const { RnnoiseWorkletNode } = await loadRnnoiseModule();
   return new RnnoiseWorkletNode(audioContext, {
     maxChannels,
     wasmBinary: wasmBinary.slice(0),

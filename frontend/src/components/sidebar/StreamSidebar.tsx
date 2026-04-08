@@ -274,7 +274,7 @@ export default function StreamSidebar() {
 
       {headerMenu && (
         <MenuOverlay x={headerMenu.x} y={headerMenu.y} onClose={() => setHeaderMenu(null)}>
-          <div className="bg-[#111214] rounded-md border border-black/40 shadow-modal py-1.5 min-w-[200px] text-[13px] text-[#dbdee1] select-none">
+          <div className="min-w-[200px] select-none rounded-md border border-riftapp-border/60 bg-riftapp-bg py-1.5 text-[13px] text-riftapp-text shadow-modal">
             <button
               type="button"
               onClick={() => {
@@ -283,7 +283,7 @@ export default function StreamSidebar() {
                 setShowCreateChannel(true);
                 setHeaderMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -297,7 +297,7 @@ export default function StreamSidebar() {
                 setShowCreateCategory(true);
                 setHeaderMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -311,7 +311,7 @@ export default function StreamSidebar() {
                 setShowInviteModal(true);
                 setHeaderMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -330,10 +330,10 @@ export default function StreamSidebar() {
                     void navigator.clipboard.writeText(activeHubId);
                     setHeaderMenu(null);
                   }}
-                  className="flex items-center justify-between gap-2 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+                  className="mx-1 flex w-[calc(100%-8px)] items-center justify-between gap-2 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
                 >
                   <span>Copy Server ID</span>
-                  <span className="text-[10px] font-mono font-semibold px-1 py-0.5 rounded bg-[#1e1f22] border border-[#3f4147] text-[#b5bac1]">ID</span>
+                  <span className="rounded border border-riftapp-border/60 bg-riftapp-bg-alt px-1 py-0.5 text-[10px] font-mono font-semibold text-riftapp-text-muted">ID</span>
                 </button>
               </>
             )}
@@ -390,7 +390,7 @@ export default function StreamSidebar() {
       {/* Blank-space context menu */}
       {blankSpaceMenu && (
         <MenuOverlay x={blankSpaceMenu.x} y={blankSpaceMenu.y} onClose={() => setBlankSpaceMenu(null)}>
-          <div className="bg-[#111214] rounded-md border border-black/40 shadow-modal py-1.5 min-w-[200px] text-[13px] text-[#dbdee1] select-none">
+          <div className="min-w-[200px] select-none rounded-md border border-riftapp-border/60 bg-riftapp-bg py-1.5 text-[13px] text-riftapp-text shadow-modal">
             <button
               type="button"
               onClick={() => {
@@ -399,7 +399,7 @@ export default function StreamSidebar() {
                 setShowCreateChannel(true);
                 setBlankSpaceMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -413,7 +413,7 @@ export default function StreamSidebar() {
                 setShowCreateCategory(true);
                 setBlankSpaceMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
@@ -427,7 +427,7 @@ export default function StreamSidebar() {
                 setShowInviteModal(true);
                 setBlankSpaceMenu(null);
               }}
-              className="flex items-center gap-2.5 px-2 py-1.5 mx-1 rounded hover:bg-[#232428] text-left w-[calc(100%-8px)]"
+              className="mx-1 flex w-[calc(100%-8px)] items-center gap-2.5 rounded px-2 py-1.5 text-left hover:bg-riftapp-surface"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4] shrink-0">
                 <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />

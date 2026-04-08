@@ -33,7 +33,7 @@ function MenuRow({
           ? 'text-[#5c5e66] cursor-not-allowed opacity-60'
           : danger
             ? 'text-[#f23f42] hover:bg-[#f23f42]/10'
-            : 'text-[#dbdee1] hover:bg-[#5865f2]/30 hover:text-white'
+        : 'text-riftapp-text hover:bg-riftapp-surface hover:text-white'
       }`}
     >
       {children}
@@ -42,14 +42,14 @@ function MenuRow({
 }
 
 function SubLabel({ children }: { children: React.ReactNode }) {
-  return <span className="block text-[11px] text-[#949ba4] font-normal mt-0.5">{children}</span>;
+  return <span className="mt-0.5 block text-[11px] font-normal text-riftapp-text-dim">{children}</span>;
 }
 
 function CheckboxMark({ checked }: { checked: boolean }) {
   return (
     <span
       className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
-        checked ? 'bg-[#5865f2] border-[#5865f2]' : 'border-[#4e5058] bg-[#1e1f22]'
+        checked ? 'bg-[#5865f2] border-[#5865f2]' : 'border-riftapp-border-light bg-riftapp-bg-alt'
       }`}
     >
       {checked && (
@@ -234,7 +234,7 @@ export default function VoiceParticipantContextMenu({
 
   const volumeSection = !isLocal ? (
     <div className="px-3 py-2">
-      <div className="text-[12px] font-semibold text-[#dbdee1] mb-2">User Volume</div>
+      <div className="mb-2 text-[12px] font-semibold text-riftapp-text">User Volume</div>
       <input
         type="range"
         min={0}
@@ -256,7 +256,7 @@ export default function VoiceParticipantContextMenu({
   return (
     <MenuOverlay x={x} y={y} onClose={onClose}>
       <div
-        className="min-w-[220px] max-w-[280px] max-h-[min(85vh,560px)] overflow-y-auto rounded-md bg-[#111214] py-1 shadow-modal border border-black/40"
+        className="max-h-[min(85vh,560px)] min-w-[220px] max-w-[280px] overflow-y-auto rounded-md border border-riftapp-border/60 bg-riftapp-bg py-1 shadow-modal"
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="px-1">

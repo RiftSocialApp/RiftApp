@@ -16,7 +16,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: #2a2d3e transparent;
+    scrollbar-color: #3a3d44 transparent;
   }
 
   ::-webkit-scrollbar {
@@ -29,14 +29,14 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(42, 45, 62, 0.5);
+    background: rgba(58, 61, 68, 0.72);
     border-radius: 4px;
     border: 2px solid transparent;
     background-clip: content-box;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(58, 61, 78, 0.8);
+    background: rgba(86, 91, 100, 0.9);
     background-clip: content-box;
   }
 

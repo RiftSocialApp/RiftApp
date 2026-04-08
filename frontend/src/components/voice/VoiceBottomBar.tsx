@@ -66,7 +66,7 @@ function ConnectionQualityIndicator() {
   return (
     <div className="relative group">
       <div
-        className={`h-7 w-7 rounded-md flex items-center justify-center transition-colors duration-150 hover:bg-white/10 ${toneClass}`}
+        className={`h-7 w-7 rounded-md border border-riftapp-border/50 bg-riftapp-surface/80 flex items-center justify-center transition-colors duration-150 hover:bg-riftapp-surface-hover ${toneClass}`}
         aria-label="Voice connection quality"
       >
         <div className={`flex h-[12px] items-end gap-[1.5px] ${reconnecting ? 'animate-pulse-soft' : ''}`}>
@@ -84,29 +84,29 @@ function ConnectionQualityIndicator() {
       </div>
 
       <div
-        className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-max min-w-[180px] rounded-lg border border-black/50 bg-[#111214] px-3 py-2 text-[12px] leading-snug text-white shadow-[0_4px_16px_rgba(0,0,0,0.5)] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+        className="pointer-events-none absolute bottom-full right-0 z-50 mb-2 w-max min-w-[180px] rounded-lg border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-2 text-[12px] leading-snug text-riftapp-text shadow-[0_4px_16px_rgba(0,0,0,0.5)] opacity-0 transition-opacity duration-150 group-hover:opacity-100"
         role="tooltip"
       >
         <div className="font-semibold text-white">Connection Quality</div>
         {reconnecting ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Reconnecting...</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Reconnecting...</div>
         ) : connectionStats.state === ConnectionState.Connecting ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Connecting...</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Connecting...</div>
         ) : connectionStats.state === ConnectionState.Disconnected ? (
-          <div className="mt-1 text-[#b5bac1]">Status: Disconnected</div>
+          <div className="mt-1 text-riftapp-text-muted">Status: Disconnected</div>
         ) : null}
-        {connectionStats.pingMs != null && <div className="mt-1 text-[#dbdee1]">Ping: {connectionStats.pingMs}ms</div>}
-        {connectionStats.jitterMs != null && <div className="text-[#dbdee1]">Jitter: {connectionStats.jitterMs}ms</div>}
-        {connectionStats.packetLossPct != null && <div className="text-[#dbdee1]">Packet Loss: {connectionStats.packetLossPct.toFixed(1)}%</div>}
+        {connectionStats.pingMs != null && <div className="mt-1 text-riftapp-text">Ping: {connectionStats.pingMs}ms</div>}
+        {connectionStats.jitterMs != null && <div className="text-riftapp-text">Jitter: {connectionStats.jitterMs}ms</div>}
+        {connectionStats.packetLossPct != null && <div className="text-riftapp-text">Packet Loss: {connectionStats.packetLossPct.toFixed(1)}%</div>}
         {!hasDetailedStats && connectionStats.state === ConnectionState.Connected && (
-          <div className="mt-1 text-[#b5bac1]">
+          <div className="mt-1 text-riftapp-text-muted">
             {connectionStats.source === 'livekit'
               ? `Quality: ${qualityLabel(connectionStats.quality)}`
               : 'Stats unavailable'}
           </div>
         )}
         <div
-          className="absolute right-4 top-full h-0 w-0 border-x-[6px] border-x-transparent border-t-[6px] border-t-[#111214]"
+          className="absolute right-4 top-full h-0 w-0 border-x-[6px] border-x-transparent border-t-[6px] border-t-riftapp-bg-alt"
           aria-hidden
         />
       </div>
@@ -143,7 +143,7 @@ function VoiceControlBtn({
             ? 'bg-[#ed4245]/20 text-[#ed4245] hover:bg-[#ed4245]/30'
             : active
               ? 'text-white bg-white/[0.15] hover:bg-white/[0.22]'
-              : 'text-[#b5bac1] hover:text-[#dbdee1] hover:bg-white/[0.08]'
+                : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-surface/80'
         }
         disabled:opacity-40 disabled:cursor-not-allowed`}
     >
@@ -233,18 +233,18 @@ export default function VoiceBottomBar() {
     : '';
 
   return (
-    <div className="flex-shrink-0 bg-[#232428]">
+    <div className="flex-shrink-0 bg-riftapp-bg-alt">
       {/* ── Voice Connected Section (above user bar) ── */}
       {inVoice && (
         <>
           {/* Status row */}
-          <div className="flex items-center gap-2 px-3 pt-2 pb-1.5 border-t border-[#1a1b1e]">
+          <div className="flex items-center gap-2 border-t border-riftapp-border/60 px-3 pb-1.5 pt-2">
             <div className="flex-1 min-w-0">
               <p className={`text-[13px] font-semibold leading-tight ${voiceStatus.className}`}>
                 {voiceStatus.label}
               </p>
               {channelLabel && (
-                <p className="text-[11px] text-[#b5bac1] truncate leading-tight mt-0.5">
+                <p className="mt-0.5 truncate text-[11px] leading-tight text-riftapp-text-muted">
                   {channelLabel}
                 </p>
               )}
@@ -268,7 +268,7 @@ export default function VoiceBottomBar() {
               <button
                 type="button"
                 onClick={voiceDismissScreenShareNotice}
-                className="text-[#dbdee1] hover:text-white transition-colors flex-shrink-0"
+                className="flex-shrink-0 text-riftapp-text-muted transition-colors hover:text-white"
                 aria-label="Dismiss"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -331,16 +331,16 @@ export default function VoiceBottomBar() {
       )}
 
       {/* ── User Bar (always visible) ── */}
-      <div className="h-[52px] flex items-center px-1.5 border-t border-[#1a1b1e]">
+      <div className="flex h-[52px] items-center border-t border-riftapp-border/60 px-1.5">
         {/* Avatar + name */}
         <button
           onClick={handleAvatarClick}
-          className="flex items-center gap-2 flex-1 min-w-0 px-1 py-1 rounded-md hover:bg-white/[0.06] transition-all duration-150 group"
+          className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 transition-all duration-150 hover:bg-riftapp-surface/70"
           title="View Profile"
         >
           <div className="relative flex-shrink-0">
             <div className={`w-8 h-8 rounded-full bg-[#5865f2] flex items-center justify-center text-xs font-semibold text-white overflow-hidden ${
-              voiceIsSpeaking ? 'ring-2 ring-riftapp-success ring-offset-1 ring-offset-[#232428]' : ''
+              voiceIsSpeaking ? 'ring-2 ring-riftapp-success ring-offset-1 ring-offset-riftapp-bg-alt' : ''
             }`}>
               {user.avatar_url ? (
                 <img src={publicAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
@@ -352,12 +352,12 @@ export default function VoiceBottomBar() {
               userId={user.id}
               fallbackStatus={user.status}
               size="lg"
-              className="absolute -bottom-0.5 -right-0.5 border-[2.5px] border-[#232428]"
+              className="absolute -bottom-0.5 -right-0.5 border-[2.5px] border-riftapp-bg-alt"
             />
           </div>
           <div className="flex-1 min-w-0 text-left">
             <p className="text-[13px] font-semibold truncate leading-tight">{user.display_name}</p>
-            <p className="text-[11px] text-[#b5bac1] truncate leading-tight">{statusLabel(currentStatus)}</p>
+            <p className="truncate text-[11px] leading-tight text-riftapp-text-muted">{statusLabel(currentStatus)}</p>
           </div>
         </button>
 
@@ -369,7 +369,7 @@ export default function VoiceBottomBar() {
             className={`w-8 h-8 rounded-md flex items-center justify-center transition-all duration-150 active:scale-90 ${
               voiceIsMuted
                 ? 'text-[#ed4245] hover:bg-[#ed4245]/10'
-                : 'text-[#b5bac1] hover:text-[#dbdee1] hover:bg-white/[0.06]'
+                : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-surface/70'
             }`}
           >
             <MicIcon muted={voiceIsMuted} size={18} />
@@ -380,7 +380,7 @@ export default function VoiceBottomBar() {
             className={`w-8 h-8 rounded-md flex items-center justify-center transition-all duration-150 active:scale-90 ${
               voiceIsDeafened
                 ? 'text-[#ed4245] hover:bg-[#ed4245]/10'
-                : 'text-[#b5bac1] hover:text-[#dbdee1] hover:bg-white/[0.06]'
+                : 'text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-surface/70'
             }`}
           >
             <HeadphonesIcon deafened={voiceIsDeafened} size={18} />
@@ -388,8 +388,8 @@ export default function VoiceBottomBar() {
           <button
             onClick={() => openSettings('profile')}
             title="User Settings"
-            className="w-8 h-8 rounded-md flex items-center justify-center text-[#b5bac1]
-              hover:text-[#dbdee1] hover:bg-white/[0.06] transition-all duration-150 active:scale-90"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-riftapp-text-muted
+              transition-all duration-150 active:scale-90 hover:bg-riftapp-surface/70 hover:text-riftapp-text"
           >
             <SettingsIcon size={18} />
           </button>

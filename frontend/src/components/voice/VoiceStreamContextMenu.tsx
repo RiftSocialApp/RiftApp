@@ -20,7 +20,7 @@ function Row({
       disabled={disabled}
       onClick={onClick}
       className={`w-full text-left px-3 py-2.5 rounded-md text-[14px] flex items-center justify-between gap-3 transition-colors ${
-        disabled ? 'text-[#5c5e66] cursor-not-allowed opacity-60' : 'text-[#dbdee1] hover:bg-white/[0.06] hover:text-white'
+        disabled ? 'text-[#5c5e66] cursor-not-allowed opacity-60' : 'text-riftapp-text hover:bg-riftapp-surface hover:text-white'
       }`}
     >
       <div className="min-w-0 flex-1 text-left">{children}</div>
@@ -30,13 +30,13 @@ function Row({
 }
 
 function SubLabel({ children }: { children: React.ReactNode }) {
-  return <span className="block text-[11px] text-[#949ba4] font-normal mt-1 leading-snug pr-4">{children}</span>;
+  return <span className="mt-1 block pr-4 text-[11px] font-normal leading-snug text-riftapp-text-dim">{children}</span>;
 }
 
 function StopIcon() {
   return (
-    <span className="w-5 h-5 rounded border border-[#4e5058] flex items-center justify-center bg-[#2b2d31]">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-[#dbdee1]">
+    <span className="flex h-5 w-5 items-center justify-center rounded border border-riftapp-border-light bg-riftapp-panel">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="text-riftapp-text">
         <path d="M18 6L6 18M6 6l12 12" strokeLinecap="round" />
       </svg>
     </span>
@@ -47,7 +47,7 @@ function CheckboxMark({ checked }: { checked: boolean }) {
   return (
     <span
       className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
-        checked ? 'bg-[#5865f2] border-[#5865f2]' : 'border-[#4e5058] bg-[#1e1f22]'
+        checked ? 'bg-[#5865f2] border-[#5865f2]' : 'border-riftapp-border-light bg-riftapp-bg-alt'
       }`}
     >
       {checked && (
@@ -61,7 +61,7 @@ function CheckboxMark({ checked }: { checked: boolean }) {
 
 function PopOutIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#b5bac1]">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-riftapp-text-muted">
       <path d="M14 3h7v7M10 14L21 3M21 14v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6" strokeLinecap="round" />
     </svg>
   );
@@ -69,7 +69,7 @@ function PopOutIcon() {
 
 function ChevronRight() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-[#949ba4]">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-riftapp-text-dim">
       <path d="M9 18l6-6-6-6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
@@ -126,7 +126,7 @@ export default function VoiceStreamContextMenu({
   return (
     <MenuOverlay x={x} y={y} onClose={onClose}>
       <div
-        className="min-w-[240px] max-w-[280px] rounded-md bg-[#1e1f22] py-1 shadow-modal border border-black/50"
+        className="min-w-[240px] max-w-[280px] rounded-md border border-riftapp-border/60 bg-riftapp-bg-alt py-1 shadow-modal"
         onContextMenu={(e) => e.preventDefault()}
       >
         <div className="px-1">
@@ -144,7 +144,7 @@ export default function VoiceStreamContextMenu({
         {menuDivider()}
 
         <div className="px-3 py-2">
-          <div className="text-[12px] font-semibold text-[#dbdee1] mb-2">Stream Volume</div>
+          <div className="mb-2 text-[12px] font-semibold text-riftapp-text">Stream Volume</div>
           <input
             type="range"
             min={0}
@@ -185,7 +185,7 @@ export default function VoiceStreamContextMenu({
         </div>
 
         <div className="px-3 py-2">
-          <div className="text-[12px] font-semibold text-[#dbdee1] mb-2">Stream Attenuation Strength</div>
+          <div className="mb-2 text-[12px] font-semibold text-riftapp-text">Stream Attenuation Strength</div>
           <input
             type="range"
             min={0}
