@@ -32,6 +32,7 @@ import type { DesktopUpdateStatus } from '../../types/desktop';
 import { normalizeMessages } from '../../utils/entityAssets';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { getDesktop, idleDesktopUpdateStatus } from '../../utils/desktop';
+import { subscribeToChatSearchRequests } from '../../utils/chatSearchBridge';
 
 type HeaderPanel = 'notifications' | 'pins' | 'search' | 'inbox' | null;
 type StreamNotificationToggleKey =
@@ -215,14 +216,6 @@ function IconSearch(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-function IconFilter(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
-    </svg>
-  );
-}
-
 function IconRefresh(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -307,8 +300,8 @@ function HeaderIconButton({
         success
           ? 'border-[#2f8555] bg-[#248046] text-white hover:bg-[#2d9d58]'
           : active
-            ? 'border-white/10 bg-[#313338] text-[#f2f3f5]'
-            : 'border-transparent bg-transparent text-[#b5bac1] hover:bg-[#313338] hover:text-[#f2f3f5]'
+            ? 'border-[#2e3138] bg-[#23262d] text-[#f2f3f5]'
+            : 'border-transparent bg-transparent text-[#aeb4bf] hover:bg-[#23262d] hover:text-[#f2f3f5]'
       }`}
     >
       <span className="inline-flex items-center justify-center">{children}</span>
@@ -551,7 +544,6 @@ export default function ChatPanel({
   const hubs = useHubStore((s) => s.hubs);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const notifications = useNotificationStore((s) => s.notifications);
-  const notificationUnreadCount = useNotificationStore((s) => s.unreadCount);
   const loadNotifications = useNotificationStore((s) => s.loadNotifications);
   const markNotifRead = useNotificationStore((s) => s.markNotifRead);
   const markAllNotifsRead = useNotificationStore((s) => s.markAllNotifsRead);
@@ -623,11 +615,6 @@ export default function ChatPanel({
   const [streamNotifSettings, setStreamNotifSettings] = useState<StreamNotificationSettings | null>(null);
   const [notifSettingsLoading, setNotifSettingsLoading] = useState(false);
   const [inboxTab, setInboxTab] = useState<'mentions' | 'unread'>('mentions');
-
-  const mentionUnreadCount = useMemo(
-    () => notifications.filter((notification) => !notification.read && notification.type === 'mention').length,
-    [notifications],
-  );
 
   const inboxItems = useMemo(() => {
     if (inboxTab === 'mentions') {
@@ -940,14 +927,19 @@ export default function ChatPanel({
     setSearchPerformed(false);
   }, []);
 
-  const runSearch = useCallback(async () => {
+  const runSearch = useCallback(async (overrides?: Partial<MessageSearchFilters>) => {
     if (!activeHubId || isDMMode) return;
+    const nextFilters = {
+      ...searchFilters,
+      ...overrides,
+    };
     setActivePanel('search');
     setSearchLoading(true);
     setSearchError(null);
     setSearchPerformed(true);
+    setSearchFilters(nextFilters);
     try {
-      const results = normalizeMessages(await api.searchHubMessages(activeHubId, cleanSearchFilters(searchFilters)));
+      const results = normalizeMessages(await api.searchHubMessages(activeHubId, cleanSearchFilters(nextFilters)));
       setSearchResults(results);
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : 'Could not search messages');
@@ -955,6 +947,27 @@ export default function ChatPanel({
       setSearchLoading(false);
     }
   }, [activeHubId, isDMMode, searchFilters]);
+
+  useEffect(() => {
+    return subscribeToChatSearchRequests((detail) => {
+      if (isDMMode || !activeHubId) return;
+
+      const nextQuery = typeof detail.query === 'string' ? detail.query : (searchFilters.query ?? '');
+      const normalizedQuery = nextQuery.trim();
+      const queryValue = normalizedQuery.length > 0 ? normalizedQuery : undefined;
+
+      if (detail.run) {
+        void runSearch({ query: queryValue });
+        return;
+      }
+
+      setSearchFilters((current) => ({
+        ...current,
+        query: queryValue,
+      }));
+      setActivePanel('search');
+    });
+  }, [activeHubId, isDMMode, runSearch, searchFilters.query]);
 
   const openStreamMessage = useCallback(
     async (message: Pick<Message, 'id' | 'stream_id'>, hubId = activeHubId ?? undefined) => {
@@ -1096,12 +1109,12 @@ export default function ChatPanel({
   const canShowChannelTools = !showWelcome && !isDMMode && Boolean(activeHubId);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col bg-riftapp-bg min-w-0 relative">
+    <div className="flex-1 min-h-0 flex flex-col bg-[#111214] min-w-0 relative">
       {/* Header */}
       {!showWelcome && (
         <div
           ref={headerRef}
-          className="flex h-12 items-center gap-3 border-b border-riftapp-border/60 bg-[#232428] px-4 shadow-[0_1px_0_rgba(0,0,0,0.2)] flex-shrink-0"
+          className="flex h-12 items-center gap-3 border-b border-[#272a31] bg-[#18191c] px-4 shadow-[0_1px_0_rgba(0,0,0,0.35)] flex-shrink-0"
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {isDMMode ? (
@@ -1127,35 +1140,6 @@ export default function ChatPanel({
             <>
               <div className="hidden h-5 w-px bg-white/10 lg:block" />
               <div className="hidden items-center gap-2 lg:flex">
-                <div className="flex h-8 items-center gap-2 rounded-md border border-white/8 bg-[#1e1f22] px-2.5 text-[#b5bac1] focus-within:border-white/15 focus-within:text-[#f2f3f5]">
-                  <IconSearch className="h-4 w-4 shrink-0" />
-                  <input
-                    type="text"
-                    value={searchFilters.query ?? ''}
-                    onFocus={() => setActivePanel('search')}
-                    onChange={(event) => updateSearchFilter('query', event.target.value || undefined)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        void runSearch();
-                      }
-                    }}
-                    placeholder={activeStream ? `Search #${activeStream.name}` : 'Search messages'}
-                    className="w-52 bg-transparent text-sm text-[#f2f3f5] outline-none placeholder:text-[#949ba4] xl:w-64"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActivePanel('search');
-                      void runSearch();
-                    }}
-                    className="inline-flex h-6 w-6 items-center justify-center rounded text-[#949ba4] transition-colors hover:bg-[#232428] hover:text-[#f2f3f5]"
-                    aria-label="Search messages"
-                  >
-                    <IconFilter className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-
                 <HeaderIconButton
                   label="Notification settings"
                   active={activePanel === 'notifications'}
@@ -1171,28 +1155,21 @@ export default function ChatPanel({
                 >
                   <IconPin className="h-4 w-4" />
                 </HeaderIconButton>
-
-                <HeaderIconButton
-                  label={showMemberList ? 'Hide member list' : 'Show member list'}
-                  active={showMemberList}
-                  onClick={onToggleMemberList}
-                >
-                  <IconUsers className="h-4 w-4" />
-                </HeaderIconButton>
               </div>
             </>
           ) : null}
 
           {!showWelcome ? (
             <div className="flex items-center gap-2">
-              <HeaderIconButton
-                label="Inbox"
-                active={activePanel === 'inbox'}
-                badge={mentionUnreadCount || notificationUnreadCount}
-                onClick={() => togglePanel('inbox')}
-              >
-                <IconInbox className="h-4 w-4" />
-              </HeaderIconButton>
+              {canShowChannelTools ? (
+                <HeaderIconButton
+                  label={showMemberList ? 'Hide user list' : 'Show user list'}
+                  active={showMemberList}
+                  onClick={onToggleMemberList}
+                >
+                  <IconUsers className="h-4 w-4" />
+                </HeaderIconButton>
+              ) : null}
 
               {desktop && updateStatus.state === 'ready' ? (
                 <HeaderIconButton
@@ -1704,7 +1681,7 @@ export default function ChatPanel({
         ) : null}
 
         {showWelcome && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-riftapp-bg">
+          <div className="absolute inset-0 z-10 flex items-center justify-center bg-[#111214]">
             <div className="text-center animate-fade-in max-w-sm px-6">
               <div className="w-16 h-16 rounded-3xl bg-riftapp-surface flex items-center justify-center mx-auto mb-5">
                 <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riftapp-text-dim">
