@@ -477,6 +477,7 @@ function PinnedMessageCard({
           isOwn={isOwn}
           hubId={hubId}
           isPreview
+          previewVariant="pinned"
           timestampFormatter={formatPinnedMessageTimestamp}
         />
       </div>

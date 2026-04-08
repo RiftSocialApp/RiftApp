@@ -271,6 +271,7 @@ interface MessageItemProps {
   /** Active hub (for message link in context menu). */
   hubId?: string | null;
   isPreview?: boolean;
+  previewVariant?: 'default' | 'pinned';
   timestampFormatter?: (dateStr: string) => string;
 }
 
@@ -281,6 +282,7 @@ const MessageItem = memo(function MessageItem({
   isDM = false,
   hubId = null,
   isPreview = false,
+  previewVariant = 'default',
   timestampFormatter,
 }: MessageItemProps) {
   const author = message.author;
@@ -333,6 +335,7 @@ const MessageItem = memo(function MessageItem({
   const openProfile = useProfilePopoverStore((s) => s.open);
   const openContextMenu = useUserContextMenuStore((s) => s.open);
   const interactionsDisabled = isPreview;
+  const isPinnedPreview = isPreview && previewVariant === 'pinned';
 
   const handleMentionClick = useCallback((username: string, rect: DOMRect) => {
     if (interactionsDisabled) return;
@@ -603,15 +606,15 @@ const MessageItem = memo(function MessageItem({
     ) : (
       <div className={interactionsDisabled ? 'pointer-events-none' : undefined}>
         {inlineMedia ? (
-          <InlineMediaImage url={inlineMedia.url} type={inlineMedia.type} />
+          <InlineMediaImage url={inlineMedia.url} type={inlineMedia.type} compact={isPinnedPreview} />
         ) : (
           <>
             <div className="text-[15px] leading-[1.375rem] text-riftapp-text/[0.90]">{renderedContent}</div>
-            {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} />}
+            {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} compact={isPinnedPreview} />}
           </>
         )}
-        <Attachments message={message} />
-        {reactions.length > 0 && (
+        <Attachments message={message} compact={isPinnedPreview} />
+        {!isPinnedPreview && reactions.length > 0 && (
           <ReactionPills reactions={reactions} currentUserId={currentUserId} onToggle={handleToggle} />
         )}
       </div>
@@ -799,7 +802,7 @@ function extractEmbedUrls(text: string): ParsedEmbed[] {
 /* Max embeds to render per message to avoid spam */
 const MAX_EMBEDS = 5;
 
-function LinkEmbeds({ urls }: { urls: ParsedEmbed[] }) {
+function LinkEmbeds({ urls, compact = false }: { urls: ParsedEmbed[]; compact?: boolean }) {
   const [collapsed, setCollapsed] = useState(false);
   const visible = urls.slice(0, MAX_EMBEDS);
   const overflow = urls.length - MAX_EMBEDS;
@@ -821,13 +824,13 @@ function LinkEmbeds({ urls }: { urls: ParsedEmbed[] }) {
       {visible.map((embed) => {
         switch (embed.type) {
           case 'youtube':
-            return <YouTubeEmbed key={embed.url} videoId={embed.ytId!} />;
+            return <YouTubeEmbed key={embed.url} videoId={embed.ytId!} compact={compact} />;
           case 'twitter':
-            return <TwitterEmbed key={embed.url} url={embed.url} />;
+            return <TwitterEmbed key={embed.url} url={embed.url} compact={compact} />;
           case 'reddit':
-            return <RedditEmbed key={embed.url} url={embed.url} />;
+            return <RedditEmbed key={embed.url} url={embed.url} compact={compact} />;
           default:
-            return <GenericLinkPreview key={embed.url} url={embed.url} />;
+            return <GenericLinkPreview key={embed.url} url={embed.url} compact={compact} />;
         }
       })}
       {overflow > 0 && (
@@ -848,17 +851,21 @@ function LinkEmbeds({ urls }: { urls: ParsedEmbed[] }) {
 
 /* ─── Shared embed card wrapper ──────────────────────────────────────── */
 const EMBED_CARD =
-  'mt-1.5 max-w-[420px] rounded-xl overflow-hidden border border-riftapp-border/40 bg-riftapp-content-elevated transition-all duration-200 hover:brightness-110 hover:shadow-elevation-md';
+  'mt-1.5 rounded-xl overflow-hidden border border-riftapp-border/40 bg-riftapp-content-elevated transition-all duration-200 hover:brightness-110 hover:shadow-elevation-md';
+
+function getEmbedCardClass(compact = false) {
+  return `${EMBED_CARD} ${compact ? 'w-full max-w-full' : 'max-w-[420px]'}`;
+}
 
 /* ─── YouTube Embed ──────────────────────────────────────────────────── */
-function YouTubeEmbed({ videoId }: { videoId: string }) {
+function YouTubeEmbed({ videoId, compact = false }: { videoId: string; compact?: boolean }) {
   const [playing, setPlaying] = useState(false);
   const thumbUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
 
   if (playing) {
     return (
-      <div className={`${EMBED_CARD} bg-black`}>
-        <div className="relative w-full" style={{ paddingBottom: '56.25%', maxHeight: '300px' }}>
+      <div className={`${getEmbedCardClass(compact)} bg-black`}>
+        <div className="relative w-full" style={{ paddingBottom: '56.25%', maxHeight: compact ? '220px' : '300px' }}>
           <iframe
             src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
             title="YouTube video"
@@ -875,9 +882,9 @@ function YouTubeEmbed({ videoId }: { videoId: string }) {
     <button
       type="button"
       onClick={() => setPlaying(true)}
-      className={`${EMBED_CARD} bg-riftapp-bg/40 block text-left cursor-pointer group/yt`}
+      className={`${getEmbedCardClass(compact)} ${compact ? 'bg-riftapp-content-elevated/90' : 'bg-riftapp-bg/40'} block text-left cursor-pointer group/yt`}
     >
-      <div className="relative w-full" style={{ aspectRatio: '16/9', maxHeight: '240px' }}>
+      <div className="relative w-full" style={{ aspectRatio: '16/9', maxHeight: compact ? '200px' : '240px' }}>
         <img src={thumbUrl} alt="YouTube video" loading="lazy" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/10 group-hover/yt:from-black/60 transition-colors duration-200" />
         <div className="absolute inset-0 flex items-center justify-center">
@@ -898,7 +905,7 @@ function YouTubeEmbed({ videoId }: { videoId: string }) {
 }
 
 /* ─── Twitter/X Embed ────────────────────────────────────────────────── */
-function TwitterEmbed({ url }: { url: string }) {
+function TwitterEmbed({ url, compact = false }: { url: string; compact?: boolean }) {
   const [meta, setMeta] = useState<{ title?: string; description?: string; image?: string; site_name?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -920,7 +927,7 @@ function TwitterEmbed({ url }: { url: string }) {
   const handle = (() => { try { return new URL(url).pathname.split('/')[1]; } catch { return ''; } })();
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className={`${EMBED_CARD} flex p-3 gap-3 group/tw`}>
+    <a href={url} target="_blank" rel="noopener noreferrer" className={`${getEmbedCardClass(compact)} flex p-3 gap-3 group/tw`}>
       {/* Left accent stripe */}
       <div className="w-1 rounded-full bg-[#1d9bf0] flex-shrink-0" />
       <div className="min-w-0 flex-1">
@@ -945,7 +952,7 @@ function TwitterEmbed({ url }: { url: string }) {
 
         {/* Media thumbnail */}
         {meta?.image && (
-          <img src={meta.image} alt="" loading="lazy" className="mt-2 w-full max-h-[200px] object-cover rounded-lg" />
+          <img src={meta.image} alt="" loading="lazy" className={`mt-2 w-full ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} object-cover rounded-lg`} />
         )}
       </div>
     </a>
@@ -953,7 +960,7 @@ function TwitterEmbed({ url }: { url: string }) {
 }
 
 /* ─── Reddit Embed ───────────────────────────────────────────────────── */
-function RedditEmbed({ url }: { url: string }) {
+function RedditEmbed({ url, compact = false }: { url: string; compact?: boolean }) {
   const [meta, setMeta] = useState<{ title?: string; description?: string; image?: string; site_name?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -980,7 +987,7 @@ function RedditEmbed({ url }: { url: string }) {
   }, [url]);
 
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className={`${EMBED_CARD} flex p-3 gap-3 group/rd`}>
+    <a href={url} target="_blank" rel="noopener noreferrer" className={`${getEmbedCardClass(compact)} flex p-3 gap-3 group/rd`}>
       {/* Left accent stripe */}
       <div className="w-1 rounded-full bg-[#ff4500] flex-shrink-0" />
       <div className="min-w-0 flex-1">
@@ -1013,7 +1020,7 @@ function RedditEmbed({ url }: { url: string }) {
 
         {/* Thumbnail */}
         {meta?.image && (
-          <img src={meta.image} alt="" loading="lazy" className="mt-2 w-full max-h-[200px] object-cover rounded-lg" />
+          <img src={meta.image} alt="" loading="lazy" className={`mt-2 w-full ${compact ? 'max-h-[160px]' : 'max-h-[200px]'} object-cover rounded-lg`} />
         )}
       </div>
     </a>
@@ -1021,7 +1028,7 @@ function RedditEmbed({ url }: { url: string }) {
 }
 
 /* ─── Generic Link Preview ───────────────────────────────────────────── */
-function GenericLinkPreview({ url }: { url: string }) {
+function GenericLinkPreview({ url, compact = false }: { url: string; compact?: boolean }) {
   const [meta, setMeta] = useState<{ title?: string; description?: string; image?: string; site_name?: string; domain: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [imgFailed, setImgFailed] = useState(false);
@@ -1055,7 +1062,7 @@ function GenericLinkPreview({ url }: { url: string }) {
       href={url}
       target="_blank"
       rel="noopener noreferrer"
-      className={`${EMBED_CARD} flex gap-3 p-3 group/link`}
+      className={`${getEmbedCardClass(compact)} flex gap-3 p-3 group/link`}
     >
       {/* Thumbnail */}
       {hasImage && (
@@ -1063,7 +1070,7 @@ function GenericLinkPreview({ url }: { url: string }) {
           src={meta.image!}
           alt=""
           loading="lazy"
-          className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+          className={`${compact ? 'w-14 h-14' : 'w-16 h-16'} rounded-lg object-cover flex-shrink-0`}
           onError={() => setImgFailed(true)}
         />
       )}
@@ -1100,7 +1107,7 @@ function fmtTime(s: number): string {
   return `${m}:${sec.toString().padStart(2, '0')}`;
 }
 
-function VideoPlayer({ src }: { src: string }) {
+function VideoPlayer({ src, compact = false }: { src: string; compact?: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>();
@@ -1211,7 +1218,7 @@ function VideoPlayer({ src }: { src: string }) {
   return (
     <div
       ref={containerRef}
-      className="mt-1 max-w-[420px] rounded-xl overflow-hidden border border-riftapp-border/40 bg-black relative select-none group/video"
+      className={`mt-1 ${compact ? 'w-full max-w-full rounded-lg' : 'max-w-[420px] rounded-xl border border-riftapp-border/40'} overflow-hidden bg-black relative select-none group/video`}
       tabIndex={0}
       onContextMenu={(e) => e.preventDefault()}
       onMouseEnter={() => { setHovered(true); setShowControls(true); }}
@@ -1225,7 +1232,7 @@ function VideoPlayer({ src }: { src: string }) {
         playsInline
         onTimeUpdate={handleTimeUpdate}
         onClick={togglePlay}
-        className="w-full max-h-[300px] object-contain cursor-pointer block"
+        className={`w-full ${compact ? 'max-h-[220px]' : 'max-h-[300px]'} object-contain cursor-pointer block`}
       >
         <track kind="captions" />
       </video>
@@ -1355,7 +1362,7 @@ function VideoPlayer({ src }: { src: string }) {
 }
 
 /* ─── Inline GIF / Sticker embed (sent as plain URL) ────────────────── */
-function InlineMediaImage({ url, type }: { url: string; type: 'gif' | 'sticker' }) {
+function InlineMediaImage({ url, type, compact = false }: { url: string; type: 'gif' | 'sticker'; compact?: boolean }) {
   const [loaded, setLoaded] = useState(false);
   const [lightbox, setLightbox] = useState(false);
   const isSticker = type === 'sticker';
@@ -1367,7 +1374,7 @@ function InlineMediaImage({ url, type }: { url: string; type: 'gif' | 'sticker' 
         type="button"
         onClick={() => setLightbox(true)}
         className={`relative block rounded-xl overflow-hidden mt-1 cursor-pointer text-left group/inline-media
-          ${isSticker ? '' : 'border border-riftapp-border/40 bg-riftapp-bg/40 hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md'}
+          ${isSticker ? '' : compact ? '' : 'border border-riftapp-border/40 bg-riftapp-bg/40 hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md'}
           transition-all duration-200`}
       >
         {!loaded && !isSticker && (
@@ -1380,7 +1387,7 @@ function InlineMediaImage({ url, type }: { url: string; type: 'gif' | 'sticker' 
           decoding="async"
           onLoad={() => setLoaded(true)}
           className={`block object-contain rounded-xl transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}
-            ${isSticker ? 'w-32 h-32' : 'max-w-[420px] max-h-[288px] w-auto h-auto'}`}
+            ${isSticker ? 'w-32 h-32' : compact ? 'max-w-full max-h-[220px] w-auto h-auto' : 'max-w-[420px] max-h-[288px] w-auto h-auto'}`}
         />
       </button>
     </>
@@ -1392,10 +1399,12 @@ function ImageThumb({
   src,
   alt,
   onClick,
+  compact = false,
 }: {
   src: string;
   alt: string;
   onClick: () => void;
+  compact?: boolean;
 }) {
   const [loaded, setLoaded] = useState(false);
 
@@ -1403,8 +1412,7 @@ function ImageThumb({
     <button
       type="button"
       onClick={onClick}
-      className="relative block rounded-xl border border-riftapp-border/40 overflow-hidden bg-riftapp-bg/40
-        hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md transition-all duration-200 cursor-pointer text-left group/thumb"
+      className={`relative block overflow-hidden transition-all duration-200 cursor-pointer text-left group/thumb ${compact ? 'rounded-lg' : 'rounded-xl border border-riftapp-border/40 bg-riftapp-bg/40 hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md'}`}
     >
       {/* Skeleton placeholder */}
       {!loaded && (
@@ -1418,7 +1426,7 @@ function ImageThumb({
         onLoad={() => setLoaded(true)}
         className={`block max-w-full w-auto h-auto object-contain rounded-xl
           transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-        style={{ maxHeight: '288px' }}
+        style={{ maxHeight: compact ? '220px' : '288px' }}
       />
     </button>
   );
@@ -1554,9 +1562,11 @@ const MAX_GRID_VISIBLE = 4;
 function ImageGrid({
   images,
   onOpen,
+  compact = false,
 }: {
   images: { id: string; src: string; alt: string }[];
   onOpen: (idx: number) => void;
+  compact?: boolean;
 }) {
   const count = images.length;
   const visible = images.slice(0, MAX_GRID_VISIBLE);
@@ -1565,8 +1575,8 @@ function ImageGrid({
   // 1 image → single full-width thumb
   if (count === 1) {
     return (
-      <div className="max-w-[420px]">
-        <ImageThumb src={visible[0].src} alt={visible[0].alt} onClick={() => onOpen(0)} />
+      <div className={compact ? 'w-full max-w-full' : 'max-w-[420px]'}>
+        <ImageThumb src={visible[0].src} alt={visible[0].alt} onClick={() => onOpen(0)} compact={compact} />
       </div>
     );
   }
@@ -1574,10 +1584,10 @@ function ImageGrid({
   // 2–4+ images → adaptive grid  (2 cols, max 2 rows)
   return (
     <div
-      className="grid gap-1 max-w-[420px]"
+      className={`grid gap-1 ${compact ? 'w-full max-w-full' : 'max-w-[420px]'}`}
       style={{
         gridTemplateColumns: 'repeat(2, 1fr)',
-        maxHeight: '320px',
+        maxHeight: compact ? '240px' : '320px',
       }}
     >
       {visible.map((img, idx) => {
@@ -1587,8 +1597,7 @@ function ImageGrid({
             key={img.id}
             type="button"
             onClick={() => onOpen(idx)}
-            className="relative rounded-xl overflow-hidden border border-riftapp-border/40 bg-riftapp-bg/40
-              hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md transition-all duration-200 cursor-pointer"
+            className={`relative overflow-hidden transition-all duration-200 cursor-pointer ${compact ? 'rounded-lg' : 'rounded-xl border border-riftapp-border/40 bg-riftapp-bg/40 hover:brightness-110 hover:scale-[1.02] hover:shadow-elevation-md'}`}
             style={{ aspectRatio: '4/3' }}
           >
             <img
@@ -1611,7 +1620,7 @@ function ImageGrid({
 }
 
 /* ─── Attachments (images, videos & files) ──────────────────────────── */
-function Attachments({ message }: { message: Message }) {
+function Attachments({ message, compact = false }: { message: Message; compact?: boolean }) {
   const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
 
   if (!message.attachments || message.attachments.length === 0) return null;
@@ -1633,16 +1642,18 @@ function Attachments({ message }: { message: Message }) {
         {/* Images */}
         {imageItems.length > 0 && (
           imageItems.length === 1 ? (
-            <div className="max-w-[420px]">
+            <div className={compact ? 'w-full max-w-full' : 'max-w-[420px]'}>
               <ImageThumb
                 src={imageItems[0].src}
                 alt={imageItems[0].alt}
                 onClick={() => setLightbox({ src: imageItems[0].src, alt: imageItems[0].alt })}
+                compact={compact}
               />
             </div>
           ) : (
             <ImageGrid
               images={imageItems}
+              compact={compact}
               onOpen={(idx) => {
                 const img = imageItems[idx];
                 setLightbox({ src: img.src, alt: img.alt });
@@ -1653,7 +1664,7 @@ function Attachments({ message }: { message: Message }) {
 
         {/* Videos */}
         {videoAtts.map((att) => (
-          <VideoPlayer key={att.id} src={publicAssetUrl(att.url)} />
+          <VideoPlayer key={att.id} src={publicAssetUrl(att.url)} compact={compact} />
         ))}
 
         {/* Non-image/video files */}
@@ -1666,7 +1677,8 @@ function Attachments({ message }: { message: Message }) {
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-3 bg-riftapp-content-elevated border border-riftapp-border/50 rounded-xl px-4 py-3
-                hover:bg-riftapp-content-elevated hover:border-riftapp-border transition-all duration-150 max-w-[380px] group/file"
+                hover:bg-riftapp-content-elevated hover:border-riftapp-border transition-all duration-150 group/file"
+              style={{ maxWidth: compact ? '100%' : '380px' }}
             >
               <div className="w-10 h-10 rounded-lg bg-riftapp-accent/10 flex items-center justify-center flex-shrink-0">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-riftapp-accent">
