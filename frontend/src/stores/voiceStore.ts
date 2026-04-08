@@ -17,11 +17,9 @@ import {
   ConnectionQuality,
   ConnectionState,
 } from 'livekit-client';
-import {
-  BackgroundProcessor,
-  supportsBackgroundProcessors,
-  type BackgroundProcessorWrapper,
-  type SwitchBackgroundProcessorOptions,
+import type {
+  BackgroundProcessorWrapper,
+  SwitchBackgroundProcessorOptions,
 } from '@livekit/track-processors';
 import { api } from '../api/client';
 import { wsSend } from '../hooks/useWebSocket';
@@ -52,6 +50,8 @@ type ScreenShareNotice = {
   tone: 'info' | 'error';
   message: string;
 };
+
+type TrackProcessorsModule = typeof import('@livekit/track-processors');
 
 const SPEAKING_BROADCAST_INTERVAL_MS = 30;
 const CONNECTION_STATS_POLL_INTERVAL_MS = 1000;
@@ -384,21 +384,28 @@ function cameraBackgroundProcessorOptions(
 
 function createCameraBackgroundProcessor(
   state: Pick<VoiceStore, 'cameraBackgroundMode' | 'cameraBackgroundAsset'>,
-): BackgroundProcessorWrapper | undefined {
+): Promise<BackgroundProcessorWrapper | undefined> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return undefined;
+    return Promise.resolve(undefined);
   }
 
-  if (!supportsBackgroundProcessors()) {
-    return undefined;
-  }
+  return loadTrackProcessorsModule()
+    .then(({ BackgroundProcessor, supportsBackgroundProcessors }) => {
+      if (!supportsBackgroundProcessors()) {
+        return undefined;
+      }
 
-  try {
-    return BackgroundProcessor(cameraBackgroundProcessorOptions(state), 'rift-camera-background');
-  } catch (error) {
-    console.warn('Unable to create camera background processor.', error);
-    return undefined;
-  }
+      try {
+        return BackgroundProcessor(cameraBackgroundProcessorOptions(state), 'rift-camera-background');
+      } catch (error) {
+        console.warn('Unable to create camera background processor.', error);
+        return undefined;
+      }
+    })
+    .catch((error) => {
+      console.warn('Unable to load camera background processor runtime.', error);
+      return undefined;
+    });
 }
 
 function getLocalCameraTrack(room: Room): LocalVideoTrack | null {
@@ -434,7 +441,7 @@ async function syncLocalCameraBackground(
     return;
   }
 
-  const processor = createCameraBackgroundProcessor(state);
+  const processor = await createCameraBackgroundProcessor(state);
   if (!processor) {
     return;
   }
@@ -452,7 +459,6 @@ function cameraCaptureOptions(
       height: 1440,
       frameRate: 60,
     },
-    processor: createCameraBackgroundProcessor(state),
   };
 }
 
@@ -466,6 +472,18 @@ let transientSpeakingTimers = new Map<string, number>();
 let micGateProcessor: MicNoiseGateProcessor | null = null;
 let micLastSpeakingBroadcastAt = 0;
 let connectionStatsTimer: number | null = null;
+let trackProcessorsModulePromise: Promise<TrackProcessorsModule> | null = null;
+
+async function loadTrackProcessorsModule() {
+  if (!trackProcessorsModulePromise) {
+    trackProcessorsModulePromise = import('@livekit/track-processors').catch((error) => {
+      trackProcessorsModulePromise = null;
+      throw error;
+    });
+  }
+
+  return trackProcessorsModulePromise;
+}
 
 function createDefaultConnectionStats(): VoiceConnectionStats {
   return {

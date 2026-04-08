@@ -332,7 +332,7 @@ function DeviceSelect({
           value={value ?? ''}
           onChange={(event) => void onChange(event.target.value || null)}
           disabled={disabled}
-          className="w-full cursor-pointer rounded-lg border border-white/10 bg-[#111214] px-3 py-2.5 text-[13px] text-white outline-none transition-colors hover:border-white/20 focus:border-[#5865f2] disabled:cursor-not-allowed disabled:opacity-60"
+          className="w-full cursor-pointer rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-[13px] text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2] disabled:cursor-not-allowed disabled:opacity-60"
         >
           <option value="">{systemDefaultLabel(kind)}</option>
           {devices.map((device) => (
@@ -342,7 +342,7 @@ function DeviceSelect({
           ))}
         </select>
         {description ? (
-          <p className="text-[12px] leading-snug text-[#9ca3af]">{description}</p>
+          <p className="text-[12px] leading-snug text-riftapp-text-muted">{description}</p>
         ) : null}
       </div>
     </Field>
@@ -364,18 +364,18 @@ function SettingToggle({
     <button
       type="button"
       onClick={onToggle}
-      className="w-full rounded-xl border border-white/10 bg-[#111214] px-4 py-3 text-left transition-colors hover:border-white/15 hover:bg-[#16181c]"
+      className="w-full rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-4 py-3 text-left transition-colors hover:border-riftapp-border-light hover:bg-riftapp-surface-hover"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">{label}</p>
-          <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">{description}</p>
+          <p className="text-sm font-semibold text-riftapp-text">{label}</p>
+          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">{description}</p>
         </div>
         <span
           className={`mt-0.5 inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
             enabled
               ? 'border-[#5865f2] bg-[#5865f2]'
-              : 'border-white/12 bg-[#0b0c0e]'
+              : 'border-riftapp-border/60 bg-riftapp-bg-alt'
           }`}
           aria-hidden="true"
         >
@@ -504,8 +504,8 @@ function ChoiceCard({
       onClick={onClick}
       className={`group w-full rounded-xl border px-4 py-4 text-left transition-all ${
         selected
-          ? 'border-[#5865f2] bg-[#1a1f2d] shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
-          : 'border-white/10 bg-[#111214] hover:border-white/20 hover:bg-[#17191d]'
+          ? 'border-[#5865f2] bg-riftapp-panel shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
+          : 'border-riftapp-border/60 bg-riftapp-surface hover:border-riftapp-border-light hover:bg-riftapp-surface-hover'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -513,16 +513,16 @@ function ChoiceCard({
           <div className="flex items-center gap-2">
             <p className="text-sm font-semibold text-white">{title}</p>
             {badge ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#cbd0d8]">
+              <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-muted">
                 {badge}
               </span>
             ) : null}
           </div>
-          <p className="text-[13px] leading-snug text-[#9ca3af]">{description}</p>
+          <p className="text-[13px] leading-snug text-riftapp-text-muted">{description}</p>
         </div>
         <span
           className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-            selected ? 'border-[#5865f2] bg-[#5865f2]' : 'border-white/15 bg-transparent'
+            selected ? 'border-[#5865f2] bg-[#5865f2]' : 'border-riftapp-border/60 bg-transparent'
           }`}
           aria-hidden="true"
         >
@@ -756,7 +756,7 @@ function BackgroundPickerModal({
                     }}
                     className={`overflow-hidden rounded-xl border text-left transition-all ${
                       selected
-                        ? 'border-[#5865f2] bg-[#1a1f2d] shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
+                        ? 'border-[#5865f2] bg-riftapp-panel shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
                         : 'border-riftapp-border/60 bg-riftapp-panel/70 hover:border-riftapp-border-light hover:bg-riftapp-panel-hover'
                     }`}
                   >
@@ -858,20 +858,20 @@ function CameraTestCard({
   const previewUrl = backgroundPreviewUrl(backgroundAsset);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+    <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white">Test Camera</p>
-          <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
+          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
             Preview the selected camera and confirm the saved background mode before you go live.
           </p>
         </div>
-        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#cbd0d8]">
+        <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
           {backgroundModeTitle(backgroundMode, backgroundAsset)}
         </span>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0d0f12]">
+      <div className="mt-4 overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-bg">
         <div className="relative aspect-video">
           {previewUrl ? (
             <img
@@ -880,20 +880,20 @@ function CameraTestCard({
               className="absolute inset-0 h-full w-full object-cover opacity-20"
             />
           ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#222833,transparent_56%),linear-gradient(135deg,#14161a,#0d0f12)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#2a3038,transparent_56%),linear-gradient(135deg,#191b1f,#101114)]" />
           )}
         {previewEnabled ? (
             <video ref={videoRef} playsInline muted className="relative z-10 h-full w-full bg-black object-cover" />
         ) : (
-            <div className="relative z-10 flex h-full items-center justify-center px-6 text-center text-[13px] text-[#c9ced6]">
+            <div className="relative z-10 flex h-full items-center justify-center px-6 text-center text-[13px] text-riftapp-text-muted">
               Camera preview is off. Start a test to check framing and lighting.
             </div>
         )}
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-white/10 bg-black/45 px-4 py-3 backdrop-blur-sm">
+          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-riftapp-border/60 bg-riftapp-bg/80 px-4 py-3 backdrop-blur-sm">
             <div>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#cbd0d8]">Background</p>
+              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">Background</p>
               <p className="mt-1 text-[13px] text-white">{backgroundModeTitle(backgroundMode, backgroundAsset)}</p>
-              <p className="mt-1 text-[12px] text-[#9ca3af]">{backgroundModeDescription(backgroundMode, backgroundAsset)}</p>
+              <p className="mt-1 text-[12px] text-riftapp-text-muted">{backgroundModeDescription(backgroundMode, backgroundAsset)}</p>
             </div>
             <button
               type="button"
@@ -904,14 +904,14 @@ function CameraTestCard({
                   setPreviewEnabled(true);
                 }
               }}
-              className="shrink-0 rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/15"
+              className="shrink-0 rounded-lg border border-riftapp-border/60 bg-riftapp-surface/80 px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
             >
               {previewEnabled ? 'Stop Test' : 'Test Camera'}
             </button>
           </div>
         </div>
       </div>
-      {starting && <p className="mt-3 text-[12px] text-[#9ca3af]">Starting preview…</p>}
+      {starting && <p className="mt-3 text-[12px] text-riftapp-text-muted">Starting preview…</p>}
       {error && <p className="mt-3 text-[12px] text-[#f87171]">{error}</p>}
     </div>
   );
@@ -1055,12 +1055,12 @@ function MicrophoneTestCard({
   }, [stopTest]);
 
   return (
-    <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+    <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
       <audio ref={audioRef} className="hidden" />
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white">Test Microphone</p>
-          <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
+          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
             Route your mic back to your chosen output so you can hear the current voice profile, RNNoise, and echo cancellation settings together.
           </p>
         </div>
@@ -1073,29 +1073,29 @@ function MicrophoneTestCard({
               setTesting(true);
             }
           }}
-          className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/15"
+          className="rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
         >
           {testing ? 'Stop Test' : 'Let\'s Check'}
         </button>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-white/10 bg-[#111214] px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8e97a8]">Input Profile</p>
+        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">Input Profile</p>
           <p className="mt-2 text-sm font-medium text-white">{noiseSuppressionEnabled ? 'Voice Isolation' : 'Studio / Custom'}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#111214] px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8e97a8]">RNNoise</p>
+        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">RNNoise</p>
           <p className="mt-2 text-sm font-medium text-white">{noiseSuppressionEnabled ? 'Enabled' : 'Disabled'}</p>
         </div>
-        <div className="rounded-xl border border-white/10 bg-[#111214] px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8e97a8]">Echo Cancellation</p>
+        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">Echo Cancellation</p>
           <p className="mt-2 text-sm font-medium text-white">{echoCancellationEnabled ? 'Enabled' : 'Disabled'}</p>
         </div>
       </div>
-      <p className="mt-4 text-[12px] text-[#9ca3af]">
+      <p className="mt-4 text-[12px] text-riftapp-text-muted">
         Use headphones if possible to avoid feedback while the test is active.
       </p>
-      {starting && <p className="mt-3 text-[12px] text-[#9ca3af]">Starting microphone test…</p>}
+      {starting && <p className="mt-3 text-[12px] text-riftapp-text-muted">Starting microphone test…</p>}
       {error && <p className="mt-3 text-[12px] text-[#f87171]">{error}</p>}
     </div>
   );
@@ -1277,21 +1277,21 @@ function VoiceVideoSettingsTab() {
     <div className="space-y-8">
       <section className="space-y-4">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-[#8e97a8]">Voice</h3>
-          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-[#9ca3af]">
+          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-riftapp-text-dim">Voice</h3>
+          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-riftapp-text-muted">
             Pick an input profile first, then fine-tune the mic path only when you need a custom setup.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">Input Profile</p>
-              <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
+              <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
                 Voice Isolation keeps RNNoise on, Studio keeps it off, and Custom exposes the raw controls.
               </p>
             </div>
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#cbd0d8]">
+            <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
               {selectedProfile === 'voice-isolation'
                 ? 'Voice Isolation'
                 : selectedProfile === 'studio'
@@ -1325,7 +1325,7 @@ function VoiceVideoSettingsTab() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
           <div className="grid gap-4 md:grid-cols-2">
               <DeviceSelect
                 label="Input Device"
@@ -1351,15 +1351,15 @@ function VoiceVideoSettingsTab() {
 
         {showCustomControls ? (
           <div className="space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+            <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
                   <p className="text-sm font-semibold text-white">Input Mode</p>
-                  <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
+                  <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
                     Push to Talk uses the existing space bar bind. Voice Activity follows your live threshold.
                   </p>
                 </div>
-                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#cbd0d8]">
+                <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
                   {pttMode ? 'Push to Talk' : 'Voice Activity'}
                 </span>
               </div>
@@ -1404,7 +1404,7 @@ function VoiceVideoSettingsTab() {
               />
             </div>
 
-            <div className={`rounded-2xl border border-white/10 bg-[#16181c] p-5 ${automaticInputSensitivity || pttMode ? 'opacity-70' : ''}`}>
+            <div className={`rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5 ${automaticInputSensitivity || pttMode ? 'opacity-70' : ''}`}>
               <Field label="Manual Input Sensitivity">
                 <div className="space-y-3">
                   <div className="flex items-center justify-between gap-3 text-[13px] text-white">
@@ -1416,7 +1416,7 @@ function VoiceVideoSettingsTab() {
                           : formatSensitivity(manualInputSensitivity)}
                     </span>
                     {!automaticInputSensitivity && !pttMode ? (
-                      <span className="text-[#8e97a8]">Set to 0 to keep the mic open</span>
+                      <span className="text-riftapp-text-dim">Set to 0 to keep the mic open</span>
                     ) : null}
                   </div>
 
@@ -1439,12 +1439,12 @@ function VoiceVideoSettingsTab() {
                     />
                   </div>
 
-                  <div className="flex items-center justify-between text-[11px] text-[#8e97a8]">
+                  <div className="flex items-center justify-between text-[11px] text-riftapp-text-dim">
                     <span>More sensitive</span>
                     <span>Less sensitive</span>
                   </div>
 
-                  <p className="text-[12px] leading-snug text-[#9ca3af]">
+                  <p className="text-[12px] leading-snug text-riftapp-text-muted">
                     One threshold controls both the speaking ring and the outgoing mic gate, so the indicator matches what actually leaves your mic.
                   </p>
                 </div>
@@ -1452,7 +1452,7 @@ function VoiceVideoSettingsTab() {
             </div>
           </div>
         ) : (
-          <div className="rounded-2xl border border-white/10 bg-[#16181c] px-5 py-4 text-[13px] leading-snug text-[#9ca3af]">
+          <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 px-5 py-4 text-[13px] leading-snug text-riftapp-text-muted">
             Switch to Custom when you want to adjust input mode, manual sensitivity, or echo cancellation directly.
           </div>
         )}
@@ -1468,13 +1468,13 @@ function VoiceVideoSettingsTab() {
 
       <section className="space-y-4">
         <div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-[#8e97a8]">Video</h3>
-          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-[#9ca3af]">
+          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-riftapp-text-dim">Video</h3>
+          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-riftapp-text-muted">
             Pick the camera you want to use, then choose whether to keep the feed raw, blurred, or backed by a custom asset.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
           <div className="grid gap-4 lg:grid-cols-2">
             <DeviceSelect
               label="Camera Device"
@@ -1487,18 +1487,18 @@ function VoiceVideoSettingsTab() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-[#16181c] p-5">
+        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-sm font-semibold text-white">Video Background</p>
-              <p className="mt-1 text-[13px] leading-snug text-[#9ca3af]">
+              <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
                 Choose None, Blur, or Custom. Custom opens the background picker for uploads and GIFs.
               </p>
             </div>
             <button
               type="button"
               onClick={() => setBackgroundPickerOpen(true)}
-              className="rounded-lg border border-white/10 bg-white/10 px-3 py-2 text-[13px] font-medium text-white transition-colors hover:bg-white/15"
+              className="rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
             >
               {cameraBackgroundMode === 'custom' ? 'Edit Custom' : 'Browse Custom'}
             </button>
@@ -1511,8 +1511,8 @@ function VoiceVideoSettingsTab() {
               selected={cameraBackgroundMode === 'none'}
               onClick={() => setCameraBackgroundMode('none')}
             >
-              <div className="overflow-hidden rounded-xl border border-white/10 bg-[radial-gradient(circle_at_top,#232831,transparent_56%),linear-gradient(135deg,#17191d,#0f1012)]">
-                <div className="aspect-[16/9] px-4 py-4 text-[12px] text-[#cbd0d8]">Raw camera preview</div>
+              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-[radial-gradient(circle_at_top,#2b3038,transparent_56%),linear-gradient(135deg,#191b1f,#101114)]">
+                <div className="aspect-[16/9] px-4 py-4 text-[12px] text-riftapp-text-muted">Raw camera preview</div>
               </div>
             </ChoiceCard>
 
@@ -1522,7 +1522,7 @@ function VoiceVideoSettingsTab() {
               selected={cameraBackgroundMode === 'blur'}
               onClick={() => setCameraBackgroundMode('blur')}
             >
-              <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111214]">
+              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-bg">
                 <div className="relative aspect-[16/9]">
                   <div
                     className="absolute inset-0 scale-110 bg-cover bg-center opacity-80 blur-sm"
@@ -1551,7 +1551,7 @@ function VoiceVideoSettingsTab() {
                 }
               }}
             >
-              <div className="overflow-hidden rounded-xl border border-white/10 bg-[#111214]">
+              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-bg">
                 {customBackgroundPreview ? (
                   <img
                     src={customBackgroundPreview}
@@ -1559,7 +1559,7 @@ function VoiceVideoSettingsTab() {
                     className="aspect-[16/9] w-full object-cover"
                   />
                 ) : (
-                  <div className="flex aspect-[16/9] items-center justify-center bg-[radial-gradient(circle_at_top,#2a1d2b,transparent_58%),linear-gradient(135deg,#17191d,#0f1012)] px-4 text-center text-[12px] text-[#cbd0d8]">
+                  <div className="flex aspect-[16/9] items-center justify-center bg-[radial-gradient(circle_at_top,#2c323a,transparent_58%),linear-gradient(135deg,#191b1f,#101114)] px-4 text-center text-[12px] text-riftapp-text-muted">
                     No custom background selected yet
                   </div>
                 )}
