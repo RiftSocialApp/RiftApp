@@ -465,6 +465,18 @@ function getLocalCameraTrack(room: Room): LocalVideoTrack | null {
   return publication?.videoTrack ?? null;
 }
 
+async function stopLocalCameraProcessor(cameraTrack: LocalVideoTrack | null) {
+  if (!cameraTrack?.getProcessor()) {
+    return;
+  }
+
+  try {
+    await cameraTrack.stopProcessor();
+  } catch (error) {
+    console.warn('Unable to stop camera background processor.', error);
+  }
+}
+
 function isBackgroundProcessorWrapper(value: unknown): value is BackgroundProcessorWrapper {
   return typeof value === 'object'
     && value !== null
@@ -484,13 +496,18 @@ async function syncLocalCameraBackground(
   const desiredOptions = cameraBackgroundProcessorOptions(state);
   const existingProcessor = cameraTrack.getProcessor();
 
+  if (desiredOptions.mode === 'disabled') {
+    await stopLocalCameraProcessor(cameraTrack);
+    return;
+  }
+
   if (isBackgroundProcessorWrapper(existingProcessor)) {
     await existingProcessor.switchTo(desiredOptions);
     return;
   }
 
-  if (desiredOptions.mode === 'disabled') {
-    return;
+  if (existingProcessor) {
+    await stopLocalCameraProcessor(cameraTrack);
   }
 
   const processor = await createCameraBackgroundProcessor(state);
@@ -1534,11 +1551,15 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
     const wasEnabled = roomRef.localParticipant.isCameraEnabled;
     const currentState = get();
+    if (wasEnabled) {
+      await stopLocalCameraProcessor(getLocalCameraTrack(roomRef));
+    }
     await roomRef.localParticipant.setCameraEnabled(
       !wasEnabled,
       !wasEnabled ? cameraCaptureOptions(currentState) : undefined,
     );
     if (!wasEnabled) {
+      await stopLocalCameraProcessor(getLocalCameraTrack(roomRef));
       await syncLocalCameraBackground(roomRef, currentState);
     }
     set({ isCameraOn: !wasEnabled });
@@ -1783,8 +1804,10 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         cameraBackgroundMode: current.cameraBackgroundMode,
         cameraBackgroundAsset: current.cameraBackgroundAsset,
       };
+      await stopLocalCameraProcessor(getLocalCameraTrack(room));
       await room.localParticipant.setCameraEnabled(false);
       await room.localParticipant.setCameraEnabled(true, cameraCaptureOptions(nextCameraState));
+      await stopLocalCameraProcessor(getLocalCameraTrack(room));
       await syncLocalCameraBackground(room, nextCameraState);
       syncParticipants();
     }

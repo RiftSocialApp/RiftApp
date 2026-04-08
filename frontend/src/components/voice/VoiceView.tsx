@@ -61,6 +61,24 @@ type TileMenuState = {
   focusSlotId: string;
 } | null;
 
+function useAttachedVideoTrack(track: Track | undefined, enabled = true) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    const element = videoRef.current;
+    if (!enabled || !track || track.kind !== Track.Kind.Video || !element) {
+      return;
+    }
+
+    track.attach(element);
+    return () => {
+      track.detach(element);
+    };
+  }, [track, enabled]);
+
+  return videoRef;
+}
+
 const ActivitiesIcon = activityIcons.game;
 
 export default function VoiceView() {
@@ -364,7 +382,7 @@ export default function VoiceView() {
               <MicIcon muted={isMuted} size={22} />
             </ControlBtn>
 
-            <ControlBtn onClick={() => void toggleCamera()} active={isCameraOn} crossed={!isCameraOn} tooltip={isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}>
+            <ControlBtn onClick={() => void toggleCamera()} active={isCameraOn} crossed={!isCameraOn} neutralWhenCrossed tooltip={isCameraOn ? 'Turn Off Camera' : 'Turn On Camera'}>
               <CameraIcon enabled={isCameraOn} size={22} />
             </ControlBtn>
 
@@ -551,6 +569,7 @@ function ControlBtn({
   active,
   danger,
   crossed,
+  neutralWhenCrossed,
   className = '',
 }: {
   children: React.ReactNode;
@@ -559,12 +578,13 @@ function ControlBtn({
   active?: boolean;
   danger?: boolean;
   crossed?: boolean;
+  neutralWhenCrossed?: boolean;
   className?: string;
 }) {
   let cls = 'bg-transparent hover:bg-white/[0.06] text-[#b5bac1]';
   if (danger) cls = 'bg-[#ed4245] hover:bg-[#c93b3e] text-white';
   else if (active) cls = 'bg-[#5865f2] hover:bg-[#4752c4] text-white';
-  else if (crossed) cls = 'bg-transparent hover:bg-white/[0.06] text-[#ed4245]';
+  else if (crossed) cls = `bg-transparent hover:bg-white/[0.06] ${neutralWhenCrossed ? 'text-[#b5bac1]' : 'text-[#ed4245]'}`;
 
   return (
     <button
@@ -688,17 +708,7 @@ function StageSlotContent({ slot, hubMembers }: { slot: LayoutSlot; hubMembers: 
 }
 
 function CameraFill({ participant }: { participant: VoiceParticipant }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  useEffect(() => {
-    const track = participant.videoTrack;
-    const el = videoRef.current;
-    if (track && el && track.kind === Track.Kind.Video) {
-      track.attach(el);
-      return () => {
-        track.detach(el);
-      };
-    }
-  }, [participant.videoTrack]);
+  const videoRef = useAttachedVideoTrack(participant.videoTrack, participant.isCameraOn);
   return <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />;
 }
 
@@ -711,20 +721,9 @@ function ScreenShareStage({
   hubMembers: Record<string, User>;
   fill?: boolean;
 }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoRef = useAttachedVideoTrack(participant.screenTrack, participant.isScreenSharing);
   const member = hubMembers[participant.identity];
   const displayName = member?.display_name || member?.username || participant.identity;
-
-  useEffect(() => {
-    const track = participant.screenTrack;
-    const el = videoRef.current;
-    if (track && el && track.kind === Track.Kind.Video) {
-      track.attach(el);
-      return () => {
-        track.detach(el);
-      };
-    }
-  }, [participant.screenTrack]);
 
   return (
     <div className={`relative w-full h-full flex items-center justify-center bg-black ${fill ? '' : ''}`}>
@@ -774,7 +773,6 @@ function SlotTile({
   onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const participant = slot.participant;
-  const videoRef = useRef<HTMLVideoElement>(null);
   const member = hubMembers[participant.identity];
   const displayName = member?.display_name || member?.username || participant.identity;
   const avatarUrl = member?.avatar_url;
@@ -784,17 +782,7 @@ function SlotTile({
   const hasVideo = Boolean(
     track && track.kind === Track.Kind.Video && (isScreen || participant.isCameraOn),
   );
-
-  useEffect(() => {
-    const el = videoRef.current;
-    const t = track;
-    if (t && el && t.kind === Track.Kind.Video) {
-      t.attach(el);
-      return () => {
-        t.detach(el);
-      };
-    }
-  }, [track]);
+  const videoRef = useAttachedVideoTrack(track, hasVideo);
 
   const speaking = participant.isSpeaking;
 
