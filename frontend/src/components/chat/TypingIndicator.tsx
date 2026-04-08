@@ -23,7 +23,7 @@ export default function TypingIndicator({ streamId }: TypingIndicatorProps) {
   }
 
   return (
-    <div className="h-6 px-4 flex items-center gap-1.5 text-xs text-riftapp-text-muted flex-shrink-0 animate-fade-in">
+    <div className="mt-1 h-6 px-4 flex items-center gap-1.5 text-xs text-riftapp-text-muted flex-shrink-0 animate-fade-in">
       <span className="flex gap-[3px] items-center">
         <span className="w-1.5 h-1.5 rounded-full bg-riftapp-accent animate-typing-dot" />
         <span className="w-1.5 h-1.5 rounded-full bg-riftapp-accent animate-typing-dot [animation-delay:0.2s]" />

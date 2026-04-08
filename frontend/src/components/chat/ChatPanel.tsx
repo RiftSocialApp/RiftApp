@@ -333,6 +333,7 @@ function FloatingPanel({
   subtitle,
   widthClass = 'w-[380px]',
   contentClassName = 'max-h-[min(72vh,680px)] overflow-y-auto p-3',
+  showHeaderDivider = true,
   actions,
   onClose,
   children,
@@ -341,13 +342,14 @@ function FloatingPanel({
   subtitle?: string;
   widthClass?: string;
   contentClassName?: string;
+  showHeaderDivider?: boolean;
   actions?: ReactNode;
   onClose: () => void;
   children: ReactNode;
 }) {
   return (
     <div className={`${widthClass} overflow-hidden rounded-2xl border border-white/10 bg-[#111214]/95 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl animate-scale-in`}>
-      <div className="flex items-start justify-between gap-3 border-b border-white/6 px-4 py-3">
+      <div className={`flex items-start justify-between gap-3 px-4 py-3 ${showHeaderDivider ? 'border-b border-white/6' : ''}`}>
         <div className="min-w-0">
           <h4 className="text-sm font-semibold text-[#f2f3f5]">{title}</h4>
           {subtitle ? <p className="mt-0.5 text-xs text-[#949ba4]">{subtitle}</p> : null}
@@ -1332,6 +1334,7 @@ export default function ChatPanel({
                 subtitle={activeStream ? `#${activeStream.name}` : 'Current channel'}
                 widthClass="w-[360px]"
                 contentClassName="max-h-[min(72vh,680px)] overflow-y-auto px-2.5 py-3"
+                showHeaderDivider={false}
                 onClose={closePanel}
                 actions={
                   <button
