@@ -169,11 +169,15 @@ function upsertSavedCameraBackgroundAssets(
   nextAsset: CameraBackgroundAsset | null,
 ) {
   const normalizedAsset = normalizeCameraBackgroundAsset(nextAsset);
-  if (!normalizedAsset || normalizedAsset.kind === 'video') {
-    return existingAssets;
+  const uploadedOnly = existingAssets.filter(
+    (asset) => asset.kind !== 'video' && asset.source === 'upload',
+  );
+
+  if (!normalizedAsset || normalizedAsset.kind === 'video' || normalizedAsset.source !== 'upload') {
+    return uploadedOnly;
   }
 
-  const deduped = existingAssets.filter(
+  const deduped = uploadedOnly.filter(
     (asset) => !(asset.source === normalizedAsset.source && asset.url === normalizedAsset.url),
   );
 
@@ -192,7 +196,7 @@ function loadVoiceSettings(): VoiceSettingsSnapshot {
     let savedCameraBackgroundAssets = Array.isArray(parsed.savedCameraBackgroundAssets)
       ? parsed.savedCameraBackgroundAssets
         .map((asset) => normalizeCameraBackgroundAsset(asset))
-        .filter((asset): asset is CameraBackgroundAsset => asset !== null && asset.kind !== 'video')
+        .filter((asset): asset is CameraBackgroundAsset => asset !== null && asset.kind !== 'video' && asset.source === 'upload')
       : [];
 
     if (cameraBackgroundAsset) {
