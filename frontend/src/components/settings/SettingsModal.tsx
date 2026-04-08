@@ -1457,8 +1457,6 @@ function BackgroundPickerModal({
   const [gifPickerOpen, setGifPickerOpen] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const uploadedAsset = currentAsset?.source === 'upload' ? currentAsset : null;
-
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -1557,7 +1555,7 @@ function BackgroundPickerModal({
         </div>
 
         <div className="px-6 pb-5">
-          <div className="grid grid-cols-[1.45fr_1fr] gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
               onClick={openUploadPicker}
@@ -1580,24 +1578,14 @@ function BackgroundPickerModal({
                 handleDroppedFile(event.dataTransfer.files);
               }}
               disabled={uploading}
-              className={`relative flex min-h-[196px] items-center justify-center overflow-hidden rounded-xl border px-4 text-center transition-colors ${
+              className={`relative flex h-[196px] items-center justify-center overflow-hidden rounded-xl border px-4 text-center transition-colors ${
                 dragActive
                   ? 'border-[#5865f2] bg-[#4f545c]'
-                  : 'border-white/6 bg-[#3a3c46] hover:bg-[#454754]'
+                  : currentAsset?.source === 'upload'
+                    ? 'border-[#5865f2] bg-[#4a4d57]'
+                    : 'border-white/6 bg-[#3a3c46] hover:bg-[#454754]'
               } disabled:cursor-not-allowed disabled:opacity-80`}
             >
-              {uploadedAsset ? (
-                <>
-                  <BackgroundAssetMedia
-                    asset={uploadedAsset}
-                    alt={uploadedAsset.label ?? 'Uploaded background'}
-                    className="absolute inset-0 h-full w-full object-cover"
-                    autoPlay
-                    loading="eager"
-                  />
-                  <div className="absolute inset-0 bg-black/38" />
-                </>
-              ) : null}
               <div className="relative z-10 flex flex-col items-center justify-center gap-3 text-white">
                 <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-black/12 text-white/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
                   {uploading ? (
@@ -1620,7 +1608,7 @@ function BackgroundPickerModal({
             <button
               type="button"
               onClick={() => setGifPickerOpen(true)}
-              className={`group relative min-h-[196px] overflow-hidden rounded-xl border transition-colors ${
+              className={`group relative h-[196px] overflow-hidden rounded-xl border transition-colors ${
                 currentAsset?.source === 'tenor'
                   ? 'border-[#5865f2] bg-[#2f3136]'
                   : 'border-white/6 bg-[#2f3136] hover:bg-[#36393f]'
@@ -1634,7 +1622,7 @@ function BackgroundPickerModal({
                       <BackgroundAssetMedia
                         asset={asset}
                         alt={asset.label ?? 'GIF preview'}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-cover brightness-[0.58] saturate-[0.9]"
                         autoPlay
                         loading="eager"
                       />
@@ -1644,9 +1632,9 @@ function BackgroundPickerModal({
                   );
                 })}
               </div>
-              <div className="absolute inset-0 bg-black/38 transition-colors group-hover:bg-black/28" />
+              <div className="absolute inset-0 bg-black/58 transition-colors group-hover:bg-black/48" />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[15px] font-semibold text-white drop-shadow-[0_1px_3px_rgba(0,0,0,0.55)]">Choose GIF</span>
+                <span className="text-[15px] font-semibold text-white drop-shadow-[0_1px_4px_rgba(0,0,0,0.75)]">Choose GIF</span>
               </div>
             </button>
           </div>
