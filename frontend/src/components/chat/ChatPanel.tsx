@@ -90,6 +90,27 @@ function formatCompactTimestamp(dateStr: string): string {
   });
 }
 
+function formatPinnedMessageTimestamp(dateStr: string): string {
+  const date = new Date(dateStr);
+  const now = new Date();
+  const isSameDay = date.toDateString() === now.toDateString();
+
+  if (isSameDay) {
+    return date.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  }
+
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
 function formatRelativeTimestamp(dateStr: string): string {
   try {
     return formatDistanceToNow(new Date(dateStr), { addSuffix: true });
@@ -311,13 +332,15 @@ function FloatingPanel({
   title,
   subtitle,
   widthClass = 'w-[380px]',
+  contentClassName = 'max-h-[min(72vh,680px)] overflow-y-auto p-3',
   actions,
   onClose,
   children,
 }: {
-  title: string;
+  title: ReactNode;
   subtitle?: string;
   widthClass?: string;
+  contentClassName?: string;
   actions?: ReactNode;
   onClose: () => void;
   children: ReactNode;
@@ -341,7 +364,7 @@ function FloatingPanel({
           </button>
         </div>
       </div>
-      <div className="max-h-[min(72vh,680px)] overflow-y-auto p-3">{children}</div>
+      <div className={contentClassName}>{children}</div>
     </div>
   );
 }
@@ -418,6 +441,46 @@ function MessagePreviewCard({
         </div>
       </div>
     </button>
+  );
+}
+
+function PinnedMessageCard({
+  message,
+  isOwn,
+  hubId,
+  onOpen,
+}: {
+  message: Message;
+  isOwn: boolean;
+  hubId?: string | null;
+  onOpen: () => void;
+}) {
+  const handleKeyDown = useCallback((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      onOpen();
+    }
+  }, [onOpen]);
+
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
+      className="group rounded-xl border border-white/6 bg-[#17181c] px-3 py-3 text-left transition-colors hover:bg-[#1d1f24] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2]/40"
+    >
+      <div className="pointer-events-none">
+        <MessageItem
+          message={message}
+          showHeader
+          isOwn={isOwn}
+          hubId={hubId}
+          isPreview
+          timestampFormatter={formatPinnedMessageTimestamp}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -1259,8 +1322,15 @@ export default function ChatPanel({
 
             {activePanel === 'pins' && canShowChannelTools ? (
               <FloatingPanel
-                title="Pinned Messages"
+                title={(
+                  <span className="inline-flex items-center gap-2">
+                    <IconPin className="h-4 w-4 text-[#b5bac1]" />
+                    <span>Pinned Messages</span>
+                  </span>
+                )}
                 subtitle={activeStream ? `#${activeStream.name}` : 'Current channel'}
+                widthClass="w-[360px]"
+                contentClassName="max-h-[min(72vh,680px)] overflow-y-auto px-2.5 py-3"
                 onClose={closePanel}
                 actions={
                   <button
@@ -1276,7 +1346,7 @@ export default function ChatPanel({
                 {pinnedLoading ? (
                   <div className="space-y-2">
                     {[0, 1, 2].map((item) => (
-                      <div key={item} className="h-24 animate-pulse rounded-xl bg-[#17181c]" />
+                      <div key={item} className="h-32 animate-pulse rounded-xl bg-[#17181c]" />
                     ))}
                   </div>
                 ) : pinnedError ? (
@@ -1286,11 +1356,13 @@ export default function ChatPanel({
                     icon={<IconPin className="h-5 w-5" />}
                   />
                 ) : pinnedMessages.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {pinnedMessages.map((message) => (
-                      <MessagePreviewCard
+                      <PinnedMessageCard
                         key={message.id}
                         message={message}
+                        isOwn={message.author_id === user?.id}
+                        hubId={activeHubId}
                         onOpen={() => void openStreamMessage(message)}
                       />
                     ))}

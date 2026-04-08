@@ -271,9 +271,18 @@ interface MessageItemProps {
   /** Active hub (for message link in context menu). */
   hubId?: string | null;
   isPreview?: boolean;
+  timestampFormatter?: (dateStr: string) => string;
 }
 
-const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM = false, hubId = null, isPreview = false }: MessageItemProps) {
+const MessageItem = memo(function MessageItem({
+  message,
+  showHeader,
+  isOwn,
+  isDM = false,
+  hubId = null,
+  isPreview = false,
+  timestampFormatter,
+}: MessageItemProps) {
   const author = message.author;
   const authorName = author?.display_name || 'Unknown';
   const toggleReaction = useMessageStore((s) => s.toggleReaction);
@@ -308,6 +317,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
 
   const color = useMemo(() => nameColor(authorName), [authorName]);
   const bg = useMemo(() => avatarBg(authorName), [authorName]);
+  const renderTimestamp = timestampFormatter ?? formatTime;
 
   // Build a lowercase set of known usernames for mention detection
   const knownUsernames = useMemo(() => {
@@ -368,13 +378,8 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     jumpToMessageId(replyTargetId);
   }, [replyTargetId]);
 
-  const replyPreviewBlock = hasReplyPreview ? (
-    <button
-      type="button"
-      onClick={handleReplyPreviewClick}
-      disabled={interactionsDisabled || !replyTargetId}
-      className="group/reply mb-0.5 flex max-w-[580px] min-w-0 items-center gap-1.5 pr-2 text-left disabled:cursor-default disabled:opacity-80"
-    >
+  const replyPreviewBody = (
+    <>
       <span
         aria-hidden
         className="mt-[9px] h-[10px] w-6 shrink-0 rounded-tl-[6px] border-l-2 border-t-2 border-riftapp-border/35"
@@ -406,7 +411,23 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
       >
         {replyPreview.text}
       </span>
-    </button>
+    </>
+  );
+
+  const replyPreviewBlock = hasReplyPreview ? (
+    interactionsDisabled || !replyTargetId ? (
+      <div className="mb-0.5 flex max-w-[580px] min-w-0 items-center gap-1.5 pr-2 text-left opacity-80">
+        {replyPreviewBody}
+      </div>
+    ) : (
+      <button
+        type="button"
+        onClick={handleReplyPreviewClick}
+        className="group/reply mb-0.5 flex max-w-[580px] min-w-0 items-center gap-1.5 pr-2 text-left"
+      >
+        {replyPreviewBody}
+      </button>
+    )
   ) : null;
 
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
@@ -598,7 +619,7 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
 
   return (
     <div
-      id={`message-${message.id}`}
+      id={isPreview ? undefined : `message-${message.id}`}
       onContextMenu={interactionsDisabled ? undefined : handleMessageContextMenu}
       className={isPreview
         ? 'relative rounded-xl'
@@ -681,10 +702,10 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
                 {authorName}
               </span>
               <span className="text-[11px] text-riftapp-text-dim/80 select-none">
-                {formatTime(message.created_at)}
+                {renderTimestamp(message.created_at)}
               </span>
               {message.edited_at && (
-                <span className="text-[10px] text-riftapp-text-dim/60 select-none" title={`Edited ${formatTime(message.edited_at)}`}>(edited)</span>
+                <span className="text-[10px] text-riftapp-text-dim/60 select-none" title={`Edited ${renderTimestamp(message.edited_at)}`}>(edited)</span>
               )}
             </div>
             {contentBlock}
