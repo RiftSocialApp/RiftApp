@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -17,6 +18,13 @@ func Connect(databaseURL string) (*pgxpool.Pool, error) {
 	config.MaxConns = 20
 	config.MinConns = 2
 	config.MaxConnLifetime = 30 * time.Minute
+
+	// Neon / some roles leave search_path empty after DROP/CREATE public; Goose then fails with
+	// "no schema has been selected to create in" when creating goose_db_version.
+	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SET search_path TO public")
+		return err
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
