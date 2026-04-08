@@ -13,6 +13,7 @@ import {
   type CameraBackgroundMode,
   type VoiceMediaDevice,
 } from '../../stores/voiceStore';
+import { useFrontendUpdateStore } from '../../stores/frontendUpdateStore';
 import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSettingsStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
@@ -73,6 +74,19 @@ function formatDeployAge(deployedAt: string, now: number) {
   return '<1h';
 }
 
+function formatFrontendBuildTimestamp(buildId: string) {
+  const buildMs = Date.parse(buildId);
+  if (Number.isNaN(buildMs)) return buildId;
+
+  return new Date(buildMs).toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function formatDesktopOsLabel(info: DesktopBuildInfo) {
   const archLabel = info.arch ? info.arch.toLowerCase() : '';
 
@@ -100,6 +114,9 @@ function SettingsModal() {
   const activeTab = useAppSettingsStore((s) => s.settingsTab);
   const closeSettings = useAppSettingsStore((s) => s.closeSettings);
   const setSettingsTab = useAppSettingsStore((s) => s.setSettingsTab);
+  const frontendVersion = useFrontendUpdateStore((s) => s.currentVersion);
+  const frontendBuildId = useFrontendUpdateStore((s) => s.currentBuildId);
+  const frontendUpdateReady = useFrontendUpdateStore((s) => s.updateReady);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [desktopBuildInfo, setDesktopBuildInfo] = useState<DesktopBuildInfo>(emptyDesktopBuildInfo);
   const [appVersionLabel, setAppVersionLabel] = useState('Web App');
@@ -152,6 +169,7 @@ function SettingsModal() {
   }, []);
 
   const desktopOsLabel = formatDesktopOsLabel(desktopBuildInfo);
+  const frontendBuildLabel = formatFrontendBuildTimestamp(frontendBuildId);
 
   if (!user) return null;
 
@@ -243,13 +261,14 @@ function SettingsModal() {
                 <div className="mt-4 rounded-xl border border-riftapp-border/30 bg-riftapp-panel/25 px-3 py-3">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-dim">App Version</p>
                   <p className="mt-1 text-[12px] font-semibold text-riftapp-text">{appVersionLabel}</p>
-                  {desktopBuildInfo.electronVersion && (
-                    <div className="mt-2 space-y-1 text-[11px] leading-5 text-riftapp-text-muted">
-                      {deployAgeLabel && <p>Deployed {deployAgeLabel}</p>}
-                      <p>Electron {desktopBuildInfo.electronVersion}</p>
-                      {desktopOsLabel && <p>{desktopOsLabel}</p>}
-                    </div>
-                  )}
+                  <div className="mt-2 space-y-1 text-[11px] leading-5 text-riftapp-text-muted">
+                    <p>{frontendVersion ? `Frontend v${frontendVersion}` : 'Frontend build'}</p>
+                    {frontendBuildLabel && <p>Build {frontendBuildLabel}</p>}
+                    {deployAgeLabel && <p>Deployed {deployAgeLabel}</p>}
+                    {desktopBuildInfo.electronVersion ? <p>Electron {desktopBuildInfo.electronVersion}</p> : null}
+                    {desktopOsLabel && <p>{desktopOsLabel}</p>}
+                    {frontendUpdateReady ? <p className="font-semibold text-[#3ba55d]">Frontend update ready. Use the green refresh button to apply it.</p> : null}
+                  </div>
                 </div>
               </div>
             </div>

@@ -17,6 +17,7 @@ import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/auth';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { usePresenceStore } from '../../stores/presenceStore';
+import { useFrontendUpdateStore } from '../../stores/frontendUpdateStore';
 import { useWsSend } from '../../hooks/useWebSocket';
 import MessageInput from './MessageInput';
 import MessageItem from './MessageItem';
@@ -603,6 +604,8 @@ export default function ChatPanel({
   const isLoading = isDMMode ? dmMessagesLoading : messagesLoading;
 
   const [activePanel, setActivePanel] = useState<HeaderPanel>(null);
+  const frontendUpdateReady = useFrontendUpdateStore((s) => s.updateReady);
+  const applyFrontendUpdate = useFrontendUpdateStore((s) => s.applyUpdate);
   const [updateStatus, setUpdateStatus] = useState<DesktopUpdateStatus>(idleDesktopUpdateStatus);
   const [pinnedMessages, setPinnedMessages] = useState<Message[]>([]);
   const [pinnedLoading, setPinnedLoading] = useState(false);
@@ -1107,6 +1110,12 @@ export default function ChatPanel({
   }, [activeHubId, activeStreamId, activeConversationId]);
 
   const canShowChannelTools = !showWelcome && !isDMMode && Boolean(activeHubId);
+  const desktopUpdateReady = Boolean(desktop && updateStatus.state === 'ready');
+  const showUpdateAction = desktopUpdateReady || frontendUpdateReady;
+  const updateActionLabel = desktopUpdateReady ? 'Restart to update' : 'Refresh to update';
+  const updateActionTitle = desktopUpdateReady
+    ? 'Restart to install the downloaded desktop update'
+    : 'Refresh to load the latest frontend build';
 
   return (
     <div className="flex-1 min-h-0 flex flex-col bg-[#111214] min-w-0 relative">
@@ -1171,14 +1180,21 @@ export default function ChatPanel({
                 </HeaderIconButton>
               ) : null}
 
-              {desktop && updateStatus.state === 'ready' ? (
+              {showUpdateAction ? (
                 <HeaderIconButton
-                  label="Restart to update"
-                  title="Restart to install the downloaded update"
+                  label={updateActionLabel}
+                  title={updateActionTitle}
                   tone="success"
-                  onClick={() => desktop.restartToUpdate()}
+                  onClick={() => {
+                    if (desktopUpdateReady) {
+                      desktop?.restartToUpdate();
+                      return;
+                    }
+
+                    applyFrontendUpdate();
+                  }}
                 >
-                  <IconDownload className="h-4 w-4" />
+                  {desktopUpdateReady ? <IconDownload className="h-4 w-4" /> : <IconRefresh className="h-4 w-4" />}
                 </HeaderIconButton>
               ) : null}
             </div>

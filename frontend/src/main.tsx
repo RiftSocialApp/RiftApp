@@ -2,8 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
+import { useFrontendUpdateStore } from './stores/frontendUpdateStore';
+import { reloadOnceForFrontendUpdate } from './utils/frontendUpdate';
 
-const CHUNK_RELOAD_SESSION_KEY = 'riftapp:stale-chunk-reload';
 const DEPLOY_CHECK_INTERVAL_MS = 3 * 60 * 1000;
 const DEPLOY_SCRIPT_RE = /<script[^>]+type=["']module["'][^>]+src=["']([^"']*\/assets\/[^"']+\.js[^"']*)["']/i;
 const DEPLOY_STYLE_RE = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']*\/assets\/[^"']+\.css[^"']*)["']/i;
@@ -52,24 +53,6 @@ function shouldRecoverFromPromiseRejection(reason: unknown) {
   }
 
   return false;
-}
-
-function reloadOnceForStaleChunk() {
-  try {
-    const prev = sessionStorage.getItem(CHUNK_RELOAD_SESSION_KEY);
-    if (prev) {
-      const ts = Number(prev);
-      // If we already reloaded within the last 30 seconds, don't reload again.
-      if (!Number.isNaN(ts) && Date.now() - ts < 30_000) {
-        return;
-      }
-    }
-    sessionStorage.setItem(CHUNK_RELOAD_SESSION_KEY, String(Date.now()));
-  } catch {
-    /* ignore storage failures */
-  }
-
-  window.location.reload();
 }
 
 function normalizeAssetPath(value: string) {
@@ -125,16 +108,10 @@ function installDeployRefreshMonitor() {
 
   const currentSignature = getCurrentDeploySignature();
   if (!currentSignature) return;
+  useFrontendUpdateStore.getState().setCurrentSignature(currentSignature);
 
   let knownSignature = currentSignature;
-  let pendingRefresh = false;
   let checkInFlight = false;
-
-  const reloadIfPending = () => {
-    if (!pendingRefresh) return;
-    pendingRefresh = false;
-    reloadOnceForStaleChunk();
-  };
 
   const checkForDeployUpdate = async () => {
     if (checkInFlight) return;
@@ -145,13 +122,7 @@ function installDeployRefreshMonitor() {
       if (!latestSignature || latestSignature === knownSignature) return;
 
       knownSignature = latestSignature;
-
-      if (document.visibilityState === 'hidden' || !document.hasFocus()) {
-        reloadOnceForStaleChunk();
-        return;
-      }
-
-      pendingRefresh = true;
+      useFrontendUpdateStore.getState().markUpdateReady(latestSignature);
     } catch {
       /* ignore transient deploy check failures */
     } finally {
@@ -164,28 +135,13 @@ function installDeployRefreshMonitor() {
   }, DEPLOY_CHECK_INTERVAL_MS);
 
   window.addEventListener('focus', () => {
-    if (pendingRefresh) {
-      reloadIfPending();
-      return;
-    }
     void checkForDeployUpdate();
-  });
-
-  window.addEventListener('blur', () => {
-    reloadIfPending();
   });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
-      if (pendingRefresh) {
-        reloadIfPending();
-        return;
-      }
       void checkForDeployUpdate();
-      return;
     }
-
-    reloadIfPending();
   });
 
   window.addEventListener('beforeunload', () => {
@@ -198,7 +154,7 @@ function installChunkMismatchRecovery() {
     'error',
     (event) => {
       if (shouldRecoverFromAssetFailure(event)) {
-        reloadOnceForStaleChunk();
+        reloadOnceForFrontendUpdate();
       }
     },
     true,
@@ -207,7 +163,7 @@ function installChunkMismatchRecovery() {
   window.addEventListener('unhandledrejection', (event) => {
     if (shouldRecoverFromPromiseRejection(event.reason)) {
       event.preventDefault();
-      reloadOnceForStaleChunk();
+      reloadOnceForFrontendUpdate();
     }
   });
 }
