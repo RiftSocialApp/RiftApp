@@ -16,6 +16,7 @@ import DeleteMessageModal from '../modals/DeleteMessageModal';
 import ModalCloseButton from '../shared/ModalCloseButton';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { hasPermission, PermManageMessages } from '../../utils/permissions';
+import { getReplyAuthorLabel, getReplyPreviewMeta } from '../../utils/replyPreview';
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return bytes + ' B';
@@ -36,18 +37,6 @@ function formatTime(dateStr: string): string {
   if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
 
   return `${date.toLocaleDateString()} ${time}`;
-}
-
-function formatReplySnippet(message?: Message): string {
-  if (!message) return 'Original message unavailable';
-  const content = message.content.trim();
-  if (content) return content.split('\n')[0];
-  if (message.attachments?.length) {
-    return message.attachments.length === 1
-      ? `Attachment: ${message.attachments[0].filename}`
-      : `${message.attachments.length} attachments`;
-  }
-  return 'Original message unavailable';
 }
 
 // Generate a stable pastel accent color from string
@@ -359,6 +348,9 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
     () => message.content ? renderContent(message.content, knownUsernames, handleMentionClick, emojiMap) : null,
     [message.content, knownUsernames, handleMentionClick, emojiMap],
   );
+  const replyAuthorLabel = useMemo(() => getReplyAuthorLabel(message.reply_to), [message.reply_to]);
+  const replyPreview = useMemo(() => getReplyPreviewMeta(message.reply_to), [message.reply_to]);
+  const replyAuthorColor = useMemo(() => nameColor(replyAuthorLabel), [replyAuthorLabel]);
 
   // Detect whether the current user is mentioned in this message
   const mentionsSelf = useMemo(() => {
@@ -370,9 +362,25 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
   const handleReplyPreviewClick = useCallback(() => {
     const replyId = message.reply_to?.id ?? message.reply_to_message_id;
     if (!replyId) return;
-    const target = document.getElementById(`message-${replyId}`);
+    const target = document.getElementById(`message-${replyId}`) as HTMLElement | null;
     if (!target) return;
+
+    const previousTimer = Number(target.dataset.replyJumpTimer ?? '0');
+    if (!Number.isNaN(previousTimer) && previousTimer > 0) {
+      window.clearTimeout(previousTimer);
+    }
+
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.remove('rift-message-jump-highlight');
+    void target.offsetWidth;
+    target.classList.add('rift-message-jump-highlight');
+
+    const timer = window.setTimeout(() => {
+      target.classList.remove('rift-message-jump-highlight');
+      delete target.dataset.replyJumpTimer;
+    }, 1800);
+
+    target.dataset.replyJumpTimer = String(timer);
   }, [message.reply_to?.id, message.reply_to_message_id]);
 
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
@@ -552,21 +560,36 @@ const MessageItem = memo(function MessageItem({ message, showHeader, isOwn, isDM
             type="button"
             onClick={handleReplyPreviewClick}
             disabled={!message.reply_to?.id && !message.reply_to_message_id}
-            className="mb-2 flex max-w-[420px] items-start gap-2 rounded-md border-l-2 border-riftapp-accent/60 bg-riftapp-bg/40 px-2.5 py-2 text-left transition-colors hover:bg-riftapp-bg/60 disabled:cursor-default"
+            className="group/reply relative mb-1.5 flex max-w-[520px] min-w-0 items-center gap-1.5 pr-2 text-left text-[12px] transition-colors hover:text-riftapp-text disabled:cursor-default disabled:opacity-80"
           >
-            <span className="mt-0.5 text-riftapp-text-dim" aria-hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 17 4 12l5-5" />
-                <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-              </svg>
+            <span
+              className="pointer-events-none absolute -left-7 top-[7px] h-[18px] w-6 rounded-tl-xl border-l-2 border-t-2 border-riftapp-border/70"
+              aria-hidden
+            />
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-riftapp-content-elevated ring-1 ring-white/10">
+              {message.reply_to?.author?.avatar_url ? (
+                <img
+                  src={publicAssetUrl(message.reply_to.author.avatar_url)}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <span className="text-[8px] font-bold uppercase text-riftapp-text-dim">
+                  {replyAuthorLabel.slice(0, 1)}
+                </span>
+              )}
             </span>
-            <span className="min-w-0">
-              <span className="block truncate text-[12px] font-semibold text-riftapp-accent-hover">
-                {message.reply_to?.author?.display_name || message.reply_to?.author?.username || 'Reply'}
-              </span>
-              <span className="block truncate text-[12px] text-riftapp-text-dim">
-                {formatReplySnippet(message.reply_to)}
-              </span>
+            <span className={`shrink-0 truncate font-medium ${replyAuthorColor}`}>
+              {replyAuthorLabel}
+            </span>
+            <span
+              className={`min-w-0 truncate transition-colors ${
+                replyPreview.tone === 'default'
+                  ? 'text-riftapp-text-dim group-hover/reply:text-riftapp-text-muted'
+                  : 'italic text-riftapp-text-dim/80 group-hover/reply:text-riftapp-text-dim'
+              }`}
+            >
+              {replyPreview.text}
             </span>
           </button>
         )}

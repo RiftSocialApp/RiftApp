@@ -11,6 +11,7 @@ import type { EmojiSelection } from '../media/EmojiTab';
 import { EMOJI_AUTOCOMPLETE_LIST } from '../../utils/emojiNames';
 import { api } from '../../api/client';
 import type { Attachment, HubSticker, User } from '../../types';
+import { getReplyAuthorLabel, getReplyPreviewMeta } from '../../utils/replyPreview';
 
 const TYPING_THROTTLE_MS = 500;
 const MAX_FILE_SIZE = 2 * 1024 * 1024 * 1024; // 2 GB
@@ -113,6 +114,8 @@ export default function MessageInput({
 
     return results;
   }, [emojiQuery, hubEmojis]);
+  const replyAuthorLabel = useMemo(() => getReplyAuthorLabel(replyTo ?? undefined), [replyTo]);
+  const replyPreview = useMemo(() => getReplyPreviewMeta(replyTo ?? undefined), [replyTo]);
 
   useEffect(() => {
     setReplyTo(null);
@@ -467,10 +470,22 @@ export default function MessageInput({
       )}
 
       {replyTo && (
-        <div className="mb-2 flex items-start gap-2 px-3 py-2 rounded-lg bg-riftapp-accent/10 border border-riftapp-accent/25 text-[13px]">
-          <div className="flex-1 min-w-0">
-            <p className="text-[11px] font-semibold text-riftapp-accent uppercase tracking-wide mb-0.5">Replying to {replyTo.author?.display_name || 'User'}</p>
-            <p className="text-riftapp-text-dim truncate">{(replyTo.content || '').split('\n')[0] || '…'}</p>
+        <div className="mb-2 flex items-center gap-2 px-1 py-1 text-[12px]">
+          <span className="h-5 w-5 flex-shrink-0 rounded-tl-xl border-l-2 border-t-2 border-riftapp-border/70" aria-hidden />
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+            <span className="flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full bg-riftapp-content-elevated ring-1 ring-white/10">
+              {replyTo.author?.avatar_url ? (
+                <img src={publicAssetUrl(replyTo.author.avatar_url)} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <span className="text-[8px] font-bold uppercase text-riftapp-text-dim">
+                  {replyAuthorLabel.slice(0, 1)}
+                </span>
+              )}
+            </span>
+            <span className="shrink-0 font-medium text-riftapp-accent-hover">{replyAuthorLabel}</span>
+            <span className={`min-w-0 truncate ${replyPreview.tone === 'default' ? 'text-riftapp-text-dim' : 'italic text-riftapp-text-dim/80'}`}>
+              {replyPreview.text}
+            </span>
           </div>
           <button
             type="button"
