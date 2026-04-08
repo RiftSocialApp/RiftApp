@@ -74,11 +74,13 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Get("/api/s3/*", deps.UploadHandler.ServeObject)
 	}
 
-	r.Get("/api/health", func(w http.ResponseWriter, r *http.Request) {
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
-	})
+	}
+	r.Get("/health", healthHandler)
+	r.Get("/api/health", healthHandler)
 
 	// Link unfurl (OG metadata) — authenticated + rate-limited separately.
 	unfurlRL := middleware.NewRateLimiter(rate.Every(2*time.Second), 10)
