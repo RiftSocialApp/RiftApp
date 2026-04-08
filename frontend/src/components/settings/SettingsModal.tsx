@@ -1342,7 +1342,7 @@ function BackgroundPickerModal({
 
   return (
     <ModalOverlay isOpen={isOpen} onClose={onClose} zIndex={340} className="p-4 sm:p-6">
-      <div className="mx-auto flex w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-bg shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
+      <div className="mx-auto flex h-[min(88vh,760px)] w-full max-w-5xl min-h-0 flex-col overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-bg shadow-[0_24px_80px_rgba(0,0,0,0.5)]">
         <div className="flex items-center justify-between border-b border-riftapp-border/60 px-5 py-4">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-riftapp-text-dim">Video Background</p>
@@ -1357,8 +1357,9 @@ function BackgroundPickerModal({
           </button>
         </div>
 
-        <div className="grid gap-6 px-5 py-5 lg:grid-cols-[260px,minmax(0,1fr)]">
-          <div className="space-y-4">
+        <div className="flex min-h-0 flex-1 flex-col gap-6 px-5 py-5 lg:flex-row">
+          <div className="shrink-0 lg:w-[260px]">
+            <div className="flex h-full min-h-0 flex-col gap-4">
             <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-4">
               <p className="text-sm font-semibold text-white">Upload your own</p>
               <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
@@ -1429,9 +1430,10 @@ function BackgroundPickerModal({
                   : 'Powered by Tenor for GIF search.'}
               </p>
             </div>
+            </div>
           </div>
 
-          <div className="space-y-4">
+          <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <p className="text-sm font-semibold text-white">Browse GIF backgrounds</p>
@@ -1447,46 +1449,52 @@ function BackgroundPickerModal({
               </div>
             </div>
 
-            {error ? <p className="text-[13px] text-[#f87171]">{error}</p> : null}
-            {loading ? <p className="text-[13px] text-riftapp-text-muted">Loading GIF backgrounds…</p> : null}
+            {error ? <p className="mt-4 text-[13px] text-[#f87171]">{error}</p> : null}
+            {loading ? <p className="mt-4 text-[13px] text-riftapp-text-muted">Loading GIF backgrounds…</p> : null}
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {results.map((asset) => {
-                const selected = currentAsset?.source === asset.source && currentAsset.url === asset.url;
-                return (
-                  <button
-                    key={`${asset.source}-${asset.url}`}
-                    type="button"
-                    onClick={() => {
-                      onSelectAsset(asset);
-                      onClose();
-                    }}
-                    className={`overflow-hidden rounded-xl border text-left transition-all ${
-                      selected
-                        ? 'border-[#5865f2] bg-riftapp-panel shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
-                        : 'border-riftapp-border/60 bg-riftapp-panel/70 hover:border-riftapp-border-light hover:bg-riftapp-panel-hover'
-                    }`}
-                  >
-                    <img
-                      src={backgroundPreviewUrl(asset)}
-                      alt={asset.label ?? 'GIF background'}
-                      className="aspect-[4/3] w-full object-cover"
-                      loading="lazy"
-                    />
-                    <div className="px-3 py-2.5">
-                      <p className="truncate text-sm font-medium text-white">{asset.label ?? 'Tenor GIF'}</p>
-                      <p className="mt-1 text-[12px] text-riftapp-text-muted">Use this GIF as your background</p>
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="mt-4 min-h-0 flex-1 overflow-y-auto pr-1 overscroll-contain">
+              {results.length > 0 ? (
+                <div className="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                  {results.map((asset) => {
+                    const selected = currentAsset?.source === asset.source && currentAsset.url === asset.url;
+                    return (
+                      <button
+                        key={`${asset.source}-${asset.url}`}
+                        type="button"
+                        onClick={() => {
+                          onSelectAsset(asset);
+                          onClose();
+                        }}
+                        className={`overflow-hidden rounded-xl border text-left transition-all ${
+                          selected
+                            ? 'border-[#5865f2] bg-riftapp-panel shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
+                            : 'border-riftapp-border/60 bg-riftapp-panel/70 hover:border-riftapp-border-light hover:bg-riftapp-panel-hover'
+                        }`}
+                      >
+                        <img
+                          src={backgroundPreviewUrl(asset)}
+                          alt={asset.label ?? 'GIF background'}
+                          className="aspect-[4/3] w-full object-cover"
+                          loading="lazy"
+                        />
+                        <div className="px-3 py-2.5">
+                          <p className="truncate text-sm font-medium text-white">{asset.label ?? 'Tenor GIF'}</p>
+                          <p className="mt-1 text-[12px] text-riftapp-text-muted">Use this GIF as your background</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+
+              {!loading && !error && results.length === 0 ? (
+                <div className="flex min-h-full items-center justify-center">
+                  <div className="w-full rounded-xl border border-dashed border-riftapp-border/60 bg-riftapp-content-elevated px-4 py-8 text-center text-[13px] text-riftapp-text-muted">
+                    No GIFs matched that search.
+                  </div>
+                </div>
+              ) : null}
             </div>
-
-            {!loading && !error && results.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-riftapp-border/60 bg-riftapp-content-elevated px-4 py-8 text-center text-[13px] text-riftapp-text-muted">
-                No GIFs matched that search.
-              </div>
-            ) : null}
           </div>
         </div>
       </div>
