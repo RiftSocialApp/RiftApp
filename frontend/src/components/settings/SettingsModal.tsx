@@ -2684,8 +2684,9 @@ function AccountTab({
   onClose: () => void;
 }) {
   const send = useWsSend();
+  const setUserStatus = useAuthStore((s) => s.setUserStatus);
   const liveStatus = usePresenceStore((s) => s.presence[user.id]);
-  const setPresence = usePresenceStore((s) => s.setPresence);
+  const setSelfPresence = usePresenceStore((s) => s.setSelfPresence);
   const currentStatus = liveStatus ?? user.status;
   const [confirmLogout, setConfirmLogout] = useState(false);
 
@@ -2693,11 +2694,15 @@ function AccountTab({
     { value: 1, label: 'Online' },
     { value: 2, label: 'Idle' },
     { value: 3, label: 'Do Not Disturb' },
+    { value: 0, label: 'Invisible' },
   ] as const;
 
   const handleStatusChange = (status: number) => {
-    send('set_status', { status });
-    setPresence(user.id, status);
+    if (status > 0) {
+      send('set_status', { status });
+    }
+    setSelfPresence(user.id, status);
+    setUserStatus(status);
   };
 
   return (

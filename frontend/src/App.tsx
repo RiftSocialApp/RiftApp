@@ -2,6 +2,8 @@ import { lazy, Suspense, useEffect, useState, type ComponentType } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/auth';
 import { useAppSettingsStore } from './stores/appSettingsStore';
+import { usePresenceStore } from './stores/presenceStore';
+import { SELF_PRESENCE_STORAGE_KEY } from './stores/selfPresencePersistence';
 import TitleBar from './components/layout/TitleBar';
 import { isProtectedImportUpdateReadyError, safeImport } from './utils/safeImport';
 // Push build cuz yeah hectic
@@ -122,6 +124,8 @@ function SettingsModalHost() {
 
 export default function App() {
   const restore = useAuthStore((s) => s.restore);
+  const user = useAuthStore((s) => s.user);
+  const setUserStatus = useAuthStore((s) => s.setUserStatus);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const settingsOpen = useAppSettingsStore((s) => s.settingsOpen);
   const closeSettings = useAppSettingsStore((s) => s.closeSettings);
@@ -153,6 +157,24 @@ export default function App() {
       });
     });
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== SELF_PRESENCE_STORAGE_KEY) {
+        return;
+      }
+
+      const resolvedStatus = usePresenceStore.getState().hydrateSelfPresence(user.id, user.status);
+      setUserStatus(resolvedStatus);
+    };
+
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, [setUserStatus, user]);
 
   return (
     <BrowserRouter>

@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { HUBS_SESSION_STORAGE_KEY } from './hubStore';
 import { useStreamStore } from './streamStore';
 import { useMessageStore } from './messageStore';
+import { usePresenceStore } from './presenceStore';
 import { normalizeUser } from '../utils/entityAssets';
 
 interface AuthState {
@@ -18,6 +19,12 @@ interface AuthState {
   logout: () => void;
   restore: () => Promise<void>;
   setUser: (user: User) => void;
+  setUserStatus: (status: number) => void;
+}
+
+function hydrateAuthenticatedUser(user: User) {
+  const resolvedStatus = usePresenceStore.getState().hydrateSelfPresence(user.id, user.status);
+  return resolvedStatus === user.status ? user : { ...user, status: resolvedStatus };
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -29,7 +36,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   login: async (username, password) => {
     const res = await api.login(username, password);
-    const user = normalizeUser(res.user);
+    const user = hydrateAuthenticatedUser(normalizeUser(res.user));
     api.setToken(res.access_token);
     api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riftapp_token', res.access_token);
@@ -44,7 +51,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   register: async (username, password, email) => {
     const res = await api.register(username, password, email);
-    const user = normalizeUser(res.user);
+    const user = hydrateAuthenticatedUser(normalizeUser(res.user));
     api.setToken(res.access_token);
     api.setRefreshToken(res.refresh_token);
     localStorage.setItem('riftapp_token', res.access_token);
@@ -59,6 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     const refreshToken = get().refreshToken;
+    const userId = get().user?.id;
     if (refreshToken) {
       api.logout(refreshToken).catch(() => {});
     }
@@ -69,6 +77,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       sessionStorage.removeItem(HUBS_SESSION_STORAGE_KEY);
     } catch { /* ignore */ }
+    usePresenceStore.getState().clearSelfPresence(userId);
+    usePresenceStore.getState().clearSessionCaches();
     useStreamStore.getState().clearSessionCaches();
     useMessageStore.getState().clearSessionCaches();
     set({
@@ -90,7 +100,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     api.setToken(token);
     api.setRefreshToken(refresh);
     try {
-      const user = normalizeUser(await api.getMe());
+      const user = hydrateAuthenticatedUser(normalizeUser(await api.getMe()));
       // The API client may have silently refreshed the token during getMe().
       // Re-read localStorage to pick up any updated tokens.
       const currentToken = localStorage.getItem('riftapp_token') || token;
@@ -100,7 +110,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (refresh) {
         try {
           const res = await api.refreshToken(refresh);
-          const user = normalizeUser(res.user);
+          const user = hydrateAuthenticatedUser(normalizeUser(res.user));
           api.setToken(res.access_token);
           api.setRefreshToken(res.refresh_token);
           localStorage.setItem('riftapp_token', res.access_token);
@@ -121,10 +131,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   setUser: (user) => set((s) => ({
-    user: normalizeUser(
+    user: hydrateAuthenticatedUser(normalizeUser(
       s.user?.id === user.id && user.email == null
         ? { ...s.user, ...user }
         : user,
-    ),
+    )),
   })),
+
+  setUserStatus: (status) => set((s) => (
+    s.user ? { user: { ...s.user, status } } : s
+  )),
 }));

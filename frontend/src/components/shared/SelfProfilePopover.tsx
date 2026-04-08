@@ -34,7 +34,9 @@ export default function SelfProfilePopover() {
   const anchorRect = useSelfProfileStore((s) => s.anchorRect);
   const close = useSelfProfileStore((s) => s.close);
   const user = useAuthStore((s) => s.user);
+  const setUserStatus = useAuthStore((s) => s.setUserStatus);
   const liveStatus = usePresenceStore((s) => (user ? s.presence[user.id] : undefined));
+  const setSelfPresence = usePresenceStore((s) => s.setSelfPresence);
   const developerMode = useAppSettingsStore((s) => s.developerMode);
   const openSettings = useAppSettingsStore((s) => s.openSettings);
   const send = useWsSend();
@@ -110,8 +112,11 @@ export default function SelfProfilePopover() {
   const accent = nameColor(user.display_name || user.username);
 
   const handleSetStatus = (newStatus: number) => {
-    send('set_status', { status: newStatus });
-    usePresenceStore.getState().setPresence(user.id, newStatus);
+    if (newStatus > 0) {
+      send('set_status', { status: newStatus });
+    }
+    setSelfPresence(user.id, newStatus);
+    setUserStatus(newStatus);
     setShowStatusPicker(false);
   };
 

@@ -82,6 +82,14 @@ export function useWebSocket() {
           send('heartbeat');
         }, HEARTBEAT_INTERVAL);
 
+        const authUser = useAuthStore.getState().user;
+        if (authUser) {
+          const resolvedStatus = usePresenceStore.getState().hydrateSelfPresence(authUser.id, authUser.status);
+          if (resolvedStatus > 0) {
+            send('set_status', { status: resolvedStatus });
+          }
+        }
+
         // Re-subscribe to active stream on (re)connect
         const currentStream = useStreamStore.getState().activeStreamId;
         if (currentStream) {
