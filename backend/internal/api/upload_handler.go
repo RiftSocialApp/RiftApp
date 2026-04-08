@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
@@ -64,8 +65,20 @@ func NewUploadHandler(cfg *config.Config, db *pgxpool.Pool) (*UploadHandler, err
 		return nil, fmt.Errorf("S3_ACCESS_KEY and S3_SECRET_KEY are required")
 	}
 
-	endpoint := strings.TrimPrefix(strings.TrimPrefix(cfg.S3Endpoint, "http://"), "https://")
-	useSSL := strings.HasPrefix(cfg.S3Endpoint, "https://")
+	raw := strings.TrimSpace(cfg.S3Endpoint)
+	if !strings.Contains(raw, "://") {
+		raw = "https://" + raw
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("S3_ENDPOINT parse: %w", err)
+	}
+	if u.Host == "" {
+		return nil, fmt.Errorf("S3_ENDPOINT must include a host (e.g. https://<account>.r2.cloudflarestorage.com)")
+	}
+	// minio-go rejects endpoints with paths; R2 is always host (+ optional port) only.
+	endpointHost := u.Host
+	useSSL := u.Scheme == "https" || u.Scheme == "wss"
 
 	opts := minio.Options{
 		Creds:  credentials.NewStaticV4(cfg.S3AccessKey, cfg.S3SecretKey, ""),
@@ -75,7 +88,7 @@ func NewUploadHandler(cfg *config.Config, db *pgxpool.Pool) (*UploadHandler, err
 		opts.Region = r
 	}
 
-	client, err := minio.New(endpoint, &opts)
+	client, err := minio.New(endpointHost, &opts)
 	if err != nil {
 		return nil, fmt.Errorf("s3 client: %w", err)
 	}
