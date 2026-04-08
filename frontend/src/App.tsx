@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth';
 import { useAppSettingsStore } from './stores/appSettingsStore';
 import TitleBar from './components/layout/TitleBar';
 import { isProtectedImportUpdateReadyError, safeImport } from './utils/safeImport';
+// Push build cuz yeah hectic
 
 const AuthPage = lazy(() => import('./components/auth/AuthPage'));
 const AppLayout = lazy(() => import('./components/layout/AppLayout'));
