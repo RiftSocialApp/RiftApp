@@ -1,42 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useDMStore } from '../../stores/dmStore';
-import { useHubStore } from '../../stores/hubStore';
+import { useEffect, useState, type CSSProperties, type SVGProps } from 'react';
 import { getDesktop } from '../../utils/desktop';
 
-/**
- * Frameless window chrome: drag region + min / max / close via preload `window.desktop`.
- * CSS: strip uses `-webkit-app-region: drag`; controls use `no-drag` (see Electron docs).
- */
+function RiftMark(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M4.25 6.5c1.4-1.35 2.85-1.35 4.25 0s2.85 1.35 4.25 0 2.85-1.35 4.25 0" />
+      <path d="M4.25 13.5c1.4-1.35 2.85-1.35 4.25 0s2.85 1.35 4.25 0 2.85-1.35 4.25 0" />
+    </svg>
+  );
+}
+
 function TitleBar() {
-  const location = useLocation();
   const [ready, setReady] = useState(false);
   const [maximized, setMaximized] = useState(false);
-  const hubs = useHubStore((s) => s.hubs);
-  const activeHubId = useHubStore((s) => s.activeHubId);
-  const conversations = useDMStore((s) => s.conversations);
-  const activeConversationId = useDMStore((s) => s.activeConversationId);
-
-  const windowLabel = useMemo(() => {
-    if (location.pathname.startsWith('/app/dms')) {
-      const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId);
-      const recipientName = activeConversation?.recipient.display_name || activeConversation?.recipient.username;
-      return recipientName ? `Direct Messages • ${recipientName}` : 'Direct Messages';
-    }
-
-    if (location.pathname.startsWith('/app/hubs')) {
-      const activeHub = hubs.find((hub) => hub.id === activeHubId);
-      return activeHub?.name ? `Hub • ${activeHub.name}` : 'Hub';
-    }
-
-    if (location.pathname === '/app') return null;
-    if (location.pathname === '/login') return 'Login';
-    if (location.pathname === '/register') return 'Register';
-    if (location.pathname === '/discover') return 'Discover';
-    if (location.pathname === '/support') return 'Support';
-    if (location.pathname.startsWith('/invite/')) return 'Invite';
-    return null;
-  }, [activeConversationId, activeHubId, conversations, hubs, location.pathname]);
 
   useEffect(() => {
     const d = getDesktop();
@@ -103,39 +79,33 @@ function TitleBar() {
 
   return (
     <div
-      className="titlebar flex h-9 items-center justify-between select-none shrink-0 border-b border-white/[0.06] pl-2.5"
+      className="titlebar flex h-8 items-center justify-between select-none shrink-0 border-b border-white/[0.05] bg-[#202227]/95 pl-3.5"
       style={
         {
           WebkitAppRegion: 'drag',
-          background: '#232428',
-          boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.03)',
-        } as React.CSSProperties
+        } as CSSProperties
       }
       onDoubleClick={() => api.maximize()}
     >
-      <div className="pointer-events-none flex min-w-0 items-center gap-2.5">
-        <div className="flex h-6 items-center gap-2 rounded-full border border-white/[0.05] bg-white/[0.04] px-2.5 text-[#d7dae0] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
-          <span className="inline-flex h-2.5 w-2.5 rounded-full bg-[#5865f2] shadow-[0_0_12px_rgba(88,101,242,0.45)]" />
-          <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#8b90a2]">Rift</span>
+      <div className="flex min-w-0 items-center">
+        <div className="flex items-center gap-2 opacity-95 transition-[opacity,filter] duration-150 hover:opacity-100 hover:brightness-110">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.06] bg-[#2b2e36] text-[#f2f3f5] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <RiftMark className="h-3.5 w-3.5" />
+          </span>
+          <span className="text-[15px] font-semibold leading-none tracking-[0.01em] text-[#ededed]">Rift</span>
         </div>
-        {windowLabel && (
-          <>
-            <span className="h-4 w-px bg-white/[0.08]" />
-            <span className="truncate text-[12px] font-semibold text-[#d4d7de]">{windowLabel}</span>
-          </>
-        )}
       </div>
 
       <div
-        className="flex h-full items-stretch gap-2 pr-1"
-        style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        className="flex h-full items-stretch pr-0"
+        style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
       >
         <div className="window-buttons flex h-full items-stretch">
         <button
           type="button"
           onClick={handleMinimizeClick}
           onMouseDown={(event) => event.stopPropagation()}
-          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.07] hover:text-white"
+          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.06] hover:text-white"
           aria-label="Minimize"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
@@ -147,7 +117,7 @@ function TitleBar() {
           type="button"
           onClick={handleMaximizeClick}
           onMouseDown={(event) => event.stopPropagation()}
-          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.07] hover:text-white"
+          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.06] hover:text-white"
           aria-label={maximized ? 'Restore' : 'Maximize'}
         >
           {maximized ? (
