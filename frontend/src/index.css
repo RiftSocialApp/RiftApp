@@ -136,6 +136,56 @@
       hover:bg-riftapp-danger hover:text-white active:scale-[0.97] active:translate-y-px transition-all duration-150;
   }
 
+  .voice-settings-slider {
+    @apply h-1 w-full appearance-none rounded-full cursor-pointer;
+    background: linear-gradient(#5865f2 0 0) 0 / var(--slider-fill, 100%) 100% no-repeat, #4f545c;
+  }
+
+  .voice-settings-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .voice-settings-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -5px;
+    height: 14px;
+    width: 14px;
+    border: 0;
+    border-radius: 9999px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .voice-settings-slider::-moz-range-track {
+    height: 4px;
+    border: 0;
+    border-radius: 9999px;
+    background: #4f545c;
+  }
+
+  .voice-settings-slider::-moz-range-progress {
+    height: 4px;
+    border-radius: 9999px;
+    background: #5865f2;
+  }
+
+  .voice-settings-slider::-moz-range-thumb {
+    height: 14px;
+    width: 14px;
+    border: 0;
+    border-radius: 9999px;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  }
+
+  .voice-settings-slider:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
   /* Section header (like Discord's category labels) */
   .section-label {
     @apply px-0.5 text-[11px] font-bold uppercase tracking-[0.02em] text-riftapp-text-dim

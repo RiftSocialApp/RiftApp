@@ -18,6 +18,7 @@ export interface MicNoiseGateSettings {
   manualThreshold: number;
   releaseMs: number;
   noiseSuppressionEnabled: boolean;
+  inputVolume: number;
 }
 
 interface MicNoiseGateCallbacks {
@@ -119,9 +120,13 @@ export class MicNoiseGateProcessor {
   updateSettings(next: Partial<MicNoiseGateSettings>) {
     this.settings = { ...this.settings, ...next };
 
+    if (this.speaking) {
+      this.setGain(this.getOpenGain());
+    }
+
     if (!this.settings.automaticSensitivity && this.settings.manualThreshold <= 0) {
       this.setSpeaking(true);
-      this.setGain(1);
+      this.setGain(this.getOpenGain());
     }
   }
 
@@ -156,6 +161,13 @@ export class MicNoiseGateProcessor {
     this.gain.connect(this.destination);
 
     this.processedTrack = this.destination.stream.getAudioTracks()[0] ?? track;
+
+    if (!this.settings.automaticSensitivity && this.settings.manualThreshold <= 0) {
+      this.setGain(this.getOpenGain());
+      this.setSpeaking(true);
+    } else {
+      this.setGain(0);
+    }
 
     try {
       if (audioContext.state === 'suspended') {
@@ -202,7 +214,7 @@ export class MicNoiseGateProcessor {
 
     if (shouldOpen) {
       this.holdUntil = now + this.settings.releaseMs;
-      this.setGain(1);
+      this.setGain(this.getOpenGain());
       this.setSpeaking(true);
     } else if (this.speaking && now >= this.holdUntil) {
       this.setGain(0);
@@ -237,6 +249,10 @@ export class MicNoiseGateProcessor {
       AUTO_THRESHOLD_MIN * 0.5,
       AUTO_THRESHOLD_MAX,
     );
+  }
+
+  private getOpenGain() {
+    return clamp(this.settings.inputVolume, 0, 1);
   }
 
   private setGain(value: number) {

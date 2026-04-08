@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, memo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, memo, type CSSProperties } from 'react';
+import { LocalVideoTrack } from 'livekit-client';
+import type { BackgroundProcessorWrapper, SwitchBackgroundProcessorOptions } from '@livekit/track-processors';
 import { useAuthStore } from '../../stores/auth';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useWsSend } from '../../hooks/useWebSocket';
@@ -17,6 +19,7 @@ import { stripAssetVersion } from '../../utils/entityAssets';
 import { DEFAULT_MIC_GATE_RELEASE_MS, MicNoiseGateProcessor } from '../../utils/audio/micNoiseGate';
 import type { DesktopBuildInfo } from '../../types/desktop';
 import ModalCloseButton from '@/components/shared/ModalCloseButton';
+import { CameraIcon } from '../voice/VoiceIcons';
 
 export type SettingsModalTab = SettingsOverlayTab;
 
@@ -27,6 +30,22 @@ const emptyDesktopBuildInfo: DesktopBuildInfo = {
   arch: '',
   osVersion: '',
 };
+
+type TrackProcessorsModule = typeof import('@livekit/track-processors');
+
+const CAMERA_PREVIEW_BLUR_RADIUS = 12;
+let settingsTrackProcessorsModulePromise: Promise<TrackProcessorsModule> | null = null;
+
+async function loadSettingsTrackProcessorsModule() {
+  if (!settingsTrackProcessorsModulePromise) {
+    settingsTrackProcessorsModulePromise = import('@livekit/track-processors').catch((error) => {
+      settingsTrackProcessorsModulePromise = null;
+      throw error;
+    });
+  }
+
+  return settingsTrackProcessorsModulePromise;
+}
 
 function formatDeployAge(deployedAt: string, now: number) {
   const deployedAtMs = Date.parse(deployedAt);
@@ -308,9 +327,8 @@ function systemDefaultLabel(kind: 'audioinput' | 'audiooutput' | 'videoinput') {
   return 'System default camera';
 }
 
-function DeviceSelect({
+function VoiceSelectControl({
   label,
-  description,
   devices,
   value,
   onChange,
@@ -318,34 +336,228 @@ function DeviceSelect({
   disabled = false,
 }: {
   label: string;
-  description?: string;
   devices: VoiceMediaDevice[];
   value: string | null;
   onChange: (deviceId: string | null) => void | Promise<void>;
-  kind: 'audioinput' | 'audiooutput' | 'videoinput';
+  kind: 'audioinput' | 'audiooutput';
   disabled?: boolean;
 }) {
   return (
-    <Field label={label}>
-      <div className="space-y-2">
+    <label className="block space-y-2">
+      <span className="block text-[14px] font-semibold text-riftapp-text-muted">{label}</span>
+      <select
+        value={value ?? ''}
+        onChange={(event) => void onChange(event.target.value || null)}
+        disabled={disabled}
+        className="h-9 w-full cursor-pointer rounded-[10px] border border-riftapp-border/70 bg-riftapp-surface px-3 text-[14px] font-medium text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2] disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <option value="">{systemDefaultLabel(kind)}</option>
+        {devices.map((device) => (
+          <option key={device.deviceId} value={device.deviceId}>
+            {device.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function VoiceVolumeSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: number) => void;
+}) {
+  const sliderStyle = {
+    '--slider-fill': `${Math.round(value * 100)}%`,
+  } as CSSProperties;
+
+  return (
+    <label className="block space-y-2.5">
+      <span className="block text-[14px] font-semibold text-riftapp-text-muted">{label}</span>
+      <input
+        type="range"
+        min={0}
+        max={100}
+        step={1}
+        value={Math.round(value * 100)}
+        onChange={(event) => onChange(Number(event.target.value) / 100)}
+        className="voice-settings-slider"
+        style={sliderStyle}
+      />
+    </label>
+  );
+}
+
+function VoiceLevelMeter({ level }: { level: number }) {
+  const totalBars = 44;
+  const activeBars = Math.max(0, Math.min(totalBars, Math.round(level * totalBars)));
+
+  return (
+    <div className="flex h-6 items-center gap-[3px] overflow-hidden rounded-[8px]">
+      {Array.from({ length: totalBars }, (_, index) => (
+        <span
+          key={index}
+          className={`h-6 min-w-0 flex-1 rounded-[2px] transition-colors ${
+            index < activeBars ? 'bg-[#7b808c]' : 'bg-[#4b4f59]'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+function VoiceProfileOption({
+  title,
+  description,
+  selected,
+  onSelect,
+}: {
+  title: string;
+  description: string;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className="flex w-full items-start gap-3 rounded-[10px] px-1 py-1.5 text-left transition-colors hover:bg-riftapp-panel/35"
+    >
+      <span
+        className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors ${
+          selected ? 'border-[#5865f2] bg-[#5865f2]' : 'border-[#72767d] bg-transparent'
+        }`}
+        aria-hidden="true"
+      >
+        {selected ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-[15px] font-medium text-riftapp-text">{title}</span>
+        <span className="mt-0.5 block text-[14px] leading-[1.35] text-riftapp-text-muted">{description}</span>
+      </span>
+    </button>
+  );
+}
+
+function CameraSelectControl({
+  devices,
+  value,
+  onChange,
+}: {
+  devices: VoiceMediaDevice[];
+  value: string | null;
+  onChange: (deviceId: string | null) => void | Promise<void>;
+}) {
+  return (
+    <div className="space-y-2">
+      <label className="block text-[14px] font-semibold text-riftapp-text-muted">Camera</label>
+      <div className="relative">
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-riftapp-text-muted">
+          <CameraIcon enabled size={16} />
+        </span>
         <select
           value={value ?? ''}
           onChange={(event) => void onChange(event.target.value || null)}
-          disabled={disabled}
-          className="w-full cursor-pointer rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2.5 text-[13px] text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2] disabled:cursor-not-allowed disabled:opacity-60"
+          className="h-9 w-full cursor-pointer rounded-[10px] border border-riftapp-border/70 bg-riftapp-surface pl-10 pr-10 text-[14px] font-medium text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2]"
         >
-          <option value="">{systemDefaultLabel(kind)}</option>
+          <option value="">{systemDefaultLabel('videoinput')}</option>
           {devices.map((device) => (
             <option key={device.deviceId} value={device.deviceId}>
               {device.label}
             </option>
           ))}
         </select>
-        {description ? (
-          <p className="text-[12px] leading-snug text-riftapp-text-muted">{description}</p>
-        ) : null}
+        <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-riftapp-text-muted">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
       </div>
-    </Field>
+      <p className="text-[12px] leading-snug text-riftapp-text-dim">
+        Looking for more camera options?{' '}
+        <a href="ms-settings:privacy-webcam" className="text-[#00a8fc] transition-colors hover:text-[#3ab7ff] hover:underline">
+          Check out your system camera settings.
+        </a>
+      </p>
+    </div>
+  );
+}
+
+function CameraPreviewToggleRow({
+  enabled,
+  onToggle,
+}: {
+  enabled: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-start justify-between gap-4 rounded-[10px] py-1 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block text-[16px] font-semibold text-riftapp-text">Always preview video</span>
+        <span className="mt-1 block text-[13px] leading-snug text-riftapp-text-muted">
+          Pops up preview modal every time you turn on video
+        </span>
+      </span>
+      <span
+        className={`mt-1 inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors ${
+          enabled ? 'border-[#5865f2] bg-[#5865f2]' : 'border-riftapp-border/70 bg-riftapp-bg-alt'
+        }`}
+        aria-hidden="true"
+      >
+        <span
+          className={`inline-block h-4.5 w-4.5 rounded-full bg-white transition-transform ${
+            enabled ? 'translate-x-[18px]' : 'translate-x-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
+
+function AnimatedBackgroundBadge() {
+  return (
+    <span className="absolute right-1.5 top-1.5 inline-flex h-5 w-5 items-center justify-center rounded-md bg-black/55 text-white shadow-sm">
+      <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
+        <path d="M3 2.2v5.6L7.8 5 3 2.2z" />
+      </svg>
+    </span>
+  );
+}
+
+function CameraBackgroundTile({
+  selected,
+  onClick,
+  children,
+  animated = false,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+  animated?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group relative aspect-[1.74/1] overflow-hidden rounded-[10px] border transition-all ${
+        selected
+          ? 'border-[#5865f2] shadow-[0_0_0_1px_rgba(88,101,242,0.25),0_0_18px_rgba(88,101,242,0.12)]'
+          : 'border-riftapp-border/60 hover:border-riftapp-border-light'
+      }`}
+    >
+      <div className="h-full w-full transition duration-150 group-hover:brightness-110">
+        {children}
+      </div>
+      {animated ? <AnimatedBackgroundBadge /> : null}
+    </button>
   );
 }
 
@@ -414,34 +626,66 @@ function backgroundPreviewUrl(asset: CameraBackgroundAsset | null) {
   return publicAssetUrl(asset?.previewUrl ?? asset?.url ?? '');
 }
 
-function backgroundModeTitle(mode: CameraBackgroundMode, asset: CameraBackgroundAsset | null) {
-  if (mode === 'blur') {
-    return 'Blur';
+function resolveCameraBackgroundImagePath(asset: CameraBackgroundAsset | null) {
+  if (!asset || asset.kind === 'video') {
+    return null;
   }
 
-  if (mode === 'custom') {
-    return asset?.label?.trim() || 'Custom background';
-  }
-
-  return 'None';
+  const rawPath = asset.kind === 'image' ? asset.url : asset.previewUrl ?? asset.url;
+  const resolvedPath = publicAssetUrl(rawPath).trim();
+  return resolvedPath.length > 0 ? resolvedPath : null;
 }
 
-function backgroundModeDescription(mode: CameraBackgroundMode, asset: CameraBackgroundAsset | null) {
+function cameraPreviewProcessorOptions(
+  mode: CameraBackgroundMode,
+  asset: CameraBackgroundAsset | null,
+): SwitchBackgroundProcessorOptions {
   if (mode === 'blur') {
-    return 'Keep the camera clean with a soft background blur.';
+    return {
+      mode: 'background-blur',
+      blurRadius: CAMERA_PREVIEW_BLUR_RADIUS,
+    };
   }
 
   if (mode === 'custom') {
-    if (asset?.source === 'tenor') {
-      return 'Animated background selected from Tenor.';
+    const imagePath = resolveCameraBackgroundImagePath(asset);
+    if (imagePath) {
+      return {
+        mode: 'virtual-background',
+        imagePath,
+      };
     }
-    if (asset?.kind === 'video') {
-      return 'Legacy uploaded videos cannot be applied to the outgoing camera track. Choose an image or GIF instead.';
-    }
-    return 'Uploaded custom background ready to use.';
   }
 
-  return 'Use the raw camera feed with no background treatment.';
+  return { mode: 'disabled' };
+}
+
+async function createPreviewBackgroundProcessor(
+  mode: CameraBackgroundMode,
+  asset: CameraBackgroundAsset | null,
+) {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return undefined;
+  }
+
+  try {
+    const { BackgroundProcessor, supportsBackgroundProcessors } = await loadSettingsTrackProcessorsModule();
+    if (!supportsBackgroundProcessors()) {
+      return undefined;
+    }
+
+    return BackgroundProcessor(cameraPreviewProcessorOptions(mode, asset), 'rift-settings-camera-preview');
+  } catch (error) {
+    console.warn('Unable to create preview background processor.', error);
+    return undefined;
+  }
+}
+
+function isBackgroundProcessorWrapper(value: unknown): value is BackgroundProcessorWrapper {
+  return typeof value === 'object'
+    && value !== null
+    && 'switchTo' in value
+    && typeof (value as { switchTo?: unknown }).switchTo === 'function';
 }
 
 function detectVoiceInputProfile({
@@ -800,119 +1044,177 @@ function CameraTestCard({
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const previewTrackRef = useRef<LocalVideoTrack | null>(null);
+  const previewRequestIdRef = useRef(0);
+  const backgroundModeRef = useRef(backgroundMode);
+  const backgroundAssetRef = useRef(backgroundAsset);
 
-  const stopPreview = useCallback(() => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
+  useEffect(() => {
+    backgroundModeRef.current = backgroundMode;
+    backgroundAssetRef.current = backgroundAsset;
+  }, [backgroundAsset, backgroundMode]);
+
+  const disposePreviewTrack = useCallback(() => {
+    const previewTrack = previewTrackRef.current;
+    previewTrackRef.current = null;
+
+    if (previewTrack) {
+      if (videoRef.current) {
+        previewTrack.detach(videoRef.current);
+      }
+      previewTrack.stop();
+    }
+
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.srcObject = null;
     }
-    setPreviewEnabled(false);
   }, []);
 
-  const applyPreviewStream = useCallback(async () => {
+  const stopPreview = useCallback(() => {
+    previewRequestIdRef.current += 1;
+    disposePreviewTrack();
+    setStarting(false);
+  }, [disposePreviewTrack]);
+
+  const syncPreviewProcessor = useCallback(async (
+    previewTrack: LocalVideoTrack,
+    nextBackgroundMode: CameraBackgroundMode,
+    nextBackgroundAsset: CameraBackgroundAsset | null,
+  ) => {
+    const desiredOptions = cameraPreviewProcessorOptions(nextBackgroundMode, nextBackgroundAsset);
+    const existingProcessor = previewTrack.getProcessor();
+
+    if (isBackgroundProcessorWrapper(existingProcessor)) {
+      await existingProcessor.switchTo(desiredOptions);
+      return;
+    }
+
+    if (desiredOptions.mode === 'disabled') {
+      return;
+    }
+
+    const processor = await createPreviewBackgroundProcessor(nextBackgroundMode, nextBackgroundAsset);
+    if (!processor) {
+      return;
+    }
+
+    await previewTrack.setProcessor(processor, true);
+  }, []);
+
+  const startPreview = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Camera preview is unavailable in this browser.');
       setPreviewEnabled(false);
       return;
     }
 
+    const requestId = previewRequestIdRef.current + 1;
+    previewRequestIdRef.current = requestId;
     setStarting(true);
     setError(null);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    disposePreviewTrack();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: deviceId ? { deviceId: { exact: deviceId } } : true,
       });
-      streamRef.current = stream;
+
+      if (previewRequestIdRef.current !== requestId) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) {
+        throw new Error('Camera preview track unavailable.');
+      }
+
+      const localPreviewTrack = new LocalVideoTrack(videoTrack, undefined, true);
+      previewTrackRef.current = localPreviewTrack;
+
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        localPreviewTrack.attach(videoRef.current);
         videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
+      }
+
+      try {
+        await syncPreviewProcessor(localPreviewTrack, backgroundModeRef.current, backgroundAssetRef.current);
+      } catch (processorError) {
+        console.warn('Unable to apply preview background processor.', processorError);
+      }
+
+      if (videoRef.current) {
         void videoRef.current.play().catch(() => {});
       }
     } catch {
       setError('Could not start camera preview. Check camera permissions.');
       setPreviewEnabled(false);
     } finally {
-      setStarting(false);
+      if (previewRequestIdRef.current === requestId) {
+        setStarting(false);
+      }
     }
-  }, [deviceId]);
+  }, [deviceId, disposePreviewTrack, syncPreviewProcessor]);
 
   useEffect(() => {
     if (!previewEnabled) {
+      stopPreview();
       return undefined;
     }
 
-    void applyPreviewStream();
+    void startPreview();
     return undefined;
-  }, [applyPreviewStream, previewEnabled]);
+  }, [deviceId, previewEnabled, startPreview, stopPreview]);
+
+  useEffect(() => {
+    if (!previewEnabled || !previewTrackRef.current) {
+      return undefined;
+    }
+
+    void syncPreviewProcessor(previewTrackRef.current, backgroundMode, backgroundAsset).catch((processorError) => {
+      console.warn('Unable to refresh preview background mode.', processorError);
+    });
+    return undefined;
+  }, [backgroundAsset, backgroundMode, previewEnabled, syncPreviewProcessor]);
 
   useEffect(() => () => {
     stopPreview();
   }, [stopPreview]);
 
-  const previewUrl = backgroundPreviewUrl(backgroundAsset);
-
   return (
-    <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">Test Camera</p>
-          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
-            Preview the selected camera and confirm the saved background mode before you go live.
-          </p>
+    <div className="space-y-5">
+      <div className="overflow-hidden rounded-[12px] border border-riftapp-border/60 bg-[#1b1c21] shadow-[0_8px_24px_rgba(0,0,0,0.28)]">
+        <div className="relative aspect-[2.56/1] bg-[#1b1c21]">
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className={`absolute inset-0 h-full w-full object-cover transition-opacity duration-150 ${previewEnabled ? 'opacity-100' : 'opacity-0'}`}
+          />
+          {!previewEnabled ? (
+            <div className="absolute inset-0 flex items-center justify-center px-6">
+              <button
+                type="button"
+                onClick={() => setPreviewEnabled(true)}
+                className="inline-flex h-9 items-center justify-center rounded-[8px] bg-[#5865f2] px-5 text-[14px] font-medium text-white transition-colors hover:bg-[#4752c4]"
+              >
+                Test Video
+              </button>
+            </div>
+          ) : null}
         </div>
-        <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
-          {backgroundModeTitle(backgroundMode, backgroundAsset)}
-        </span>
       </div>
 
-      <div className="mt-4 overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-bg">
-        <div className="relative aspect-video">
-          {previewUrl ? (
-            <img
-              src={previewUrl}
-              alt={backgroundAsset?.label ?? 'Selected background'}
-              className="absolute inset-0 h-full w-full object-cover opacity-20"
-            />
-          ) : (
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#2a3038,transparent_56%),linear-gradient(135deg,#191b1f,#101114)]" />
-          )}
-        {previewEnabled ? (
-            <video ref={videoRef} playsInline muted className="relative z-10 h-full w-full bg-black object-cover" />
-        ) : (
-            <div className="relative z-10 flex h-full items-center justify-center px-6 text-center text-[13px] text-riftapp-text-muted">
-              Camera preview is off. Start a test to check framing and lighting.
-            </div>
-        )}
-          <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-between gap-3 border-t border-riftapp-border/60 bg-riftapp-bg/80 px-4 py-3 backdrop-blur-sm">
-            <div>
-              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">Background</p>
-              <p className="mt-1 text-[13px] text-white">{backgroundModeTitle(backgroundMode, backgroundAsset)}</p>
-              <p className="mt-1 text-[12px] text-riftapp-text-muted">{backgroundModeDescription(backgroundMode, backgroundAsset)}</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                if (previewEnabled) {
-                  stopPreview();
-                } else {
-                  setPreviewEnabled(true);
-                }
-              }}
-              className="shrink-0 rounded-lg border border-riftapp-border/60 bg-riftapp-surface/80 px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
-            >
-              {previewEnabled ? 'Stop Test' : 'Test Camera'}
-            </button>
-          </div>
-        </div>
-      </div>
-      {starting && <p className="mt-3 text-[12px] text-riftapp-text-muted">Starting preview…</p>}
-      {error && <p className="mt-3 text-[12px] text-[#f87171]">{error}</p>}
+      <CameraPreviewToggleRow
+        enabled={previewEnabled}
+        onToggle={() => setPreviewEnabled((current) => !current)}
+      />
+
+      {starting ? <p className="text-[12px] text-riftapp-text-muted">Starting preview…</p> : null}
+      {error ? <p className="text-[12px] text-[#f87171]">{error}</p> : null}
     </div>
   );
 }
@@ -923,22 +1225,56 @@ function MicrophoneTestCard({
   outputDeviceSelectionSupported,
   noiseSuppressionEnabled,
   echoCancellationEnabled,
+  inputVolume,
+  outputVolume,
 }: {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
   outputDeviceSelectionSupported: boolean;
   noiseSuppressionEnabled: boolean;
   echoCancellationEnabled: boolean;
+  inputVolume: number;
+  outputVolume: number;
 }) {
   const [testing, setTesting] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [level, setLevel] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const processorRef = useRef<MicNoiseGateProcessor | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
+  const processorAudioContextRef = useRef<AudioContext | null>(null);
+  const meterAudioContextRef = useRef<AudioContext | null>(null);
+  const meterSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const meterAnalyserRef = useRef<AnalyserNode | null>(null);
+  const meterSamplesRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  const meterFrameRef = useRef<number | null>(null);
+  const inputVolumeRef = useRef(inputVolume);
 
-  const stopTest = useCallback(() => {
+  const stopMeter = useCallback(() => {
+    if (meterFrameRef.current != null) {
+      cancelAnimationFrame(meterFrameRef.current);
+      meterFrameRef.current = null;
+    }
+
+    meterSourceRef.current?.disconnect();
+    meterAnalyserRef.current?.disconnect();
+
+    const meterAudioContext = meterAudioContextRef.current;
+    meterAudioContextRef.current = null;
+    if (meterAudioContext && meterAudioContext.state !== 'closed') {
+      void meterAudioContext.close().catch(() => {});
+    }
+
+    meterSourceRef.current = null;
+    meterAnalyserRef.current = null;
+    meterSamplesRef.current = null;
+    setLevel(0);
+  }, []);
+
+  const disposeTestResources = useCallback(() => {
+    stopMeter();
+
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
 
@@ -948,18 +1284,72 @@ function MicrophoneTestCard({
       void processor.destroy().catch(() => {});
     }
 
-    const audioContext = audioContextRef.current;
-    audioContextRef.current = null;
-    if (audioContext) {
-      void audioContext.close().catch(() => {});
+    const processorAudioContext = processorAudioContextRef.current;
+    processorAudioContextRef.current = null;
+    if (processorAudioContext && processorAudioContext.state !== 'closed') {
+      void processorAudioContext.close().catch(() => {});
     }
 
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.srcObject = null;
     }
+  }, [stopMeter]);
+
+  const stopTest = useCallback(() => {
+    disposeTestResources();
     setTesting(false);
-  }, []);
+  }, [disposeTestResources]);
+
+  const startMeter = useCallback(async (stream: MediaStream) => {
+    stopMeter();
+
+    try {
+      const meterAudioContext = new AudioContext();
+      const meterSource = meterAudioContext.createMediaStreamSource(stream);
+      const analyser = meterAudioContext.createAnalyser();
+      analyser.fftSize = 128;
+      analyser.smoothingTimeConstant = 0.72;
+      meterSource.connect(analyser);
+
+      meterAudioContextRef.current = meterAudioContext;
+      meterSourceRef.current = meterSource;
+      meterAnalyserRef.current = analyser;
+      meterSamplesRef.current = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+
+      try {
+        if (meterAudioContext.state === 'suspended') {
+          await meterAudioContext.resume();
+        }
+      } catch {
+        /* ignore audio context resume failures */
+      }
+
+      const draw = () => {
+        const activeAnalyser = meterAnalyserRef.current;
+        const activeSamples = meterSamplesRef.current;
+        if (!activeAnalyser || !activeSamples) {
+          return;
+        }
+
+        activeAnalyser.getByteTimeDomainData(activeSamples);
+        let sumSquares = 0;
+        for (let index = 0; index < activeSamples.length; index += 1) {
+          const sample = (activeSamples[index] - 128) / 128;
+          sumSquares += sample * sample;
+        }
+
+        const rms = Math.sqrt(sumSquares / activeSamples.length);
+        const nextLevel = Math.min(1, rms * 6);
+        setLevel((current) => current * 0.58 + nextLevel * 0.42);
+        meterFrameRef.current = requestAnimationFrame(draw);
+      };
+
+      draw();
+    } catch {
+      setLevel(0);
+    }
+  }, [stopMeter]);
 
   const applyMicrophoneTest = useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -970,7 +1360,7 @@ function MicrophoneTestCard({
 
     setStarting(true);
     setError(null);
-    streamRef.current?.getTracks().forEach((track) => track.stop());
+    disposeTestResources();
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -992,35 +1382,38 @@ function MicrophoneTestCard({
       streamRef.current = stream;
       let playbackStream = stream;
 
-      if (noiseSuppressionEnabled) {
+      const inputTrack = stream.getAudioTracks()[0];
+      if (inputTrack) {
+        let processorAudioContext: AudioContext | null = null;
         try {
-          const inputTrack = stream.getAudioTracks()[0];
-          if (inputTrack) {
-            const audioContext = new AudioContext();
-            const processor = new MicNoiseGateProcessor(
-              {
-                automaticSensitivity: false,
-                manualThreshold: 0,
-                releaseMs: DEFAULT_MIC_GATE_RELEASE_MS,
-                noiseSuppressionEnabled: true,
-              },
-              { onSpeakingStateChange: () => {} },
-            );
+          processorAudioContext = new AudioContext();
+          const processor = new MicNoiseGateProcessor(
+            {
+              automaticSensitivity: false,
+              manualThreshold: 0,
+              releaseMs: DEFAULT_MIC_GATE_RELEASE_MS,
+              noiseSuppressionEnabled,
+              inputVolume: inputVolumeRef.current,
+            },
+            { onSpeakingStateChange: () => {} },
+          );
 
-            await processor.init({
-              track: inputTrack,
-              audioContext,
-            });
+          await processor.init({
+            track: inputTrack,
+            audioContext: processorAudioContext,
+          });
 
-            audioContextRef.current = audioContext;
-            processorRef.current = processor;
+          processorAudioContextRef.current = processorAudioContext;
+          processorRef.current = processor;
 
-            if (processor.processedTrack) {
-              playbackStream = new MediaStream([processor.processedTrack]);
-            }
+          if (processor.processedTrack) {
+            playbackStream = new MediaStream([processor.processedTrack]);
           }
         } catch (processorError) {
-          console.warn('RNNoise microphone test unavailable, falling back to raw microphone audio.', processorError);
+          if (processorAudioContext && processorAudioContext.state !== 'closed') {
+            void processorAudioContext.close().catch(() => {});
+          }
+          console.warn('Microphone test processing unavailable, falling back to raw microphone audio.', processorError);
         }
       }
 
@@ -1028,18 +1421,22 @@ function MicrophoneTestCard({
         audioRef.current.srcObject = playbackStream;
         audioRef.current.autoplay = true;
         audioRef.current.muted = false;
+        audioRef.current.volume = outputVolume;
         if (outputDeviceSelectionSupported) {
           await applyAudioSinkId(audioRef.current, outputDeviceId);
         }
         void audioRef.current.play().catch(() => {});
       }
+
+      await startMeter(playbackStream);
     } catch {
       setError('Could not start the microphone test. Check microphone permissions.');
+      disposeTestResources();
       setTesting(false);
     } finally {
       setStarting(false);
     }
-  }, [echoCancellationEnabled, inputDeviceId, outputDeviceId, outputDeviceSelectionSupported, noiseSuppressionEnabled]);
+  }, [disposeTestResources, echoCancellationEnabled, inputDeviceId, noiseSuppressionEnabled, outputDeviceId, outputDeviceSelectionSupported, startMeter]);
 
   useEffect(() => {
     if (!testing) {
@@ -1050,20 +1447,25 @@ function MicrophoneTestCard({
     return undefined;
   }, [applyMicrophoneTest, testing]);
 
+  useEffect(() => {
+    inputVolumeRef.current = inputVolume;
+    processorRef.current?.updateSettings({ inputVolume });
+  }, [inputVolume]);
+
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = outputVolume;
+    }
+  }, [outputVolume]);
+
   useEffect(() => () => {
-    stopTest();
-  }, [stopTest]);
+    disposeTestResources();
+  }, [disposeTestResources]);
 
   return (
-    <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
+    <div className="space-y-3">
       <audio ref={audioRef} className="hidden" />
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-white">Test Microphone</p>
-          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
-            Route your mic back to your chosen output so you can hear the current voice profile, RNNoise, and echo cancellation settings together.
-          </p>
-        </div>
+      <div className="grid gap-4 sm:grid-cols-[106px,minmax(0,1fr)] sm:items-center">
         <button
           type="button"
           onClick={() => {
@@ -1073,30 +1475,14 @@ function MicrophoneTestCard({
               setTesting(true);
             }
           }}
-          className="rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
+          className="inline-flex h-9 w-full items-center justify-center rounded-[10px] bg-[#5865f2] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#4752c4]"
         >
-          {testing ? 'Stop Test' : 'Let\'s Check'}
+          {testing ? 'Stop Test' : 'Mic Test'}
         </button>
+        <VoiceLevelMeter level={level} />
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">Input Profile</p>
-          <p className="mt-2 text-sm font-medium text-white">{noiseSuppressionEnabled ? 'Voice Isolation' : 'Studio / Custom'}</p>
-        </div>
-        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">RNNoise</p>
-          <p className="mt-2 text-sm font-medium text-white">{noiseSuppressionEnabled ? 'Enabled' : 'Disabled'}</p>
-        </div>
-        <div className="rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-3 py-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-dim">Echo Cancellation</p>
-          <p className="mt-2 text-sm font-medium text-white">{echoCancellationEnabled ? 'Enabled' : 'Disabled'}</p>
-        </div>
-      </div>
-      <p className="mt-4 text-[12px] text-riftapp-text-muted">
-        Use headphones if possible to avoid feedback while the test is active.
-      </p>
-      {starting && <p className="mt-3 text-[12px] text-riftapp-text-muted">Starting microphone test…</p>}
-      {error && <p className="mt-3 text-[12px] text-[#f87171]">{error}</p>}
+      {starting ? <p className="text-[12px] text-riftapp-text-muted">Starting microphone test…</p> : null}
+      {error ? <p className="text-[12px] text-[#f87171]">{error}</p> : null}
     </div>
   );
 }
@@ -1204,6 +1590,8 @@ function VoiceVideoSettingsTab() {
   const inputDeviceId = useVoiceStore((s) => s.inputDeviceId);
   const outputDeviceId = useVoiceStore((s) => s.outputDeviceId);
   const cameraDeviceId = useVoiceStore((s) => s.cameraDeviceId);
+  const inputVolume = useVoiceStore((s) => s.inputVolume);
+  const outputVolume = useVoiceStore((s) => s.outputVolume);
   const automaticInputSensitivity = useVoiceStore((s) => s.automaticInputSensitivity);
   const manualInputSensitivity = useVoiceStore((s) => s.manualInputSensitivity);
   const noiseSuppressionEnabled = useVoiceStore((s) => s.noiseSuppressionEnabled);
@@ -1215,6 +1603,8 @@ function VoiceVideoSettingsTab() {
   const refreshMediaDevices = useVoiceStore((s) => s.refreshMediaDevices);
   const setInputDeviceId = useVoiceStore((s) => s.setInputDeviceId);
   const setOutputDeviceId = useVoiceStore((s) => s.setOutputDeviceId);
+  const setInputVolume = useVoiceStore((s) => s.setInputVolume);
+  const setOutputVolume = useVoiceStore((s) => s.setOutputVolume);
   const setCameraDeviceId = useVoiceStore((s) => s.setCameraDeviceId);
   const setAutomaticInputSensitivity = useVoiceStore((s) => s.setAutomaticInputSensitivity);
   const setManualInputSensitivity = useVoiceStore((s) => s.setManualInputSensitivity);
@@ -1226,6 +1616,8 @@ function VoiceVideoSettingsTab() {
 
   const outputDeviceSelectionSupported = supportsAudioOutputSelection();
   const [backgroundPickerOpen, setBackgroundPickerOpen] = useState(false);
+  const [backgroundQuickPicks, setBackgroundQuickPicks] = useState<CameraBackgroundAsset[]>([]);
+  const [backgroundQuickPicksLoading, setBackgroundQuickPicksLoading] = useState(true);
 
   const detectedProfile = useMemo<VoiceInputProfile>(
     () => detectVoiceInputProfile({
@@ -1257,6 +1649,52 @@ function VoiceVideoSettingsTab() {
     };
   }, [refreshMediaDevices]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadQuickPicks = async () => {
+      setBackgroundQuickPicksLoading(true);
+
+      try {
+        const params = new URLSearchParams({
+          key: TENOR_PUBLIC_KEY,
+          limit: '8',
+          contentfilter: 'medium',
+          media_filter: 'minimal',
+        });
+
+        const response = await fetch(`https://g.tenor.com/v1/trending?${params.toString()}`);
+        if (!response.ok) {
+          throw new Error('Trending backgrounds unavailable.');
+        }
+
+        const payload = (await response.json()) as { results?: TenorResult[] };
+        const mapped = (payload.results ?? [])
+          .map(mapTenorResultToBackgroundAsset)
+          .filter((asset): asset is CameraBackgroundAsset => asset !== null)
+          .slice(0, 8);
+
+        if (!cancelled) {
+          setBackgroundQuickPicks(mapped);
+        }
+      } catch {
+        if (!cancelled) {
+          setBackgroundQuickPicks([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setBackgroundQuickPicksLoading(false);
+        }
+      }
+    };
+
+    void loadQuickPicks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const applyProfile = useCallback(async (profile: VoiceInputProfile) => {
     setSelectedProfile(profile);
     if (profile === 'custom') {
@@ -1272,85 +1710,87 @@ function VoiceVideoSettingsTab() {
 
   const showCustomControls = selectedProfile === 'custom';
   const customBackgroundPreview = backgroundPreviewUrl(cameraBackgroundAsset);
+  const selectedQuickBackground = cameraBackgroundMode === 'custom' && cameraBackgroundAsset
+    ? backgroundQuickPicks.find((asset) => asset.source === cameraBackgroundAsset.source && asset.url === cameraBackgroundAsset.url) ?? null
+    : null;
+  const customTileSelected = cameraBackgroundMode === 'custom' && !selectedQuickBackground;
+  const quickBackgroundPlaceholders = backgroundQuickPicksLoading && backgroundQuickPicks.length === 0
+    ? Array.from({ length: 8 }, (_, index) => `placeholder-${index}`)
+    : [];
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-4">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-riftapp-text-dim">Voice</h3>
-          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-riftapp-text-muted">
-            Pick an input profile first, then fine-tune the mic path only when you need a custom setup.
-          </p>
-        </div>
+    <div className="space-y-10">
+      <section className="space-y-8">
+        <div className="max-w-[620px] space-y-6">
+          <h3 className="text-[28px] font-semibold leading-none text-riftapp-text">Voice</h3>
 
-        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">Input Profile</p>
-              <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
-                Voice Isolation keeps RNNoise on, Studio keeps it off, and Custom exposes the raw controls.
-              </p>
+          <div className="grid gap-x-10 gap-y-6 md:grid-cols-2">
+            <VoiceSelectControl
+              label="Microphone"
+              devices={mediaDevices.audioinput}
+              value={inputDeviceId}
+              onChange={setInputDeviceId}
+              kind="audioinput"
+            />
+            <VoiceSelectControl
+              label="Speaker"
+              devices={mediaDevices.audiooutput}
+              value={outputDeviceId}
+              onChange={setOutputDeviceId}
+              kind="audiooutput"
+              disabled={!outputDeviceSelectionSupported}
+            />
+            <VoiceVolumeSlider
+              label="Microphone Volume"
+              value={inputVolume}
+              onChange={setInputVolume}
+            />
+            <VoiceVolumeSlider
+              label="Speaker Volume"
+              value={outputVolume}
+              onChange={setOutputVolume}
+            />
+          </div>
+
+          <MicrophoneTestCard
+            inputDeviceId={inputDeviceId}
+            outputDeviceId={outputDeviceId}
+            outputDeviceSelectionSupported={outputDeviceSelectionSupported}
+            noiseSuppressionEnabled={noiseSuppressionEnabled}
+            echoCancellationEnabled={echoCancellationEnabled}
+            inputVolume={inputVolume}
+            outputVolume={outputVolume}
+          />
+
+          <div className="border-t border-riftapp-border/60 pt-7">
+            <div className="space-y-3">
+              <h4 className="text-[18px] font-semibold text-riftapp-text">Input Profile</h4>
+              <div className="space-y-1">
+                <VoiceProfileOption
+                  title="Voice Isolation"
+                  description="RNNoise with echo cancellation and automatic sensitivity for everyday rooms."
+                  selected={selectedProfile === 'voice-isolation'}
+                  onSelect={() => void applyProfile('voice-isolation')}
+                />
+                <VoiceProfileOption
+                  title="Studio"
+                  description="Open mic with automatic sensitivity and no noise suppression."
+                  selected={selectedProfile === 'studio'}
+                  onSelect={() => void applyProfile('studio')}
+                />
+                <VoiceProfileOption
+                  title="Custom"
+                  description="Show push-to-talk, manual sensitivity, and the full voice control set."
+                  selected={selectedProfile === 'custom'}
+                  onSelect={() => void applyProfile('custom')}
+                />
+              </div>
             </div>
-            <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
-              {selectedProfile === 'voice-isolation'
-                ? 'Voice Isolation'
-                : selectedProfile === 'studio'
-                  ? 'Studio'
-                  : 'Custom'}
-            </span>
-          </div>
-
-          <div className="mt-4 grid gap-3 xl:grid-cols-3">
-            <ChoiceCard
-              title="Voice Isolation"
-              description="RNNoise on, echo cancellation on, and automatic sensitivity for everyday rooms."
-              selected={selectedProfile === 'voice-isolation'}
-              onClick={() => void applyProfile('voice-isolation')}
-              badge="RNNoise On"
-            />
-            <ChoiceCard
-              title="Studio"
-              description="RNNoise off with automatic sensitivity so your voice stays more natural and open."
-              selected={selectedProfile === 'studio'}
-              onClick={() => void applyProfile('studio')}
-              badge="RNNoise Off"
-            />
-            <ChoiceCard
-              title="Custom"
-              description="Manually tune push-to-talk, voice activity, RNNoise, echo cancellation, and sensitivity."
-              selected={selectedProfile === 'custom'}
-              onClick={() => void applyProfile('custom')}
-              badge="Advanced"
-            />
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-              <DeviceSelect
-                label="Input Device"
-                description="Switch microphones without leaving the call."
-                devices={mediaDevices.audioinput}
-                value={inputDeviceId}
-                onChange={setInputDeviceId}
-                kind="audioinput"
-              />
-              <DeviceSelect
-                label="Output Device"
-                description={outputDeviceSelectionSupported
-                  ? 'Choose where voice playback should be heard.'
-                  : 'Your browser does not support changing speaker output from the app.'}
-                devices={mediaDevices.audiooutput}
-                value={outputDeviceId}
-                onChange={setOutputDeviceId}
-                kind="audiooutput"
-                disabled={!outputDeviceSelectionSupported}
-              />
           </div>
         </div>
 
         {showCustomControls ? (
-          <div className="space-y-4">
+          <div className="space-y-4 pt-2">
             <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
@@ -1451,128 +1891,123 @@ function VoiceVideoSettingsTab() {
               </Field>
             </div>
           </div>
-        ) : (
-          <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 px-5 py-4 text-[13px] leading-snug text-riftapp-text-muted">
-            Switch to Custom when you want to adjust input mode, manual sensitivity, or echo cancellation directly.
-          </div>
-        )}
-
-        <MicrophoneTestCard
-          inputDeviceId={inputDeviceId}
-          outputDeviceId={outputDeviceId}
-          outputDeviceSelectionSupported={outputDeviceSelectionSupported}
-          noiseSuppressionEnabled={noiseSuppressionEnabled}
-          echoCancellationEnabled={echoCancellationEnabled}
-        />
+        ) : null}
       </section>
 
-      <section className="space-y-4">
-        <div>
-          <h3 className="text-xs font-bold uppercase tracking-[0.24em] text-riftapp-text-dim">Video</h3>
-          <p className="mt-2 max-w-2xl text-[13px] leading-snug text-riftapp-text-muted">
-            Pick the camera you want to use, then choose whether to keep the feed raw, blurred, or backed by a custom asset.
-          </p>
-        </div>
+      <section className="space-y-6">
+        <div className="max-w-[620px] space-y-5">
+          <h3 className="text-[18px] font-semibold text-riftapp-text">Camera</h3>
 
-        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-          <div className="grid gap-4 lg:grid-cols-2">
-            <DeviceSelect
-              label="Camera Device"
-              description="Choose which camera to use when you turn video on."
-              devices={mediaDevices.videoinput}
-              value={cameraDeviceId}
-              onChange={setCameraDeviceId}
-              kind="videoinput"
-            />
-          </div>
-        </div>
+          <CameraTestCard
+            deviceId={cameraDeviceId}
+            backgroundMode={cameraBackgroundMode}
+            backgroundAsset={cameraBackgroundAsset}
+          />
 
-        <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold text-white">Video Background</p>
-              <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
-                Choose None, Blur, or Custom. Custom opens the background picker for uploads and GIFs.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setBackgroundPickerOpen(true)}
-              className="rounded-lg border border-riftapp-border/60 bg-riftapp-surface px-3 py-2 text-[13px] font-medium text-riftapp-text transition-colors hover:bg-riftapp-surface-hover"
-            >
-              {cameraBackgroundMode === 'custom' ? 'Edit Custom' : 'Browse Custom'}
-            </button>
-          </div>
+          <CameraSelectControl
+            devices={mediaDevices.videoinput}
+            value={cameraDeviceId}
+            onChange={setCameraDeviceId}
+          />
 
-          <div className="mt-4 grid gap-3 lg:grid-cols-3">
-            <ChoiceCard
-              title="None"
-              description="Keep the regular camera feed with no extra background treatment."
-              selected={cameraBackgroundMode === 'none'}
-              onClick={() => setCameraBackgroundMode('none')}
-            >
-              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-[radial-gradient(circle_at_top,#2b3038,transparent_56%),linear-gradient(135deg,#191b1f,#101114)]">
-                <div className="aspect-[16/9] px-4 py-4 text-[12px] text-riftapp-text-muted">Raw camera preview</div>
-              </div>
-            </ChoiceCard>
+          <div className="space-y-3">
+            <p className="text-[14px] font-semibold text-riftapp-text-muted">Video Background</p>
 
-            <ChoiceCard
-              title="Blur"
-              description="Keep the focus on your face with a softer, less distracting backdrop."
-              selected={cameraBackgroundMode === 'blur'}
-              onClick={() => setCameraBackgroundMode('blur')}
-            >
-              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-bg">
-                <div className="relative aspect-[16/9]">
-                  <div
-                    className="absolute inset-0 scale-110 bg-cover bg-center opacity-80 blur-sm"
-                    style={{
-                      backgroundImage:
-                        'url(https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80)',
-                    }}
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="h-16 w-16 rounded-full bg-white/15 ring-1 ring-white/20" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <CameraBackgroundTile
+                selected={cameraBackgroundMode === 'none'}
+                onClick={() => setCameraBackgroundMode('none')}
+              >
+                <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-riftapp-panel text-riftapp-text">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-riftapp-text-muted">
+                    <circle cx="12" cy="12" r="9" />
+                    <line x1="7" y1="17" x2="17" y2="7" />
+                  </svg>
+                  <span className="text-[15px] font-medium">None</span>
+                </div>
+              </CameraBackgroundTile>
+
+              <CameraBackgroundTile
+                selected={cameraBackgroundMode === 'blur'}
+                onClick={() => setCameraBackgroundMode('blur')}
+              >
+                <div className="relative h-full w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,#9465c3,transparent_60%),linear-gradient(135deg,#4a3a63,#9f6b86)]">
+                  <div className="absolute inset-0 bg-black/12 backdrop-blur-[8px]" />
+                  <div className="relative flex h-full w-full flex-col items-center justify-center gap-2 text-white">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M4 15h16" />
+                      <path d="M4 9h16" />
+                      <path d="M10 3v18" />
+                      <path d="M14 3v18" />
+                    </svg>
+                    <span className="text-[15px] font-medium">Blur</span>
                   </div>
                 </div>
-              </div>
-            </ChoiceCard>
+              </CameraBackgroundTile>
 
-            <ChoiceCard
-              title="Custom"
-              description="Upload an image, upload a GIF, or pick a GIF from Tenor for your saved background."
-              selected={cameraBackgroundMode === 'custom'}
-              onClick={() => {
-                if (cameraBackgroundAsset) {
-                  setCameraBackgroundMode('custom');
-                } else {
-                  setBackgroundPickerOpen(true);
-                }
-              }}
-            >
-              <div className="overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-bg">
+              <CameraBackgroundTile
+                selected={customTileSelected}
+                onClick={() => setBackgroundPickerOpen(true)}
+                animated={cameraBackgroundAsset?.kind === 'gif' && Boolean(customBackgroundPreview)}
+              >
                 {customBackgroundPreview ? (
-                  <img
-                    src={customBackgroundPreview}
-                    alt={cameraBackgroundAsset?.label ?? 'Custom background'}
-                    className="aspect-[16/9] w-full object-cover"
-                  />
+                  <div className="relative h-full w-full">
+                    <img
+                      src={customBackgroundPreview}
+                      alt={cameraBackgroundAsset?.label ?? 'Custom background'}
+                      className="h-full w-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/20" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-white">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                      <span className="text-[15px] font-medium">Custom</span>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="flex aspect-[16/9] items-center justify-center bg-[radial-gradient(circle_at_top,#2c323a,transparent_58%),linear-gradient(135deg,#191b1f,#101114)] px-4 text-center text-[12px] text-riftapp-text-muted">
-                    No custom background selected yet
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[linear-gradient(135deg,#7f59cb,#b06a8b)] text-white">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14" />
+                      <path d="M5 12h14" />
+                    </svg>
+                    <span className="text-[15px] font-medium">Custom</span>
                   </div>
                 )}
-              </div>
-            </ChoiceCard>
+              </CameraBackgroundTile>
+
+              {backgroundQuickPicks.map((asset) => {
+                const selected = cameraBackgroundMode === 'custom'
+                  && cameraBackgroundAsset?.source === asset.source
+                  && cameraBackgroundAsset.url === asset.url;
+
+                return (
+                  <CameraBackgroundTile
+                    key={`${asset.source}-${asset.url}`}
+                    selected={selected}
+                    onClick={() => setCameraBackgroundAsset(asset)}
+                    animated={asset.kind === 'gif'}
+                  >
+                    <img
+                      src={backgroundPreviewUrl(asset)}
+                      alt={asset.label ?? 'Background option'}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </CameraBackgroundTile>
+                );
+              })}
+
+              {quickBackgroundPlaceholders.map((placeholderId) => (
+                <div
+                  key={placeholderId}
+                  className="aspect-[1.74/1] rounded-[10px] border border-riftapp-border/60 bg-riftapp-panel/80"
+                />
+              ))}
+            </div>
           </div>
         </div>
-
-        <CameraTestCard
-          deviceId={cameraDeviceId}
-          backgroundMode={cameraBackgroundMode}
-          backgroundAsset={cameraBackgroundAsset}
-        />
 
         <BackgroundPickerModal
           isOpen={backgroundPickerOpen}

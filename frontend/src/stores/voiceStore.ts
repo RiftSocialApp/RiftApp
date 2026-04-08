@@ -73,6 +73,8 @@ type VoiceSettingsSnapshot = {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
   cameraDeviceId: string | null;
+  inputVolume: number;
+  outputVolume: number;
   automaticInputSensitivity: boolean;
   manualInputSensitivity: number;
   noiseSuppressionEnabled: boolean;
@@ -86,6 +88,8 @@ const DEFAULT_VOICE_SETTINGS: VoiceSettingsSnapshot = {
   inputDeviceId: null,
   outputDeviceId: null,
   cameraDeviceId: null,
+  inputVolume: 1,
+  outputVolume: 1,
   automaticInputSensitivity: true,
   manualInputSensitivity: DEFAULT_MANUAL_MIC_THRESHOLD,
   noiseSuppressionEnabled: true,
@@ -118,6 +122,14 @@ function clampManualInputSensitivity(value: number) {
   );
 }
 
+function clampVoiceVolume(value: number) {
+  if (!Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.min(1, Math.max(0, value));
+}
+
 function normalizeSelectedDeviceId(deviceId: string | null | undefined) {
   if (typeof deviceId !== 'string') {
     return null;
@@ -139,6 +151,12 @@ function loadVoiceSettings(): VoiceSettingsSnapshot {
       inputDeviceId: normalizeSelectedDeviceId(parsed.inputDeviceId),
       outputDeviceId: normalizeSelectedDeviceId(parsed.outputDeviceId),
       cameraDeviceId: normalizeSelectedDeviceId(parsed.cameraDeviceId),
+      inputVolume: clampVoiceVolume(
+        typeof parsed.inputVolume === 'number' ? parsed.inputVolume : 1,
+      ),
+      outputVolume: clampVoiceVolume(
+        typeof parsed.outputVolume === 'number' ? parsed.outputVolume : 1,
+      ),
       automaticInputSensitivity: parsed.automaticInputSensitivity !== false,
       manualInputSensitivity: clampManualInputSensitivity(
         typeof parsed.manualInputSensitivity === 'number'
@@ -254,6 +272,8 @@ interface VoiceStore {
   inputDeviceId: string | null;
   outputDeviceId: string | null;
   cameraDeviceId: string | null;
+  inputVolume: number;
+  outputVolume: number;
   automaticInputSensitivity: boolean;
   manualInputSensitivity: number;
   noiseSuppressionEnabled: boolean;
@@ -313,6 +333,8 @@ interface VoiceStore {
   refreshMediaDevices: () => Promise<void>;
   setInputDeviceId: (deviceId: string | null) => Promise<void>;
   setOutputDeviceId: (deviceId: string | null) => Promise<void>;
+  setInputVolume: (volume: number) => void;
+  setOutputVolume: (volume: number) => void;
   setCameraDeviceId: (deviceId: string | null) => Promise<void>;
   setAutomaticInputSensitivity: (enabled: boolean) => void;
   setManualInputSensitivity: (threshold: number) => void;
@@ -741,6 +763,8 @@ function voiceSettingsSnapshot(
     | 'inputDeviceId'
     | 'outputDeviceId'
     | 'cameraDeviceId'
+    | 'inputVolume'
+    | 'outputVolume'
     | 'automaticInputSensitivity'
     | 'manualInputSensitivity'
     | 'noiseSuppressionEnabled'
@@ -754,6 +778,8 @@ function voiceSettingsSnapshot(
     inputDeviceId: normalizeSelectedDeviceId(state.inputDeviceId),
     outputDeviceId: normalizeSelectedDeviceId(state.outputDeviceId),
     cameraDeviceId: normalizeSelectedDeviceId(state.cameraDeviceId),
+    inputVolume: clampVoiceVolume(state.inputVolume),
+    outputVolume: clampVoiceVolume(state.outputVolume),
     automaticInputSensitivity: state.automaticInputSensitivity,
     manualInputSensitivity: clampManualInputSensitivity(state.manualInputSensitivity),
     noiseSuppressionEnabled: state.noiseSuppressionEnabled,
@@ -770,6 +796,8 @@ function persistVoiceSettingsFromStore(
     | 'inputDeviceId'
     | 'outputDeviceId'
     | 'cameraDeviceId'
+    | 'inputVolume'
+    | 'outputVolume'
     | 'automaticInputSensitivity'
     | 'manualInputSensitivity'
     | 'noiseSuppressionEnabled'
@@ -805,6 +833,7 @@ function currentMicGateSettings() {
     manualThreshold: state.manualInputSensitivity,
     releaseMs: DEFAULT_MIC_GATE_RELEASE_MS,
     noiseSuppressionEnabled: state.noiseSuppressionEnabled,
+    inputVolume: state.inputVolume,
   };
 }
 
@@ -1196,7 +1225,7 @@ function syncParticipants() {
 function effectiveRemoteVolume(identity: string): number {
   const s = useVoiceStore.getState();
   if (s.voiceOutputMuted) return 0;
-  let base = s.participantVolumes[identity] ?? 1;
+  let base = (s.participantVolumes[identity] ?? 1) * s.outputVolume;
   const p = s.participants.find((x) => x.identity === identity);
   if (p?.isScreenSharing) {
     if (s.streamAudioMuted[identity]) base = 0;
@@ -1274,6 +1303,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   inputDeviceId: initialVoiceSettings.inputDeviceId,
   outputDeviceId: initialVoiceSettings.outputDeviceId,
   cameraDeviceId: initialVoiceSettings.cameraDeviceId,
+  inputVolume: initialVoiceSettings.inputVolume,
+  outputVolume: initialVoiceSettings.outputVolume,
   automaticInputSensitivity: initialVoiceSettings.automaticInputSensitivity,
   manualInputSensitivity: initialVoiceSettings.manualInputSensitivity,
   noiseSuppressionEnabled: initialVoiceSettings.noiseSuppressionEnabled,
@@ -1672,6 +1703,32 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     if (roomRef?.state === ConnectionState.Connected) {
       await applyOutputDevice(roomRef, nextDeviceId);
     }
+  },
+
+  setInputVolume: (volume) => {
+    const nextVolume = clampVoiceVolume(volume);
+    const current = get();
+    if (current.inputVolume === nextVolume) {
+      return;
+    }
+
+    const nextState = { inputVolume: nextVolume };
+    set(nextState);
+    persistVoiceSettingsFromStore({ ...current, ...nextState });
+    updateMicGateSettings();
+  },
+
+  setOutputVolume: (volume) => {
+    const nextVolume = clampVoiceVolume(volume);
+    const current = get();
+    if (current.outputVolume === nextVolume) {
+      return;
+    }
+
+    const nextState = { outputVolume: nextVolume };
+    set(nextState);
+    persistVoiceSettingsFromStore({ ...current, ...nextState });
+    queueMicrotask(() => reapplyAllRemoteVoiceVolumes());
   },
 
   setCameraDeviceId: async (deviceId) => {
