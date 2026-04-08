@@ -16,7 +16,15 @@ import {
 import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSettingsStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
-import { DEFAULT_MIC_GATE_RELEASE_MS, MicNoiseGateProcessor } from '../../utils/audio/micNoiseGate';
+import {
+  AUTO_THRESHOLD_MAX,
+  AUTO_THRESHOLD_MIN,
+  DEFAULT_MANUAL_MIC_THRESHOLD,
+  DEFAULT_MIC_GATE_RELEASE_MS,
+  MicNoiseGateProcessor,
+  estimateAutomaticMicThreshold,
+  updateAutomaticMicNoiseFloor,
+} from '../../utils/audio/micNoiseGate';
 import type { DesktopBuildInfo } from '../../types/desktop';
 import ModalCloseButton from '@/components/shared/ModalCloseButton';
 import { CameraIcon } from '../voice/VoiceIcons';
@@ -293,7 +301,7 @@ function SettingsModal() {
 
 const MANUAL_SENSITIVITY_STEP = 0.001;
 const MANUAL_SENSITIVITY_MIN = 0;
-const MANUAL_SENSITIVITY_MAX = 0.08;
+const MANUAL_SENSITIVITY_MAX = AUTO_THRESHOLD_MAX;
 
 type SinkCapableAudioElement = HTMLAudioElement & {
   setSinkId?: (deviceId: string) => Promise<void>;
@@ -315,10 +323,6 @@ async function applyAudioSinkId(audio: HTMLAudioElement | null, outputDeviceId: 
   }
 
   await sinkAudio.setSinkId(outputDeviceId ?? 'default');
-}
-
-function formatSensitivity(threshold: number) {
-  return threshold <= 0 ? 'Always transmit' : `Threshold ${threshold.toFixed(3)}`;
 }
 
 function systemDefaultLabel(kind: 'audioinput' | 'audiooutput' | 'videoinput') {
@@ -526,44 +530,211 @@ function CameraBackgroundTile({
   );
 }
 
-function SettingToggle({
-  label,
-  description,
+function VoiceToggleSwitch({
   enabled,
   onToggle,
+  ariaLabel,
 }: {
-  label: string;
-  description: string;
   enabled: boolean;
   onToggle: () => void;
+  ariaLabel: string;
 }) {
   return (
     <button
       type="button"
+      role="switch"
+      aria-checked={enabled}
+      aria-label={ariaLabel}
       onClick={onToggle}
-      className="w-full rounded-xl border border-riftapp-border/60 bg-riftapp-surface px-4 py-3 text-left transition-colors hover:border-riftapp-border-light hover:bg-riftapp-surface-hover"
+      className={`inline-flex h-7 w-[42px] shrink-0 items-center rounded-full border transition-colors ${
+        enabled
+          ? 'border-[#5865f2] bg-[#5865f2]'
+          : 'border-riftapp-border/70 bg-riftapp-bg-alt'
+      }`}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-riftapp-text">{label}</p>
-          <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">{description}</p>
-        </div>
-        <span
-          className={`mt-0.5 inline-flex h-6 w-11 items-center rounded-full border transition-colors ${
-            enabled
-              ? 'border-[#5865f2] bg-[#5865f2]'
-              : 'border-riftapp-border/60 bg-riftapp-bg-alt'
-          }`}
-          aria-hidden="true"
-        >
-          <span
-            className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
-              enabled ? 'translate-x-5' : 'translate-x-0.5'
-            }`}
-          />
-        </span>
-      </div>
+      <span
+        className={`inline-block h-5 w-5 rounded-full bg-white transition-transform ${
+          enabled ? 'translate-x-[19px]' : 'translate-x-0.5'
+        }`}
+      />
     </button>
+  );
+}
+
+function VoiceStackedSetting({
+  label,
+  description,
+  control,
+  children,
+}: {
+  label: string;
+  description?: string;
+  control: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="py-4 first:pt-0 last:pb-0">
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1 pr-2">
+          <p className="text-[16px] font-semibold leading-5 text-riftapp-text">{label}</p>
+          {description ? (
+            <p className="mt-1.5 max-w-[460px] text-[13px] leading-[1.4] text-riftapp-text-muted">
+              {description}
+            </p>
+          ) : null}
+        </div>
+        <div className="shrink-0 pt-0.5">{control}</div>
+      </div>
+      {children ? <div className="mt-4">{children}</div> : null}
+    </div>
+  );
+}
+
+function useAutomaticSensitivityThresholdPreview(deviceId: string | null, enabled: boolean) {
+  const [threshold, setThreshold] = useState(DEFAULT_MANUAL_MIC_THRESHOLD);
+
+  useEffect(() => {
+    if (!enabled || !navigator.mediaDevices?.getUserMedia) {
+      return undefined;
+    }
+
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let audioContext: AudioContext | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let analyser: AnalyserNode | null = null;
+    let frame: number | null = null;
+    let noiseFloor = AUTO_THRESHOLD_MIN;
+
+    void (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: deviceId
+            ? {
+                deviceId: { exact: deviceId },
+                echoCancellation: false,
+                autoGainControl: false,
+                noiseSuppression: false,
+              }
+            : {
+                echoCancellation: false,
+                autoGainControl: false,
+                noiseSuppression: false,
+              },
+          video: false,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        audioContext = new AudioContext();
+        source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.08;
+        source.connect(analyser);
+        const samples = new Uint8Array(new ArrayBuffer(analyser.fftSize));
+
+        try {
+          if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+          }
+        } catch {
+          /* ignore audio context resume failures */
+        }
+
+        const tick = () => {
+          if (cancelled || !analyser) {
+            return;
+          }
+
+          analyser.getByteTimeDomainData(samples);
+          let sumSquares = 0;
+          for (let index = 0; index < samples.length; index += 1) {
+            const sample = (samples[index] - 128) / 128;
+            sumSquares += sample * sample;
+          }
+
+          const level = Math.sqrt(sumSquares / samples.length);
+          const currentThreshold = estimateAutomaticMicThreshold(noiseFloor);
+          if (level < currentThreshold) {
+            noiseFloor = updateAutomaticMicNoiseFloor(noiseFloor, level);
+          }
+
+          const nextThreshold = estimateAutomaticMicThreshold(noiseFloor);
+          setThreshold((current) => (
+            Math.abs(current - nextThreshold) >= MANUAL_SENSITIVITY_STEP ? nextThreshold : current
+          ));
+
+          frame = requestAnimationFrame(tick);
+        };
+
+        tick();
+      } catch {
+        setThreshold(DEFAULT_MANUAL_MIC_THRESHOLD);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (frame != null) {
+        cancelAnimationFrame(frame);
+      }
+      source?.disconnect();
+      analyser?.disconnect();
+      stream?.getTracks().forEach((track) => track.stop());
+      if (audioContext && audioContext.state !== 'closed') {
+        void audioContext.close().catch(() => {});
+      }
+    };
+  }, [deviceId, enabled]);
+
+  return threshold;
+}
+
+function VoiceSensitivitySetting({
+  deviceId,
+  automaticInputSensitivity,
+  manualInputSensitivity,
+  onToggleAutomatic,
+  onManualChange,
+}: {
+  deviceId: string | null;
+  automaticInputSensitivity: boolean;
+  manualInputSensitivity: number;
+  onToggleAutomatic: () => void;
+  onManualChange: (threshold: number) => void;
+}) {
+  const automaticThreshold = useAutomaticSensitivityThresholdPreview(deviceId, automaticInputSensitivity);
+  const displayedThreshold = automaticInputSensitivity ? automaticThreshold : manualInputSensitivity;
+
+  return (
+    <VoiceStackedSetting
+      label="Automatically Adjust Input Sensitivity"
+      description="Controls how much sound Rift transmits from your mic."
+      control={(
+        <VoiceToggleSwitch
+          enabled={automaticInputSensitivity}
+          onToggle={onToggleAutomatic}
+          ariaLabel="Automatically adjust input sensitivity"
+        />
+      )}
+    >
+      <input
+        type="range"
+        min={MANUAL_SENSITIVITY_MIN}
+        max={MANUAL_SENSITIVITY_MAX}
+        step={MANUAL_SENSITIVITY_STEP}
+        value={displayedThreshold}
+        disabled={automaticInputSensitivity}
+        onChange={(event) => onManualChange(Number(event.target.value))}
+        aria-label="Input sensitivity threshold"
+        className="voice-sensitivity-slider w-full"
+        style={automaticInputSensitivity ? ({ opacity: 1 } as CSSProperties) : undefined}
+      />
+    </VoiceStackedSetting>
   );
 }
 
@@ -690,57 +861,6 @@ function mapTenorResultToBackgroundAsset(result: TenorResult): CameraBackgroundA
     label: result.content_description?.trim() || result.title?.trim() || 'Tenor GIF',
     source: 'tenor',
   };
-}
-
-function ChoiceCard({
-  title,
-  description,
-  selected,
-  onClick,
-  children,
-  badge,
-}: {
-  title: string;
-  description: string;
-  selected: boolean;
-  onClick: () => void;
-  children?: React.ReactNode;
-  badge?: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`group w-full rounded-xl border px-4 py-4 text-left transition-all ${
-        selected
-          ? 'border-[#5865f2] bg-riftapp-panel shadow-[0_0_0_1px_rgba(88,101,242,0.2)]'
-          : 'border-riftapp-border/60 bg-riftapp-surface hover:border-riftapp-border-light hover:bg-riftapp-surface-hover'
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <p className="text-sm font-semibold text-white">{title}</p>
-            {badge ? (
-              <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-riftapp-text-muted">
-                {badge}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-[13px] leading-snug text-riftapp-text-muted">{description}</p>
-        </div>
-        <span
-          className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
-            selected ? 'border-[#5865f2] bg-[#5865f2]' : 'border-riftapp-border/60 bg-transparent'
-          }`}
-          aria-hidden="true"
-        >
-          {selected ? <span className="h-2 w-2 rounded-full bg-white" /> : null}
-        </span>
-      </div>
-      {children ? <div className="mt-4">{children}</div> : null}
-    </button>
-  );
 }
 
 function BackgroundPickerModal({
@@ -1006,7 +1126,6 @@ function CameraTestCard({
   backgroundAsset: CameraBackgroundAsset | null;
 }) {
   const [previewEnabled, setPreviewEnabled] = useState(false);
-  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewTrackRef = useRef<LocalVideoTrack | null>(null);
@@ -1039,7 +1158,6 @@ function CameraTestCard({
   const stopPreview = useCallback(() => {
     previewRequestIdRef.current += 1;
     disposePreviewTrack();
-    setStarting(false);
   }, [disposePreviewTrack]);
 
   const syncPreviewProcessor = useCallback(async (
@@ -1076,7 +1194,6 @@ function CameraTestCard({
 
     const requestId = previewRequestIdRef.current + 1;
     previewRequestIdRef.current = requestId;
-    setStarting(true);
     setError(null);
     disposePreviewTrack();
 
@@ -1117,10 +1234,6 @@ function CameraTestCard({
     } catch {
       setError('Could not start camera preview. Check camera permissions.');
       setPreviewEnabled(false);
-    } finally {
-      if (previewRequestIdRef.current === requestId) {
-        setStarting(false);
-      }
     }
   }, [deviceId, disposePreviewTrack, syncPreviewProcessor]);
 
@@ -1174,8 +1287,6 @@ function CameraTestCard({
           </div>
         </div>
       </div>
-
-      {starting ? <p className="text-[12px] text-riftapp-text-muted">Starting preview…</p> : null}
       {error ? <p className="text-[12px] text-[#f87171]">{error}</p> : null}
     </div>
   );
@@ -1328,12 +1439,12 @@ function MicrophoneTestCard({
           ? {
               deviceId: { exact: inputDeviceId },
               echoCancellation: echoCancellationEnabled,
-              autoGainControl: true,
+              autoGainControl: false,
               noiseSuppression: false,
             }
           : {
               echoCancellation: echoCancellationEnabled,
-              autoGainControl: true,
+              autoGainControl: false,
               noiseSuppression: false,
             },
         video: false,
@@ -1441,105 +1552,6 @@ function MicrophoneTestCard({
       </div>
       {error ? <p className="text-[12px] text-[#f87171]">{error}</p> : null}
     </div>
-  );
-}
-
-/** Live microphone volume meter displayed behind the sensitivity slider. */
-function SensitivityMeter({ deviceId, threshold, max, disabled }: { deviceId: string | null; threshold: number; max: number; disabled: boolean }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef<{ stream: MediaStream | null; ctx: AudioContext | null; analyser: AnalyserNode | null; frame: number | null; samples: Uint8Array<ArrayBuffer> | null }>({ stream: null, ctx: null, analyser: null, frame: null, samples: null });
-
-  useEffect(() => {
-    if (disabled) return;
-
-    let cancelled = false;
-    const s = stateRef.current;
-
-    (async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: deviceId ? { deviceId: { exact: deviceId } } : true,
-          video: false,
-        });
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
-        const ctx = new AudioContext();
-        const source = ctx.createMediaStreamSource(stream);
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.3;
-        source.connect(analyser);
-        s.stream = stream;
-        s.ctx = ctx;
-        s.analyser = analyser;
-        s.samples = new Uint8Array(analyser.fftSize);
-
-        const draw = () => {
-          if (cancelled) return;
-          s.frame = requestAnimationFrame(draw);
-          const canvas = canvasRef.current;
-          if (!canvas || !s.analyser || !s.samples) return;
-          s.analyser.getByteTimeDomainData(s.samples);
-          let sumSq = 0;
-          for (let i = 0; i < s.samples.length; i++) {
-            const v = (s.samples[i] - 128) / 128;
-            sumSq += v * v;
-          }
-          const rms = Math.sqrt(sumSq / s.samples.length);
-          const c = canvas.getContext('2d');
-          if (!c) return;
-          const dpr = window.devicePixelRatio || 1;
-          const cssW = canvas.clientWidth;
-          const cssH = canvas.clientHeight;
-          if (canvas.width !== cssW * dpr || canvas.height !== cssH * dpr) {
-            canvas.width = cssW * dpr;
-            canvas.height = cssH * dpr;
-          }
-          c.clearRect(0, 0, canvas.width, canvas.height);
-          // Volume bar
-          const pct = Math.min(rms / max, 1);
-          const barW = pct * canvas.width;
-          const aboveThreshold = max > 0 && rms >= threshold;
-          c.fillStyle = aboveThreshold ? 'rgba(67, 181, 129, 0.35)' : 'rgba(255, 255, 255, 0.08)';
-          c.beginPath();
-          c.roundRect(0, 0, barW, canvas.height, 4 * dpr);
-          c.fill();
-          // Threshold line
-          if (threshold > 0 && max > 0) {
-            const tx = (threshold / max) * canvas.width;
-            c.strokeStyle = 'rgba(255, 255, 255, 0.35)';
-            c.lineWidth = 1.5 * dpr;
-            c.beginPath();
-            c.moveTo(tx, 0);
-            c.lineTo(tx, canvas.height);
-            c.stroke();
-          }
-        };
-        s.frame = requestAnimationFrame(draw);
-      } catch { /* mic permission denied or unavailable */ }
-    })();
-
-    return () => {
-      cancelled = true;
-      if (s.frame != null) cancelAnimationFrame(s.frame);
-      s.analyser?.disconnect();
-      s.stream?.getTracks().forEach((t) => t.stop());
-      if (s.ctx && s.ctx.state !== 'closed') void s.ctx.close().catch(() => {});
-      s.stream = null;
-      s.ctx = null;
-      s.analyser = null;
-      s.frame = null;
-      s.samples = null;
-    };
-  }, [deviceId, disabled, threshold, max]);
-
-  if (disabled) return null;
-
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 pointer-events-none rounded"
-      style={{ width: '100%', height: '100%' }}
-    />
   );
 }
 
@@ -1697,105 +1709,60 @@ function VoiceVideoSettingsTab() {
         </div>
 
         {showCustomControls ? (
-          <div className="space-y-4 pt-2">
-            <div className="rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="text-sm font-semibold text-white">Input Mode</p>
-                  <p className="mt-1 text-[13px] leading-snug text-riftapp-text-muted">
-                    Push to Talk uses the existing space bar bind. Voice Activity follows your live threshold.
-                  </p>
-                </div>
-                <span className="rounded-full border border-riftapp-border/60 bg-riftapp-bg-alt px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-riftapp-text-muted">
-                  {pttMode ? 'Push to Talk' : 'Voice Activity'}
-                </span>
-              </div>
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <ChoiceCard
-                  title="Voice Activity"
-                  description="Open the mic automatically when you cross the selected threshold."
-                  selected={!pttMode}
-                  onClick={() => setPTTMode(false)}
-                />
-                <ChoiceCard
-                  title="Push to Talk"
-                  description="Hold space to transmit. This is useful if your room changes a lot during the day."
-                  selected={pttMode}
-                  onClick={() => setPTTMode(true)}
-                  badge="Space"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 xl:grid-cols-2">
-              <SettingToggle
-                label="RNNoise Suppression"
-                description="Runs RNNoise before the mic gate so steady fan or room noise is less likely to open the mic."
-                enabled={noiseSuppressionEnabled}
-                onToggle={() => void setNoiseSuppressionEnabled(!noiseSuppressionEnabled)}
+          <div className="max-w-[620px] border-t border-riftapp-border/60 pt-6">
+            <div className="divide-y divide-riftapp-border/50">
+              <VoiceSensitivitySetting
+                deviceId={inputDeviceId}
+                automaticInputSensitivity={automaticInputSensitivity}
+                manualInputSensitivity={manualInputSensitivity}
+                onToggleAutomatic={() => setAutomaticInputSensitivity(!automaticInputSensitivity)}
+                onManualChange={setManualInputSensitivity}
               />
 
-              <SettingToggle
-                label="Echo Cancellation"
-                description="Cuts speaker bleed and room reflections before the mic test or live capture gets sent."
-                enabled={echoCancellationEnabled}
-                onToggle={() => void setEchoCancellationEnabled(!echoCancellationEnabled)}
-              />
-
-              <SettingToggle
-                label="Automatically Determine Input Sensitivity"
-                description="Let Rift keep the threshold in sync with the room, or turn it off for a fixed manual threshold."
-                enabled={automaticInputSensitivity}
-                onToggle={() => setAutomaticInputSensitivity(!automaticInputSensitivity)}
-              />
-            </div>
-
-            <div className={`rounded-2xl border border-riftapp-border/60 bg-riftapp-panel/70 p-5 ${automaticInputSensitivity || pttMode ? 'opacity-70' : ''}`}>
-              <Field label="Manual Input Sensitivity">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3 text-[13px] text-white">
-                    <span>
-                      {pttMode
-                        ? 'Push to Talk bypasses the voice activity threshold'
-                        : automaticInputSensitivity
-                          ? 'Automatic sensitivity is active'
-                          : formatSensitivity(manualInputSensitivity)}
+              <VoiceStackedSetting
+                label="Noise Suppression"
+                description="Reduces background noise from your mic. Powered by RNNoise."
+                control={(
+                  <div className="relative w-[190px] max-w-full">
+                    <select
+                      value={noiseSuppressionEnabled ? 'rnnoise' : 'none'}
+                      onChange={(event) => void setNoiseSuppressionEnabled(event.target.value === 'rnnoise')}
+                      className="h-9 w-full cursor-pointer rounded-[10px] border border-riftapp-border/70 bg-riftapp-surface px-3 pr-10 text-[14px] font-medium text-riftapp-text outline-none transition-colors hover:border-riftapp-border-light focus:border-[#5865f2]"
+                      aria-label="Noise suppression"
+                    >
+                      <option value="none">None</option>
+                      <option value="rnnoise">RNNoise</option>
+                    </select>
+                    <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-riftapp-text-muted">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
                     </span>
-                    {!automaticInputSensitivity && !pttMode ? (
-                      <span className="text-riftapp-text-dim">Set to 0 to keep the mic open</span>
-                    ) : null}
                   </div>
+                )}
+              />
 
-                  <div className="relative">
-                    <SensitivityMeter
-                      deviceId={inputDeviceId}
-                      threshold={manualInputSensitivity}
-                      max={MANUAL_SENSITIVITY_MAX}
-                      disabled={automaticInputSensitivity || pttMode}
-                    />
-                    <input
-                      type="range"
-                      min={MANUAL_SENSITIVITY_MIN}
-                      max={MANUAL_SENSITIVITY_MAX}
-                      step={MANUAL_SENSITIVITY_STEP}
-                      value={manualInputSensitivity}
-                      disabled={automaticInputSensitivity || pttMode}
-                      onChange={(event) => setManualInputSensitivity(Number(event.target.value))}
-                      className="relative z-10 w-full bg-transparent accent-[#5865f2] disabled:cursor-not-allowed"
-                    />
-                  </div>
+              <VoiceStackedSetting
+                label="Echo Cancellation"
+                control={(
+                  <VoiceToggleSwitch
+                    enabled={echoCancellationEnabled}
+                    onToggle={() => void setEchoCancellationEnabled(!echoCancellationEnabled)}
+                    ariaLabel="Echo cancellation"
+                  />
+                )}
+              />
 
-                  <div className="flex items-center justify-between text-[11px] text-riftapp-text-dim">
-                    <span>More sensitive</span>
-                    <span>Less sensitive</span>
-                  </div>
-
-                  <p className="text-[12px] leading-snug text-riftapp-text-muted">
-                    One threshold controls both the speaking ring and the outgoing mic gate, so the indicator matches what actually leaves your mic.
-                  </p>
-                </div>
-              </Field>
+              <VoiceStackedSetting
+                label="Push-to-talk"
+                control={(
+                  <VoiceToggleSwitch
+                    enabled={pttMode}
+                    onToggle={() => setPTTMode(!pttMode)}
+                    ariaLabel="Push-to-talk"
+                  />
+                )}
+              />
             </div>
           </div>
         ) : null}

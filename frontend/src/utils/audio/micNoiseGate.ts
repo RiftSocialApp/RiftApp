@@ -5,8 +5,8 @@ import rnnoiseSimdWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.w
 
 const AUTO_THRESHOLD_MULTIPLIER = 1.55;
 const AUTO_THRESHOLD_OFFSET = 0.0025;
-const AUTO_THRESHOLD_MIN = 0.006;
-const AUTO_THRESHOLD_MAX = 0.08;
+export const AUTO_THRESHOLD_MIN = 0.006;
+export const AUTO_THRESHOLD_MAX = 0.08;
 const NOISE_FLOOR_RISE_SMOOTHING = 0.05;
 const NOISE_FLOOR_FALL_SMOOTHING = 0.012;
 
@@ -34,6 +34,27 @@ type RnnoiseModule = typeof import('@sapphi-red/web-noise-suppressor');
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
+}
+
+export function estimateAutomaticMicThreshold(noiseFloor: number) {
+  return clamp(
+    noiseFloor * AUTO_THRESHOLD_MULTIPLIER + AUTO_THRESHOLD_OFFSET,
+    AUTO_THRESHOLD_MIN,
+    AUTO_THRESHOLD_MAX,
+  );
+}
+
+export function updateAutomaticMicNoiseFloor(noiseFloor: number, level: number) {
+  const cappedLevel = Math.min(level, Math.max(noiseFloor * 2.5, AUTO_THRESHOLD_MIN * 2));
+  const smoothing = cappedLevel > noiseFloor
+    ? NOISE_FLOOR_RISE_SMOOTHING
+    : NOISE_FLOOR_FALL_SMOOTHING;
+
+  return clamp(
+    noiseFloor * (1 - smoothing) + cappedLevel * smoothing,
+    AUTO_THRESHOLD_MIN * 0.5,
+    AUTO_THRESHOLD_MAX,
+  );
 }
 
 let rnnoiseBinaryPromise: Promise<ArrayBuffer> | null = null;
@@ -231,24 +252,11 @@ export class MicNoiseGateProcessor {
       return clamp(this.settings.manualThreshold, 0, AUTO_THRESHOLD_MAX);
     }
 
-    return clamp(
-      this.noiseFloor * AUTO_THRESHOLD_MULTIPLIER + AUTO_THRESHOLD_OFFSET,
-      AUTO_THRESHOLD_MIN,
-      AUTO_THRESHOLD_MAX,
-    );
+    return estimateAutomaticMicThreshold(this.noiseFloor);
   }
 
   private updateNoiseFloor(level: number) {
-    const cappedLevel = Math.min(level, Math.max(this.noiseFloor * 2.5, AUTO_THRESHOLD_MIN * 2));
-    const smoothing = cappedLevel > this.noiseFloor
-      ? NOISE_FLOOR_RISE_SMOOTHING
-      : NOISE_FLOOR_FALL_SMOOTHING;
-
-    this.noiseFloor = clamp(
-      this.noiseFloor * (1 - smoothing) + cappedLevel * smoothing,
-      AUTO_THRESHOLD_MIN * 0.5,
-      AUTO_THRESHOLD_MAX,
-    );
+    this.noiseFloor = updateAutomaticMicNoiseFloor(this.noiseFloor, level);
   }
 
   private getOpenGain() {

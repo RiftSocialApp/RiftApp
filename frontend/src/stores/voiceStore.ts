@@ -389,7 +389,7 @@ function micAudioCaptureOptions(
 ): AudioCaptureOptions {
   const base: AudioCaptureOptions = {
     echoCancellation: state.echoCancellationEnabled,
-    autoGainControl: true,
+    autoGainControl: false,
     noiseSuppression: false,
     channelCount: 1,
     sampleRate: 48000,
