@@ -1,8 +1,16 @@
+import type { MessageSearchFilters } from '../types';
+
 export const CHAT_SEARCH_REQUEST_EVENT = 'riftapp:chat-search-request';
+
+export type ChatSearchFocusFilter = keyof Pick<
+  MessageSearchFilters,
+  'stream_id' | 'author_id' | 'author_type' | 'mentions' | 'has' | 'before' | 'after' | 'on' | 'during' | 'filename' | 'ext'
+>;
 
 export type ChatSearchRequestDetail = {
   query?: string;
   run?: boolean;
+  focusFilter?: ChatSearchFocusFilter;
 };
 
 export function dispatchChatSearchRequest(detail: ChatSearchRequestDetail) {

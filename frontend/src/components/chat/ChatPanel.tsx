@@ -34,7 +34,10 @@ import type { ChatTimelineItem } from '../../utils/chatTimeline';
 import { buildChatTimeline } from '../../utils/chatTimeline';
 import { normalizeMessages } from '../../utils/entityAssets';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
-import { subscribeToChatSearchRequests } from '../../utils/chatSearchBridge';
+import {
+  subscribeToChatSearchRequests,
+  type ChatSearchFocusFilter,
+} from '../../utils/chatSearchBridge';
 import { jumpToMessageId } from '../../utils/messageJump';
 
 type HeaderPanel = 'notifications' | 'pins' | 'search' | 'inbox' | null;
@@ -612,6 +615,7 @@ export default function ChatPanel({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
   const floatingPanelRef = useRef<HTMLDivElement>(null);
+  const searchFieldRefs = useRef<Partial<Record<ChatSearchFocusFilter, HTMLInputElement | HTMLSelectElement | null>>>({});
   const prevMessageCountRef = useRef(0);
   const wasNearBottomRef = useRef(true);
   const pendingJumpMessageIdRef = useRef<string | null>(null);
@@ -687,6 +691,7 @@ export default function ChatPanel({
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [searchPerformed, setSearchPerformed] = useState(false);
+  const [pendingSearchFocus, setPendingSearchFocus] = useState<ChatSearchFocusFilter | null>(null);
   const [streamNotifSettings, setStreamNotifSettings] = useState<StreamNotificationSettings | null>(null);
   const [notifSettingsLoading, setNotifSettingsLoading] = useState(false);
   const [inboxTab, setInboxTab] = useState<'mentions' | 'unread'>('mentions');
@@ -1054,9 +1059,24 @@ export default function ChatPanel({
         ...current,
         query: queryValue,
       }));
+      setPendingSearchFocus(detail.focusFilter ?? null);
       setActivePanel('search');
     });
   }, [activeHubId, isDMMode, runSearch, searchFilters.query]);
+
+  useEffect(() => {
+    if (activePanel !== 'search' || !pendingSearchFocus) return;
+
+    const focusTarget = pendingSearchFocus;
+    requestAnimationFrame(() => {
+      const field = searchFieldRefs.current[focusTarget];
+      field?.focus();
+      if (field instanceof HTMLInputElement) {
+        field.select();
+      }
+    });
+    setPendingSearchFocus(null);
+  }, [activePanel, pendingSearchFocus]);
 
   const openStreamMessage = useCallback(
     async (message: Pick<Message, 'id' | 'stream_id'>, hubId = activeHubId ?? undefined) => {
@@ -1451,6 +1471,9 @@ export default function ChatPanel({
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                       <SearchField label="Channel">
                         <select
+                          ref={(element) => {
+                            searchFieldRefs.current.stream_id = element;
+                          }}
                           value={searchFilters.stream_id ?? ''}
                           onChange={(event) => updateSearchFilter('stream_id', event.target.value || undefined)}
                           className="w-full rounded-lg border border-white/8 bg-[#17181c] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-white/15"
@@ -1466,6 +1489,9 @@ export default function ChatPanel({
 
                       <SearchField label="Author">
                         <select
+                          ref={(element) => {
+                            searchFieldRefs.current.author_id = element;
+                          }}
                           value={searchFilters.author_id ?? ''}
                           onChange={(event) => updateSearchFilter('author_id', event.target.value || undefined)}
                           className="w-full rounded-lg border border-white/8 bg-[#17181c] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-white/15"
@@ -1481,6 +1507,9 @@ export default function ChatPanel({
 
                       <SearchField label="Author Type">
                         <select
+                          ref={(element) => {
+                            searchFieldRefs.current.author_type = element;
+                          }}
                           value={searchFilters.author_type ?? ''}
                           onChange={(event) => updateSearchFilter('author_type', (event.target.value || undefined) as MessageSearchFilters['author_type'])}
                           className="w-full rounded-lg border border-white/8 bg-[#17181c] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-white/15"
@@ -1495,6 +1524,9 @@ export default function ChatPanel({
                       <SearchField label="Mentions Username">
                         <>
                           <input
+                            ref={(element) => {
+                              searchFieldRefs.current.mentions = element;
+                            }}
                             type="text"
                             list="search-mention-usernames"
                             value={searchFilters.mentions ?? ''}
@@ -1512,6 +1544,9 @@ export default function ChatPanel({
 
                       <SearchField label="Has">
                         <select
+                          ref={(element) => {
+                            searchFieldRefs.current.has = element;
+                          }}
                           value={searchFilters.has ?? ''}
                           onChange={(event) => updateSearchFilter('has', (event.target.value || undefined) as MessageSearchFilters['has'])}
                           className="w-full rounded-lg border border-white/8 bg-[#17181c] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-white/15"
@@ -1527,6 +1562,9 @@ export default function ChatPanel({
 
                       <SearchField label="Before">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.before = element;
+                          }}
                           type="date"
                           value={searchFilters.before ?? ''}
                           onChange={(event) => updateSearchFilter('before', event.target.value || undefined)}
@@ -1536,6 +1574,9 @@ export default function ChatPanel({
 
                       <SearchField label="After">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.after = element;
+                          }}
                           type="date"
                           value={searchFilters.after ?? ''}
                           onChange={(event) => updateSearchFilter('after', event.target.value || undefined)}
@@ -1545,6 +1586,9 @@ export default function ChatPanel({
 
                       <SearchField label="On">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.on = element;
+                          }}
                           type="date"
                           value={searchFilters.on ?? ''}
                           onChange={(event) => {
@@ -1561,6 +1605,9 @@ export default function ChatPanel({
 
                       <SearchField label="During">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.during = element;
+                          }}
                           type="date"
                           value={searchFilters.during ?? ''}
                           onChange={(event) => {
@@ -1577,6 +1624,9 @@ export default function ChatPanel({
 
                       <SearchField label="Filename">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.filename = element;
+                          }}
                           type="text"
                           value={searchFilters.filename ?? ''}
                           onChange={(event) => updateSearchFilter('filename', event.target.value || undefined)}
@@ -1587,6 +1637,9 @@ export default function ChatPanel({
 
                       <SearchField label="Extension">
                         <input
+                          ref={(element) => {
+                            searchFieldRefs.current.ext = element;
+                          }}
                           type="text"
                           value={searchFilters.ext ?? ''}
                           onChange={(event) => updateSearchFilter('ext', event.target.value || undefined)}
