@@ -41,13 +41,6 @@ type RouterDeps struct {
 	Config                  *config.Config
 	UploadHandler           *UploadHandler
 	NotifRepo               *repository.NotificationRepo
-	DeveloperService        *service.DeveloperService
-	DeveloperRepo           *repository.DeveloperRepo
-	HubRepo                 *repository.HubRepo
-	StreamRepo              *repository.StreamRepo
-	MsgRepo                 *repository.MessageRepo
-	RankRepo                *repository.RankRepo
-	DB                      interface{}
 }
 
 func NewRouter(deps RouterDeps) *chi.Mux {

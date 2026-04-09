@@ -82,7 +82,7 @@ func main() {
 
 	// Developer portal
 	devRepo := repository.NewDeveloperRepo(db)
-	devSvc := service.NewDeveloperService(devRepo, cfg.JWTSecret)
+	devSvc := service.NewDeveloperService(devRepo)
 
 	// Upload handler (S3-compatible storage, e.g. Cloudflare R2)
 	uploadH, err := api.NewUploadHandler(cfg, db)
@@ -94,10 +94,6 @@ func main() {
 	if uploadH != nil {
 		customSvc.SetFileDeleter(uploadH)
 	}
-
-	// Developer portal
-	devRepo := repository.NewDeveloperRepo(db)
-	devSvc := service.NewDeveloperService(devRepo)
 
 	// Router
 	router := api.NewRouter(api.RouterDeps{
@@ -123,12 +119,6 @@ func main() {
 		Config:                  cfg,
 		UploadHandler:           uploadH,
 		NotifRepo:               notifRepo,
-		DeveloperService:        devSvc,
-		DeveloperRepo:           devRepo,
-		HubRepo:                 hubRepo,
-		StreamRepo:              streamRepo,
-		MsgRepo:                 msgRepo,
-		RankRepo:                rankRepo,
 	})
 
 	srv := &http.Server{
