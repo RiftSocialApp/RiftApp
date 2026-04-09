@@ -1,121 +1,196 @@
 # RiftApp
 
-**Fast · Clean · Yours**  
-Real-time communication built for clarity and control.
+RiftApp is a real-time chat, voice, and DM platform with web and desktop clients.
 
-Chat · Voice · DMs · Self-host or Cloud
+This repository contains the product code. It does not contain every production dependency in one place, and that is intentional.
 
----
+## Repo At A Glance
 
-## What is RiftApp?
+- `backend/` - Go API, WebSocket server, auth, messaging, permissions, uploads
+- `frontend/` - React + Vite web client
+- `app/` - Electron desktop client
+- `.github/workflows/` - CI and release workflows
+- `ARCHITECTURE.md` - deeper system design notes
 
-RiftApp combines **chat, voice, DMs and shared spaces** into one fast minimal experience.
+## Production Topology
 
-- Self-host for full control  
-- Or use Rift Cloud for zero setup  
+The most useful mental model for contributors is this:
 
-> Software should feel fast stay out of your way and belong to you
+```text
+Web client / Desktop client
+            |
+            v
+    Rift backend (Docker)
+      |       |       |
+      |       |       +--> LiveKit on a separate VPS
+      |       |
+      |       +----------> Redis Cloud
+      |
+      +------------------> Neon Postgres
+      +------------------> Cloudflare R2 or another S3-compatible store
+```
 
----
+Important implications:
 
-## Run Rift your way
+- `backend/compose.yml` is an example deployment file, not a full copy of production
+- LiveKit can be hosted completely separately from the backend
+- Postgres and Redis can be managed services
+- this repo is best understood as `clients + backend`, with infra dependencies connected from outside
 
-### Self-Hosted (Free)
+## Repository Map
 
-- Full control over your data  
-- No subscriptions  
-- Runs with Docker  
+### `backend/`
 
-**Your servers. Your rules.**
+- `cmd/riftapp/` - main entrypoint
+- `internal/api/` - HTTP and WebSocket handlers
+- `internal/service/` - business logic
+- `internal/repository/` - data access layer
+- `internal/database/migrations/` - schema migrations
+- `internal/models/` - models and permission constants
+- `Dockerfile` - backend container image
+- `compose.yml` - example Docker Compose setup
+- `.env.example` - backend environment template
 
----
+### `frontend/`
 
-### Rift Cloud
+- `src/` - React application code
+- `components/` - major UI surfaces
+- `stores/` - client state and syncing logic
+- `api/` - HTTP client
+- `functions/` - optional edge proxy functions, including `/api` proxy support for deployments such as Cloudflare Pages
 
-- No setup required  
-- Global infrastructure  
-- Automatic updates and scaling  
+### `app/`
 
----
+- `src/main.ts` - Electron main process
+- `src/preload.ts` - Electron preload bridge
+- `scripts/` - packaging and Windows metadata helpers
 
-## Quick start
+## Local Development
 
-### 1. Setup env
+### Prerequisites
 
+- Go `1.25`
+- Node.js `20+`
+- npm
+- credentials for Postgres, Redis, object storage, and LiveKit
+
+### Backend
+
+1. Copy the env template:
+
+```bash
 cp backend/.env.example backend/.env
+```
 
-### 2. Run
+2. Fill in at least these values in `backend/.env`:
 
-docker compose up -d
+- `DATABASE_URL`
+- `REDIS_URL`
+- `S3_ENDPOINT`
+- `S3_ACCESS_KEY`
+- `S3_SECRET_KEY`
+- `S3_BUCKET`
+- `JWT_SECRET`
+- `ALLOWED_ORIGINS`
+- `LIVEKIT_URL`
+- `LIVEKIT_API_KEY`
+- `LIVEKIT_API_SECRET`
 
-That’s it. Rift is running.
+3. Run the backend directly:
 
-Full compose config is in `backend/compose.yml`.
+```bash
+cd backend
+go run ./cmd/riftapp
+```
 
----
+4. Or run the backend service from the example Compose file:
 
-## Rift Pro
+```bash
+cd backend
+docker compose up -d backend
+```
 
-**$4.99/month or $49.99/year**
+If you already run LiveKit elsewhere, keep `LIVEKIT_URL` pointed at that external host and do not treat the bundled `livekit` service in `backend/compose.yml` as required.
 
-### Free (Cloud)
-- 1080p 30fps streaming  
-- Global custom entrance sound  
-- Core features  
+### Frontend
 
-### Rift Pro
-- Up to 4K 60fps streaming  
-- Per-hub entrance sounds  
-- More customization  
-- Priority performance  
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-> Rift Pro improves quality and customization without locking core features
+The frontend API client uses `VITE_API_URL` and defaults to `/api`. If you deploy the web app behind a proxy or Pages Function, see `frontend/functions/api/[[path]].js`.
 
----
+### Desktop App
 
-## Comparison
+```bash
+cd app
+npm install
+npm run dev
+```
 
-| Feature | Rift Free | Rift Pro | Discord | Fluxer Free | Fluxer Paid |
-|--------|----------|----------|--------|-------------|-------------|
-| Self-hosting | Yes | Yes | No | Limited | Limited |
-| Streaming quality | 1080p 30fps | 4K 60fps | Paywalled | 720p | 4K |
-| Entrance sounds | Global | Per-hub | Limited | None | Limited |
-| Customization | High | Very high | Limited | Basic | Medium |
-| File upload limits | High | Higher | Limited | Low | Medium |
-| Privacy control | Full | Full | Low | Partial | Partial |
-| Ads | None | None | Some | Unknown | Unknown |
-| Price | Free | $4.99/mo | ~$9.99/mo | Free | $4.99/mo |
+The desktop app wraps the frontend and adds native desktop behavior such as the updater and screen-capture integration.
 
----
+## Useful Commands
 
-## Why Rift?
+Backend tests:
 
-- Blazing fast  
-- Clean UI  
-- No clutter  
-- No lock-in  
-- Self-host or cloud  
+```bash
+cd backend
+go test ./...
+```
 
----
+Frontend tests:
 
-## Project structure
+```bash
+cd frontend
+npm test -- --run
+```
 
-- backend/ — API and realtime  
-- frontend/ — web client  
-- app/ — desktop app  
-- ARCHITECTURE.md — technical details  
+Frontend production build:
 
----
+```bash
+cd frontend
+npm run build
+```
 
-## Philosophy
+Desktop package smoke test:
 
-- No clutter  
-- No lock-in  
-- No bloat  
+```bash
+cd app
+npm run pack
+```
 
-**Just fast clean communication on your terms**
+## Suggested Reading Order
 
----
+If you are new to the codebase, this is the fastest route:
+
+1. Read this README for the repo map and deployment model.
+2. Read `ARCHITECTURE.md` for the system design.
+3. Read `backend/internal/api/` and `backend/internal/service/` for backend request flow.
+4. Read `frontend/src/App.tsx`, `frontend/src/components/`, and `frontend/src/stores/` for client flow.
+5. Read `app/src/main.ts` only for desktop-specific behavior.
+
+## Naming Map
+
+Rift uses a few app-specific names:
+
+- Server -> Hub
+- Channel -> Stream
+- Voice Channel -> Voice Stream
+- Role -> Rank
+
+## Keeping The Repo Easy To Understand
+
+The cleanest rule is to separate product code from environment-specific deployment details:
+
+- keep application code in `backend/`, `frontend/`, and `app/`
+- keep the root README focused on orientation, startup, and the current deployment mental model
+- keep `ARCHITECTURE.md` as the deeper technical reference
+- clearly label deployment files as examples when they do not match production exactly
+
+If you want to make the repo even easier for outsiders later, the next good step is adding a `docs/` folder for deployment guides and moving environment-specific examples there.
 
 ## License
 
