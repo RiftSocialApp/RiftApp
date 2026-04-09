@@ -246,6 +246,18 @@
     @apply px-0.5 text-[11px] font-bold uppercase tracking-[0.02em] text-riftapp-text-dim
       hover:text-riftapp-text-muted cursor-default select-none flex items-center gap-1 mb-1;
   }
+
+  .rift-context-menu-shell {
+    @apply select-none overflow-hidden rounded-lg border border-riftapp-border/60 bg-riftapp-menu py-1.5 shadow-modal;
+  }
+
+  .rift-context-submenu-shell {
+    @apply overflow-hidden rounded-lg border border-riftapp-border/60 bg-riftapp-menu py-1.5 shadow-modal;
+  }
+
+  .rift-context-menu-divider {
+    @apply mx-2 my-1 border-t border-riftapp-border/40;
+  }
 }
 
 @keyframes rift-message-jump-flash {

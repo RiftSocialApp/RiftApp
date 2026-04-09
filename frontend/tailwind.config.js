@@ -14,6 +14,8 @@ export default {
           'content-elevated': '#2a2d33',
           surface: '#1f2125',
           'surface-hover': '#2a2d33',
+          menu: '#2b2d31',
+          'menu-hover': '#34373c',
           panel: '#15171a',
           'panel-hover': '#1d2024',
           border: '#2c2f36',

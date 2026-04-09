@@ -326,19 +326,19 @@ export default function MessageContextMenu({
     </button>
   );
 
-  const divider = <div className="mx-2 my-1 border-t border-riftapp-border/40" />;
+  const divider = <div className="rift-context-menu-divider" />;
 
   return (
     <MenuOverlay x={x} y={y} onClose={onClose}>
-      <div className="w-[216px] select-none overflow-hidden rounded-lg border border-riftapp-border/50 bg-riftapp-panel py-1.5 shadow-modal">
+      <div className="rift-context-menu-shell w-[216px]">
         {!isDM && (
-          <div className="mx-1.5 mb-1 flex items-center justify-center gap-1 px-1.5">
+          <div className="mx-1.5 mb-1.5 flex items-center justify-center gap-1.5 px-2 py-1">
             {QUICK_ROW.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => addReaction(emoji)}
-                className="flex h-8 w-8 items-center justify-center rounded-md border border-riftapp-border/40 bg-riftapp-content-elevated text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-riftapp-accent hover:bg-riftapp-accent hover:text-white"
+                className="flex h-9 w-9 items-center justify-center rounded-md border border-riftapp-border/50 bg-riftapp-menu-hover text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-riftapp-accent hover:bg-riftapp-accent hover:text-white"
               >
                 {emoji}
               </button>
@@ -357,13 +357,13 @@ export default function MessageContextMenu({
           </div>
           {reactionOpen && !isDM && (
             <div className="absolute left-full top-0 z-20 pl-1" onMouseEnter={() => setReactionOpen(true)} onMouseLeave={() => setReactionOpen(false)}>
-              <div className="grid min-w-[188px] grid-cols-5 gap-1 rounded-lg border border-riftapp-border/50 bg-riftapp-panel p-1.5 shadow-modal">
+              <div className="rift-context-submenu-shell grid min-w-[208px] grid-cols-5 gap-1.5 p-2">
                 {REACTION_PICK.map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
                     onClick={() => addReaction(emoji)}
-                    className="flex h-8 w-8 items-center justify-center rounded-md text-lg transition-colors hover:bg-riftapp-accent hover:text-white"
+                    className="flex h-9 w-9 items-center justify-center rounded-md text-lg transition-colors hover:bg-riftapp-accent hover:text-white"
                   >
                     {emoji}
                   </button>
