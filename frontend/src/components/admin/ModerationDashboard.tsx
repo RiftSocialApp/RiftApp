@@ -32,6 +32,11 @@ export default function ModerationDashboard() {
   const [error, setError] = useState('');
   const [accessDenied, setAccessDenied] = useState(false);
 
+  const isAccessDeniedError = (err: unknown) =>
+    err instanceof Error &&
+    (err.message.toLowerCase().includes('forbidden') ||
+      err.message.toLowerCase().includes('missing permissions'));
+
   const loadReports = async () => {
     setLoading(true);
     setError('');
@@ -40,7 +45,7 @@ export default function ModerationDashboard() {
       setReports(res.reports);
       setTotal(res.total);
     } catch (err) {
-      if (err instanceof Error && err.message.toLowerCase().includes('forbidden')) {
+      if (isAccessDeniedError(err)) {
         setAccessDenied(true);
       } else {
         setError(err instanceof Error ? err.message : 'Failed to load reports');
@@ -54,7 +59,7 @@ export default function ModerationDashboard() {
       const s = await api.getModerationStats();
       setStats(s);
     } catch (err) {
-      if (err instanceof Error && err.message.toLowerCase().includes('forbidden')) {
+      if (isAccessDeniedError(err)) {
         setAccessDenied(true);
       } else {
         console.warn('Failed to load moderation stats:', err);
@@ -160,7 +165,7 @@ export default function ModerationDashboard() {
                 <p className="text-sm text-riftapp-text-muted">{r.reason}</p>
 
                 {selectedReport?.id === r.id && (
-                  <div className="mt-4 pt-4 border-t border-riftapp-border/30">
+                  <div className="mt-4 pt-4 border-t border-riftapp-border/30" onClick={(e) => e.stopPropagation()}>
                     {r.message_content && (
                       <div className="mb-3">
                         <p className="text-xs font-semibold uppercase text-riftapp-text-dim mb-1">Reported Message</p>

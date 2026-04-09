@@ -651,14 +651,23 @@ export function BansPanel({ hubId }: { hubId?: string }) {
 
 export function AutoModPanel({ hubId }: { hubId?: string }) {
   const [settings, setSettings] = useState<import('../../types').HubAutoModSettings | null>(null);
+  const [loadingSettings, setLoadingSettings] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
-    if (!hubId) return;
-    api.getAutoModSettings(hubId).then(setSettings).catch((err) => {
-      setSaveError(err instanceof Error ? err.message : 'Failed to load settings');
-    });
+    if (!hubId) {
+      setSettings(null);
+      setLoadingSettings(false);
+      return;
+    }
+    setLoadingSettings(true);
+    setSettings(null);
+    setSaveError('');
+    api.getAutoModSettings(hubId)
+      .then(setSettings)
+      .catch((err) => setSaveError(err instanceof Error ? err.message : 'Failed to load settings'))
+      .finally(() => setLoadingSettings(false));
   }, [hubId]);
 
   const handleToggle = async (enabled: boolean) => {
@@ -708,7 +717,9 @@ export function AutoModPanel({ hubId }: { hubId?: string }) {
 
       {saveError && !settings && <p className="text-[#ed4245] text-[13px] mb-4">{saveError}</p>}
 
-      {settings && (
+      {loadingSettings ? (
+        <p className="text-[#949ba4] text-[13px] mb-4">Loading settings...</p>
+      ) : settings && (
         <>
           <ToggleRow
             label="Enable AutoMod"

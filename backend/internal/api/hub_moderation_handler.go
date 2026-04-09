@@ -48,6 +48,12 @@ func (h *HubModerationHandler) UpdateAutoModSettings(w http.ResponseWriter, r *h
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	if input.ToxicityThreshold < 0 || input.ToxicityThreshold > 1 ||
+		input.SpamThreshold < 0 || input.SpamThreshold > 1 ||
+		input.NSFWThreshold < 0 || input.NSFWThreshold > 1 {
+		writeError(w, http.StatusBadRequest, "thresholds must be between 0 and 1")
+		return
+	}
 	input.HubID = hubID
 	if err := h.modRepo.UpsertSettings(r.Context(), &input); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to save settings")
@@ -91,7 +97,10 @@ func (h *HubModerationHandler) BanMember(w http.ResponseWriter, r *http.Request)
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	_ = readJSON(r, &body)
+	if err := readJSON(r, &body); err != nil && r.ContentLength > 0 {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 
 	if err := h.modRepo.CreateBan(r.Context(), hubID, targetID, userID, body.Reason); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to ban user")
