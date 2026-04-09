@@ -332,13 +332,13 @@ export default function MessageContextMenu({
     <MenuOverlay x={x} y={y} onClose={onClose}>
       <div className="w-[216px] select-none overflow-hidden rounded-lg border border-riftapp-border/50 bg-riftapp-panel py-1.5 shadow-modal">
         {!isDM && (
-          <div className="mx-2 mb-1 flex items-center gap-0.5 rounded-md border border-riftapp-border/40 bg-riftapp-content-elevated/80 p-1">
+          <div className="mx-1.5 mb-1 flex items-center justify-center gap-1 px-1.5">
             {QUICK_ROW.map((emoji) => (
               <button
                 key={emoji}
                 type="button"
                 onClick={() => addReaction(emoji)}
-                className="flex h-8 w-8 items-center justify-center rounded-md text-lg transition-colors hover:bg-riftapp-accent hover:text-white"
+                className="flex h-8 w-8 items-center justify-center rounded-md border border-riftapp-border/40 bg-riftapp-content-elevated text-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:border-riftapp-accent hover:bg-riftapp-accent hover:text-white"
               >
                 {emoji}
               </button>
