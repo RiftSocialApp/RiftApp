@@ -23,6 +23,7 @@ type Config struct {
 	LiveKitURL     string
 	LiveKitKey     string
 	LiveKitSecret  string
+	LocalModURL    string
 }
 
 func Load() *Config {
@@ -42,6 +43,7 @@ func Load() *Config {
 		LiveKitURL:     getEnv("LIVEKIT_URL", ""),
 		LiveKitKey:     getEnv("LIVEKIT_API_KEY", "devkey"),
 		LiveKitSecret:  getEnv("LIVEKIT_API_SECRET", "devsecret"),
+		LocalModURL:    getEnv("LOCALMOD_URL", "http://localmod:8000"),
 	}
 	if cfg.JWTSecret == "dev-secret-change-me" {
 		log.Println("WARNING: JWT_SECRET is set to the default dev value. Set a strong secret in production.")

@@ -13,6 +13,7 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/auth"
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/database"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/pubsub"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
@@ -85,6 +86,31 @@ func main() {
 	devRepo := repository.NewDeveloperRepo(db)
 	devSvc := service.NewDeveloperService(devRepo)
 
+	// Content moderation (LocalMod)
+	var modSvc *moderation.Service
+	if cfg.LocalModURL != "" {
+		modClient := moderation.NewClient(cfg.LocalModURL)
+		if err := modClient.Health(context.Background()); err != nil {
+			log.Printf("warning: LocalMod unreachable (%s): %v — moderation disabled", cfg.LocalModURL, err)
+		} else {
+			modSvc = moderation.NewService(modClient)
+			log.Printf("connected to LocalMod at %s", cfg.LocalModURL)
+		}
+	}
+
+	// Wire content moderation into services
+	if modSvc != nil {
+		msgSvc.SetModerationService(modSvc)
+		dmSvc.SetModerationService(modSvc)
+		hubSvc.SetModerationService(modSvc)
+		userService.SetModerationService(modSvc)
+	}
+
+	// Report & moderation system
+	reportRepo := repository.NewReportRepo(db)
+	reportSvc := service.NewReportService(reportRepo, modSvc, msgRepo, userRepo, notifSvc)
+	hubModRepo := repository.NewHubModerationRepo(db)
+
 	// Upload handler (S3-compatible storage, e.g. Cloudflare R2)
 	uploadH, err := api.NewUploadHandler(cfg, db)
 	if err != nil {
@@ -94,12 +120,16 @@ func main() {
 	// Wire S3 file cleanup for customization deletes.
 	if uploadH != nil {
 		customSvc.SetFileDeleter(uploadH)
+		if modSvc != nil {
+			uploadH.SetModerationService(modSvc)
+		}
 	}
 
 	// Router
 	router := api.NewRouter(api.RouterDeps{
 		AuthService:             authService,
 		UserService:             userService,
+		UserRepo:                userRepo,
 		HubService:              hubSvc,
 		StreamService:           streamSvc,
 		CategoryService:         catSvc,
@@ -120,6 +150,10 @@ func main() {
 		Config:                  cfg,
 		UploadHandler:           uploadH,
 		NotifRepo:               notifRepo,
+		ModerationService:       modSvc,
+		ReportService:           reportSvc,
+		HubModerationRepo:       hubModRepo,
+		DB:                      db,
 	})
 
 	srv := &http.Server{

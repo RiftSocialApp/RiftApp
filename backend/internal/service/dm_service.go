@@ -9,6 +9,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/models"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
@@ -18,10 +19,15 @@ type DMService struct {
 	msgRepo  *repository.MessageRepo
 	notifSvc *NotificationService
 	hub      *ws.Hub
+	modSvc   *moderation.Service
 }
 
 func NewDMService(dmRepo *repository.DMRepo, msgRepo *repository.MessageRepo, notifSvc *NotificationService, hub *ws.Hub) *DMService {
 	return &DMService{dmRepo: dmRepo, msgRepo: msgRepo, notifSvc: notifSvc, hub: hub}
+}
+
+func (s *DMService) SetModerationService(mod *moderation.Service) {
+	s.modSvc = mod
 }
 
 func (s *DMService) ListConversations(ctx context.Context, userID string) ([]repository.ConvResponse, error) {
@@ -147,6 +153,13 @@ func (s *DMService) SendMessage(ctx context.Context, convID, userID string, inpu
 	if len(input.AttachmentIDs) > 10 {
 		return nil, apperror.BadRequest(fmt.Sprintf("too many attachments (max %d)", 10))
 	}
+
+	if input.Content != "" && s.modSvc != nil {
+		if result := s.modSvc.CheckText(ctx, input.Content); result != nil && result.Flagged {
+			return nil, apperror.BadRequest("message blocked by content moderation: " + result.Category)
+		}
+	}
+
 	replyToMessageID := normalizeOptionalMessageID(input.ReplyToMessageID)
 	if replyToMessageID != nil {
 		belongs, err := s.dmRepo.MessageBelongsToConversation(ctx, *replyToMessageID, convID)

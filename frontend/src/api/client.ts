@@ -1,4 +1,4 @@
-import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType, HubEmoji, HubSticker, HubSound, HubRole, HubPermissions, MessageSearchFilters, StreamNotificationSettings, DiscordTemplatePreview, StreamPermissionOverwrite } from '../types';
+import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType, HubEmoji, HubSticker, HubSound, HubRole, HubPermissions, MessageSearchFilters, StreamNotificationSettings, DiscordTemplatePreview, StreamPermissionOverwrite, Report, HubAutoModSettings, HubBan } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -439,6 +439,59 @@ class ApiClient {
     const body = await res.json();
     if (!res.ok) throw new Error(body.error || 'Upload failed');
     return body.data as Attachment;
+  }
+
+  // Reports
+  createReport(data: { reported_user_id?: string; message_id?: string; hub_id?: string; reason: string; category: string; message_content?: string }) {
+    return this.requestRaw<{ id: string }>('/reports', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  // Admin
+  listReports(params: { status?: string; category?: string; limit?: number; offset?: number } = {}) {
+    const q = new URLSearchParams();
+    if (params.status) q.set('status', params.status);
+    if (params.category) q.set('category', params.category);
+    if (params.limit) q.set('limit', String(params.limit));
+    if (params.offset) q.set('offset', String(params.offset));
+    return this.requestRaw<{ reports: Report[]; total: number }>(`/admin/reports?${q}`);
+  }
+
+  getReport(id: string) {
+    return this.requestRaw<Report>(`/admin/reports/${id}`);
+  }
+
+  updateReport(id: string, data: { status: string; note?: string }) {
+    return this.requestRaw<{ status: string }>(`/admin/reports/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  takeReportAction(reportId: string, data: { action_type: string; target_user_id?: string; target_hub_id?: string }) {
+    return this.requestRaw<{ status: string }>(`/admin/reports/${reportId}/action`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  getModerationStats() {
+    return this.requestRaw<{ total_reports: number; open: number; resolved: number; dismissed: number; flagged_images: number }>('/admin/moderation/stats');
+  }
+
+  // Hub AutoMod settings
+  getAutoModSettings(hubId: string) {
+    return this.requestRaw<HubAutoModSettings>(`/hubs/${hubId}/automod`);
+  }
+
+  updateAutoModSettings(hubId: string, data: HubAutoModSettings) {
+    return this.requestRaw<HubAutoModSettings>(`/hubs/${hubId}/automod`, { method: 'PUT', body: JSON.stringify(data) });
+  }
+
+  // Hub Bans
+  listBans(hubId: string) {
+    return this.requestRaw<{ bans: HubBan[] }>(`/hubs/${hubId}/bans`);
+  }
+
+  banMember(hubId: string, userId: string, reason?: string) {
+    return this.requestRaw<{ status: string }>(`/hubs/${hubId}/bans/${userId}`, { method: 'POST', body: JSON.stringify({ reason }) });
+  }
+
+  unbanMember(hubId: string, userId: string) {
+    return this.requestRaw<{ status: string }>(`/hubs/${hubId}/bans/${userId}`, { method: 'DELETE' });
   }
 }
 

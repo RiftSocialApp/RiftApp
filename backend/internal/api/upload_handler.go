@@ -19,6 +19,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 )
 
 const maxUploadSize = 2 << 30 // 2 GB
@@ -52,6 +53,11 @@ type UploadHandler struct {
 	bucket string
 	cfg    *config.Config
 	db     *pgxpool.Pool
+	modSvc *moderation.Service
+}
+
+func (h *UploadHandler) SetModerationService(mod *moderation.Service) {
+	h.modSvc = mod
 }
 
 func NewUploadHandler(cfg *config.Config, db *pgxpool.Pool) (*UploadHandler, error) {
@@ -205,6 +211,31 @@ func (h *UploadHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		"content_type": contentType,
 		"size_bytes":   header.Size,
 	})
+
+	if h.modSvc != nil && strings.HasPrefix(contentType, "image/") {
+		go h.moderateImage(attachID, publicURL)
+	}
+}
+
+func (h *UploadHandler) moderateImage(attachID, publicURL string) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	objectName := strings.TrimPrefix(publicURL, fmt.Sprintf("/s3/%s/", h.bucket))
+	presignedURL, err := h.client.PresignedGetObject(ctx, h.bucket, objectName, 5*time.Minute, nil)
+	if err != nil {
+		log.Printf("moderation: failed to generate presigned URL for %s: %v", attachID, err)
+		return
+	}
+
+	result := h.modSvc.CheckImage(ctx, presignedURL.String())
+	if result != nil && result.Flagged {
+		log.Printf("moderation: flagged image %s (category=%s confidence=%.2f)", attachID, result.Category, result.Confidence)
+		_, _ = h.db.Exec(ctx, `UPDATE attachments SET moderation_status = 'flagged' WHERE id = $1`, attachID)
+		_ = h.client.RemoveObject(ctx, h.bucket, strings.TrimPrefix(publicURL, fmt.Sprintf("/s3/%s/", h.bucket)), minio.RemoveObjectOptions{})
+	} else {
+		_, _ = h.db.Exec(ctx, `UPDATE attachments SET moderation_status = 'clean' WHERE id = $1`, attachID)
+	}
 }
 
 // ServeObject streams a file from S3/R2 using authenticated access.

@@ -12,6 +12,7 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/auth"
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
 	"github.com/riftapp-cloud/riftapp/internal/user"
@@ -21,6 +22,7 @@ import (
 type RouterDeps struct {
 	AuthService             *auth.Service
 	UserService             *user.Service
+	UserRepo                *user.Repo
 	HubService              *service.HubService
 	StreamService           *service.StreamService
 	CategoryService         *service.CategoryService
@@ -41,6 +43,10 @@ type RouterDeps struct {
 	Config                  *config.Config
 	UploadHandler           *UploadHandler
 	NotifRepo               *repository.NotificationRepo
+	ModerationService       *moderation.Service
+	ReportService           *service.ReportService
+	HubModerationRepo       *repository.HubModerationRepo
+	DB                      interface{}
 }
 
 func NewRouter(deps RouterDeps) *chi.Mux {
@@ -74,6 +80,16 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	var devH *DeveloperHandler
 	if deps.DeveloperService != nil {
 		devH = NewDeveloperHandler(deps.DeveloperService, deps.HubService, deps.HubRepo)
+	}
+
+	var reportH *ReportHandler
+	if deps.ReportService != nil && deps.DeveloperService != nil {
+		reportH = NewReportHandler(deps.ReportService, deps.DeveloperService)
+	}
+
+	var hubModH *HubModerationHandler
+	if deps.HubModerationRepo != nil && deps.HubService != nil && deps.HubRepo != nil {
+		hubModH = NewHubModerationHandler(deps.HubModerationRepo, deps.HubService, deps.HubRepo)
 	}
 
 	r.Get("/ws", wsH.Handle)
@@ -114,6 +130,9 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	authRL := middleware.NewRateLimiter(rate.Every(time.Second), 120)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(deps.AuthService))
+		if deps.UserRepo != nil {
+			r.Use(middleware.BanCheck(deps.UserRepo))
+		}
 		r.Use(middleware.RateLimit(authRL))
 
 		r.Get("/api/users/@me", userH.GetMe)
@@ -246,12 +265,32 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			r.Post("/api/developers/import-discord", devH.ImportDiscordBot)
 			r.Post("/api/developers/applications/{appID}/add-to-hub", devH.AddBotToHub)
 		}
+
+		if reportH != nil {
+			r.Post("/api/reports", reportH.CreateReport)
+			r.Get("/api/admin/reports", reportH.ListReports)
+			r.Get("/api/admin/reports/{reportID}", reportH.GetReport)
+			r.Patch("/api/admin/reports/{reportID}", reportH.UpdateReport)
+			r.Post("/api/admin/reports/{reportID}/action", reportH.TakeAction)
+			r.Get("/api/admin/moderation/stats", reportH.Stats)
+		}
+
+		if hubModH != nil {
+			r.Get("/api/hubs/{hubID}/automod", hubModH.GetAutoModSettings)
+			r.Put("/api/hubs/{hubID}/automod", hubModH.UpdateAutoModSettings)
+			r.Get("/api/hubs/{hubID}/bans", hubModH.ListBans)
+			r.Post("/api/hubs/{hubID}/bans/{userID}", hubModH.BanMember)
+			r.Delete("/api/hubs/{hubID}/bans/{userID}", hubModH.UnbanMember)
+		}
 	})
 
 	// Customization write routes — tighter rate limit (5 req / 10s to prevent abuse).
 	customWriteRL := middleware.NewRateLimiter(rate.Every(10*time.Second), 5)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(deps.AuthService))
+		if deps.UserRepo != nil {
+			r.Use(middleware.BanCheck(deps.UserRepo))
+		}
 		r.Use(middleware.RateLimit(customWriteRL))
 
 		r.Post("/api/hubs/{hubID}/emojis", customH.CreateEmoji)
