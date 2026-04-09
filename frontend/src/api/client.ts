@@ -309,58 +309,105 @@ class ApiClient {
   deleteHubSound(hubId: string, soundId: string) { return this.request<void>(`/hubs/${hubId}/sounds/${soundId}`, { method: 'DELETE' }); }
   playSoundboard(hubId: string, soundId: string) { return this.request<{ status: string }>(`/hubs/${hubId}/sounds/${soundId}/play`, { method: 'POST' }); }
 
-  // Developer Portal
-  getDeveloperMe() { return this.request<import('../types').DeveloperMeResponse>('/developers/me'); }
+  // Developer Portal (responses are top-level JSON, not wrapped in `data`)
+  private async requestRaw<T>(path: string, options: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(options.headers as Record<string, string>),
+    };
+    if (this.token) {
+      headers['Authorization'] = `Bearer ${this.token}`;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
+    let res = await fetch(`${BASE}${path}`, { ...options, headers, signal: controller.signal }).finally(() => clearTimeout(timer));
+    if (res.status === 401 && this.refreshTokenValue && !path.includes('/auth/')) {
+      const refreshed = await this.tryRefresh();
+      if (refreshed) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+        res = await fetch(`${BASE}${path}`, { ...options, headers });
+      }
+    }
+    if (res.status === 204) return undefined as T;
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.error || 'Request failed');
+    return body as T;
+  }
+
+  getDeveloperMe() { return this.requestRaw<{ user_id: string; is_super_admin: boolean }>('/developers/me'); }
   createApplication(name: string) {
-    return this.request<{ application: import('../types').Application; bot_token: string }>('/developers/applications', {
+    return this.requestRaw<{ application: import('../types').Application; bot_token: string }>('/developers/applications', {
       method: 'POST', body: JSON.stringify({ name }),
     });
   }
-  listApplications() { return this.request<import('../types').Application[]>('/developers/applications'); }
-  getApplication(appId: string) { return this.request<import('../types').Application>(`/developers/applications/${appId}`); }
+  listApplications() { return this.requestRaw<import('../types').Application[]>('/developers/applications'); }
+  getApplication(appId: string) { return this.requestRaw<import('../types').Application>(`/developers/applications/${appId}`); }
   updateApplication(appId: string, data: Partial<import('../types').Application>) {
-    return this.request<import('../types').Application>(`/developers/applications/${appId}`, { method: 'PATCH', body: JSON.stringify(data) });
+    return this.requestRaw<import('../types').Application>(`/developers/applications/${appId}`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    });
   }
-  deleteApplication(appId: string) { return this.request<void>(`/developers/applications/${appId}`, { method: 'DELETE' }); }
-
-  resetBotToken(appId: string) { return this.request<{ token: string }>(`/developers/applications/${appId}/bot/token`, { method: 'POST' }); }
-  getBotSettings(appId: string) { return this.request<import('../types').Application>(`/developers/applications/${appId}/bot`); }
+  deleteApplication(appId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}`, { method: 'DELETE' });
+  }
+  resetBotToken(appId: string) {
+    return this.requestRaw<{ bot_token: string }>(`/developers/applications/${appId}/bot/reset-token`, { method: 'POST' });
+  }
+  getBotSettings(appId: string) {
+    return this.requestRaw<{ bot: import('../types').User; bot_public: boolean; bot_require_code_grant: boolean; flags: number }>(`/developers/applications/${appId}/bot`);
+  }
   updateBotSettings(appId: string, data: Record<string, unknown>) {
-    return this.request<import('../types').Application>(`/developers/applications/${appId}/bot`, { method: 'PATCH', body: JSON.stringify(data) });
+    return this.requestRaw<{ status: string }>(`/developers/applications/${appId}/bot`, {
+      method: 'PATCH', body: JSON.stringify(data),
+    });
   }
-
-  listOAuth2Redirects(appId: string) { return this.request<import('../types').OAuth2Redirect[]>(`/developers/applications/${appId}/oauth2/redirects`); }
-  createOAuth2Redirect(appId: string, uri: string) {
-    return this.request<import('../types').OAuth2Redirect>(`/developers/applications/${appId}/oauth2/redirects`, { method: 'POST', body: JSON.stringify({ redirect_uri: uri }) });
+  listOAuth2Redirects(appId: string) { return this.requestRaw<import('../types').OAuth2Redirect[]>(`/developers/applications/${appId}/oauth2/redirects`); }
+  createOAuth2Redirect(appId: string, redirectUri: string) {
+    return this.requestRaw<import('../types').OAuth2Redirect>(`/developers/applications/${appId}/oauth2/redirects`, {
+      method: 'POST', body: JSON.stringify({ redirect_uri: redirectUri }),
+    });
   }
-  deleteOAuth2Redirect(appId: string, redirectId: string) { return this.request<void>(`/developers/applications/${appId}/oauth2/redirects/${redirectId}`, { method: 'DELETE' }); }
-
-  listAppEmojis(appId: string) { return this.request<import('../types').AppEmoji[]>(`/developers/applications/${appId}/emojis`); }
+  deleteOAuth2Redirect(appId: string, redirectId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}/oauth2/redirects/${redirectId}`, { method: 'DELETE' });
+  }
+  listAppEmojis(appId: string) { return this.requestRaw<import('../types').AppEmoji[]>(`/developers/applications/${appId}/emojis`); }
   createAppEmoji(appId: string, name: string, imageHash: string) {
-    return this.request<import('../types').AppEmoji>(`/developers/applications/${appId}/emojis`, { method: 'POST', body: JSON.stringify({ name, image_hash: imageHash }) });
+    return this.requestRaw<import('../types').AppEmoji>(`/developers/applications/${appId}/emojis`, {
+      method: 'POST', body: JSON.stringify({ name, image_hash: imageHash }),
+    });
   }
-  deleteAppEmoji(appId: string, emojiId: string) { return this.request<void>(`/developers/applications/${appId}/emojis/${emojiId}`, { method: 'DELETE' }); }
-
-  listAppWebhooks(appId: string) { return this.request<import('../types').AppWebhook[]>(`/developers/applications/${appId}/webhooks`); }
-  createAppWebhook(appId: string, url: string, secret: string, eventTypes: string[]) {
-    return this.request<import('../types').AppWebhook>(`/developers/applications/${appId}/webhooks`, { method: 'POST', body: JSON.stringify({ url, secret, event_types: eventTypes }) });
+  deleteAppEmoji(appId: string, emojiId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}/emojis/${emojiId}`, { method: 'DELETE' });
   }
-  deleteAppWebhook(appId: string, webhookId: string) { return this.request<void>(`/developers/applications/${appId}/webhooks/${webhookId}`, { method: 'DELETE' }); }
-
-  listAppTesters(appId: string) { return this.request<import('../types').AppTester[]>(`/developers/applications/${appId}/testers`); }
+  listAppWebhooks(appId: string) { return this.requestRaw<import('../types').AppWebhook[]>(`/developers/applications/${appId}/webhooks`); }
+  createAppWebhook(appId: string, data: { url: string; secret: string; event_types: string[] }) {
+    return this.requestRaw<import('../types').AppWebhook>(`/developers/applications/${appId}/webhooks`, {
+      method: 'POST', body: JSON.stringify(data),
+    });
+  }
+  deleteAppWebhook(appId: string, webhookId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}/webhooks/${webhookId}`, { method: 'DELETE' });
+  }
+  listAppTesters(appId: string) { return this.requestRaw<import('../types').AppTester[]>(`/developers/applications/${appId}/testers`); }
   addAppTester(appId: string, userId: string) {
-    return this.request<{ status: string }>(`/developers/applications/${appId}/testers`, { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+    return this.requestRaw<void>(`/developers/applications/${appId}/testers`, {
+      method: 'POST', body: JSON.stringify({ user_id: userId }),
+    });
   }
-  removeAppTester(appId: string, testerId: string) { return this.request<void>(`/developers/applications/${appId}/testers/${testerId}`, { method: 'DELETE' }); }
-
-  listRichPresenceAssets(appId: string) { return this.request<import('../types').RichPresenceAsset[]>(`/developers/applications/${appId}/rich-presence/assets`); }
-  createRichPresenceAsset(appId: string, name: string, type: string, imageHash: string) {
-    return this.request<import('../types').RichPresenceAsset>(`/developers/applications/${appId}/rich-presence/assets`, { method: 'POST', body: JSON.stringify({ name, type, image_hash: imageHash }) });
+  removeAppTester(appId: string, userId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}/testers/${userId}`, { method: 'DELETE' });
   }
-  deleteRichPresenceAsset(appId: string, assetId: string) { return this.request<void>(`/developers/applications/${appId}/rich-presence/assets/${assetId}`, { method: 'DELETE' }); }
-
+  listRichPresenceAssets(appId: string) { return this.requestRaw<import('../types').RichPresenceAsset[]>(`/developers/applications/${appId}/rich-presence/assets`); }
+  createRichPresenceAsset(appId: string, data: { name: string; type: string; image_hash: string }) {
+    return this.requestRaw<import('../types').RichPresenceAsset>(`/developers/applications/${appId}/rich-presence/assets`, {
+      method: 'POST', body: JSON.stringify(data),
+    });
+  }
+  deleteRichPresenceAsset(appId: string, assetId: string) {
+    return this.requestRaw<void>(`/developers/applications/${appId}/rich-presence/assets/${assetId}`, { method: 'DELETE' });
+  }
   importDiscordBot(botToken: string, name?: string) {
-    return this.request<{ application: import('../types').Application; bot_token: string; imported: boolean }>('/developers/import-discord', {
+    return this.requestRaw<{ application: import('../types').Application; bot_token: string; imported: boolean }>('/developers/import-discord', {
       method: 'POST', body: JSON.stringify({ bot_token: botToken, name }),
     });
   }

@@ -216,6 +216,22 @@ export default function App() {
               {/* Invite (top-level for clean share URLs) */}
               <Route path="/invite/:code" element={<RequireAuth><InviteJoinPage /></RequireAuth>} />
 
+              {/* Developer Portal */}
+              <Route path="/developers" element={<RequireAuth><DevPortalLayout /></RequireAuth>}>
+                <Route index element={<ApplicationsListPage />} />
+                <Route path=":appId">
+                  <Route index element={<GeneralInformationPage />} />
+                  <Route path="installation" element={<InstallationPage />} />
+                  <Route path="oauth2" element={<OAuth2Page />} />
+                  <Route path="bot" element={<BotPage />} />
+                  <Route path="emojis" element={<EmojisPage />} />
+                  <Route path="webhooks" element={<WebhooksPage />} />
+                  <Route path="rich-presence" element={<RichPresencePage />} />
+                  <Route path="testers" element={<AppTestersPage />} />
+                  <Route path="verification" element={<AppVerificationPage />} />
+                </Route>
+              </Route>
+
               {/* Authenticated app under /app */}
               <Route path="/app/hubs/:hubId/:streamId" element={<RequireAuth><AppLayout /></RequireAuth>} />
               <Route path="/app/hubs/:hubId" element={<RequireAuth><AppLayout /></RequireAuth>} />

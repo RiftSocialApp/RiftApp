@@ -1,108 +1,62 @@
 import { useState, useEffect } from 'react';
-import { useDeveloperStore } from '../../stores/developerStore';
+import { useParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import type { AppTester } from '../../types';
 
 export default function AppTestersPage() {
-  const currentApp = useDeveloperStore((s) => s.currentApp);
+  const { appId } = useParams();
   const [testers, setTesters] = useState<AppTester[]>([]);
-  const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState('');
-  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
-    if (currentApp) {
-      setLoading(true);
-      api.listAppTesters(currentApp.id).then((t) => setTesters(t ?? [])).catch(() => {}).finally(() => setLoading(false));
-    }
-  }, [currentApp]);
+    if (appId) api.listAppTesters(appId).then(t => setTesters(t || []));
+  }, [appId]);
 
   const handleAdd = async () => {
-    if (!currentApp || !userId.trim()) return;
-    setAdding(true);
-    try {
-      await api.addAppTester(currentApp.id, userId.trim());
-      const updated = await api.listAppTesters(currentApp.id);
-      setTesters(updated ?? []);
-      setUserId('');
-    } catch {
-      // handled by API client
-    } finally {
-      setAdding(false);
-    }
+    if (!appId || !userId.trim()) return;
+    await api.addAppTester(appId, userId.trim());
+    const updated = await api.listAppTesters(appId);
+    setTesters(updated || []);
+    setUserId('');
   };
 
-  const handleRemove = async (testerUserId: string) => {
-    if (!currentApp) return;
-    await api.removeAppTester(currentApp.id, testerUserId);
-    setTesters(testers.filter((t) => t.user_id !== testerUserId));
+  const handleRemove = async (uid: string) => {
+    if (!appId) return;
+    await api.removeAppTester(appId, uid);
+    setTesters(testers.filter(t => t.user_id !== uid));
   };
-
-  if (!currentApp) {
-    return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-riftapp-accent border-t-transparent rounded-full animate-spin" /></div>;
-  }
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-8">
-      <h2 className="text-xl font-bold mb-6">App Testers</h2>
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <h2 className="text-xl font-semibold text-white mb-6">App Testers</h2>
 
-      <p className="text-sm text-riftapp-text-muted mb-6">
-        Add testers who can access your application during development. Testers receive an invitation and must accept it.
+      <p className="text-sm text-gray-400 mb-6">
+        Add users who can test your application before it's publicly available. Testers can access your bot even if it's not verified.
       </p>
 
-      {/* Add tester */}
       <div className="flex gap-2 mb-6">
-        <input
-          type="text"
-          value={userId}
-          onChange={(e) => setUserId(e.target.value)}
-          placeholder="User ID"
-          className="settings-input flex-1 py-2 px-3 text-sm"
-          onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
-        />
-        <button onClick={handleAdd} disabled={!userId.trim() || adding} className="btn-primary px-4 py-2 text-sm font-medium disabled:opacity-50">
-          {adding ? 'Adding...' : 'Add Tester'}
-        </button>
+        <input value={userId} onChange={e => setUserId(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAdd()} placeholder="User ID" className="flex-1 bg-black/30 border border-white/10 rounded px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 font-mono" />
+        <button onClick={handleAdd} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-sm font-medium transition-colors">Add Tester</button>
       </div>
 
-      {/* Testers list */}
-      {loading ? (
-        <div className="py-8 text-center text-riftapp-text-dim text-sm">Loading testers...</div>
-      ) : testers.length === 0 ? (
-        <div className="text-center py-16">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" className="mx-auto mb-4 text-riftapp-text-dim/30">
-            <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
-          </svg>
-          <p className="text-riftapp-text-dim text-sm">No testers added yet.</p>
+      {testers.length === 0 ? (
+        <div className="text-center py-12 text-gray-500">
+          <p className="text-sm">No testers added yet.</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {testers.map((tester) => (
-            <div key={tester.user_id} className="flex items-center gap-3 p-3 rounded-xl bg-riftapp-content-elevated border border-riftapp-border/40 group">
-              <div className="w-10 h-10 rounded-full bg-riftapp-accent/10 flex items-center justify-center text-sm font-semibold text-riftapp-accent overflow-hidden">
-                {tester.user?.avatar_url ? (
-                  <img src={tester.user.avatar_url} alt="" className="w-full h-full object-cover" />
-                ) : (
-                  (tester.user?.display_name || tester.user_id).slice(0, 2).toUpperCase()
-                )}
+          {testers.map(tester => (
+            <div key={tester.user_id} className="bg-[#12122a] border border-white/5 rounded-lg p-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-indigo-600/20 flex items-center justify-center text-indigo-400 text-sm font-bold">
+                  {tester.user?.display_name?.charAt(0).toUpperCase() || '?'}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white">{tester.user?.display_name || tester.user?.username || tester.user_id}</p>
+                  <p className="text-xs text-gray-500">{tester.status}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{tester.user?.display_name || tester.user_id}</p>
-                <p className="text-xs text-riftapp-text-dim">
-                  {tester.user?.username ? `@${tester.user.username}` : ''} · Status: {tester.status}
-                </p>
-              </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
-                tester.status === 'accepted' ? 'bg-riftapp-success/10 text-riftapp-success' : 'bg-yellow-500/10 text-yellow-400'
-              }`}>
-                {tester.status}
-              </span>
-              <button
-                onClick={() => handleRemove(tester.user_id)}
-                className="text-riftapp-danger opacity-0 group-hover:opacity-100 transition-opacity text-xs"
-              >
-                Remove
-              </button>
+              <button onClick={() => handleRemove(tester.user_id)} className="text-red-400 hover:text-red-300 text-sm">&times;</button>
             </div>
           ))}
         </div>

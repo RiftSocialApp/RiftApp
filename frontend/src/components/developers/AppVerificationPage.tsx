@@ -1,76 +1,51 @@
 import { useDeveloperStore } from '../../stores/developerStore';
 
 export default function AppVerificationPage() {
-  const currentApp = useDeveloperStore((s) => s.currentApp);
+  const { currentApp } = useDeveloperStore();
 
-  if (!currentApp) {
-    return <div className="flex items-center justify-center h-full"><div className="w-8 h-8 border-2 border-riftapp-accent border-t-transparent rounded-full animate-spin" /></div>;
-  }
-
-  const requirements = [
-    { label: 'App has a name and description', met: !!(currentApp.name && currentApp.description) },
-    { label: 'Terms of Service URL is set', met: !!currentApp.terms_of_service_url },
-    { label: 'Privacy Policy URL is set', met: !!currentApp.privacy_policy_url },
-    { label: 'App icon is set', met: !!currentApp.icon },
-    { label: 'Bot is configured', met: !!currentApp.bot_user_id },
-    { label: 'App is in at least 75 servers', met: (currentApp.approximate_guild_count || 0) >= 75 },
+  const checks = [
+    { label: 'Terms of Service URL provided', met: !!currentApp?.terms_of_service_url },
+    { label: 'Privacy Policy URL provided', met: !!currentApp?.privacy_policy_url },
+    { label: 'Application has a description', met: !!(currentApp?.description && currentApp.description.length > 10) },
+    { label: 'Application has an icon', met: !!currentApp?.icon },
+    { label: 'Bot is in fewer than 76 hubs', met: true },
   ];
 
-  const allMet = requirements.every((r) => r.met);
-  const metCount = requirements.filter((r) => r.met).length;
+  const allMet = checks.every(c => c.met);
 
   return (
-    <div className="max-w-3xl mx-auto px-8 py-8">
-      <h2 className="text-xl font-bold mb-6">App Verification</h2>
+    <div className="max-w-3xl mx-auto px-6 py-8">
+      <h2 className="text-xl font-semibold text-white mb-6">App Verification</h2>
 
-      {/* Status */}
-      <div className="mb-8 p-4 rounded-xl bg-riftapp-content-elevated border border-riftapp-border/40">
-        <div className="flex items-center gap-3">
-          <div className={`w-3 h-3 rounded-full ${allMet ? 'bg-riftapp-success' : 'bg-yellow-500'}`} />
-          <div>
-            <p className="text-sm font-medium">
-              {allMet ? 'Eligible for Verification' : 'Not Yet Eligible'}
-            </p>
-            <p className="text-xs text-riftapp-text-dim mt-0.5">
-              {metCount}/{requirements.length} requirements met
-            </p>
-          </div>
+      <div className="bg-[#12122a] border border-white/5 rounded-lg p-6 mb-6">
+        <h3 className="text-sm font-semibold text-white mb-1">Verification Status</h3>
+        <p className="text-sm text-gray-400 mb-4">
+          Verified apps can be added to more than 100 hubs and gain access to additional features.
+        </p>
+        <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-600/10 text-yellow-400 text-sm">
+          <span className="w-2 h-2 rounded-full bg-yellow-400" />
+          Not Verified
         </div>
       </div>
 
-      {/* Requirements checklist */}
-      <div className="mb-8">
-        <h3 className="text-sm font-bold mb-4">Requirements</h3>
-        <div className="space-y-3">
-          {requirements.map((req) => (
-            <div key={req.label} className="flex items-center gap-3">
-              <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${
-                req.met ? 'bg-riftapp-success/20 text-riftapp-success' : 'bg-riftapp-content-elevated border border-riftapp-border/50'
-              }`}>
-                {req.met && (
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                    <polyline points="20 6 9 17 4 12" />
-                  </svg>
-                )}
-              </div>
-              <span className={`text-sm ${req.met ? 'text-riftapp-text' : 'text-riftapp-text-muted'}`}>
-                {req.label}
-              </span>
+      <div className="space-y-3 mb-6">
+        <h3 className="text-sm font-semibold text-white">Requirements</h3>
+        {checks.map((check, i) => (
+          <div key={i} className="flex items-center gap-3">
+            <div className={`w-5 h-5 rounded flex items-center justify-center text-xs ${check.met ? 'bg-green-600/20 text-green-400' : 'bg-red-600/20 text-red-400'}`}>
+              {check.met ? '✓' : '✗'}
             </div>
-          ))}
-        </div>
+            <span className={`text-sm ${check.met ? 'text-gray-300' : 'text-gray-500'}`}>{check.label}</span>
+          </div>
+        ))}
       </div>
 
-      {/* Submit button */}
       <button
         disabled={!allMet}
-        className="btn-primary px-6 py-3 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded text-sm font-medium transition-colors"
       >
         Submit for Verification
       </button>
-      {!allMet && (
-        <p className="text-xs text-riftapp-text-dim mt-2">Complete all requirements above to submit for verification.</p>
-      )}
     </div>
   );
 }

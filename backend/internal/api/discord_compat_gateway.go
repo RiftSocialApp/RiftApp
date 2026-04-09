@@ -11,30 +11,29 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
 )
 
-// Discord gateway opcodes
 const (
 	GatewayOpDispatch        = 0
 	GatewayOpHeartbeat       = 1
 	GatewayOpIdentify        = 2
+	GatewayOpStatusUpdate    = 3
+	GatewayOpVoiceStateUpdate = 4
 	GatewayOpResume          = 6
 	GatewayOpReconnect       = 7
+	GatewayOpRequestGuildMembers = 8
 	GatewayOpInvalidSession  = 9
 	GatewayOpHello           = 10
 	GatewayOpHeartbeatAck    = 11
 )
 
-const heartbeatIntervalMs = 45000
-
 type GatewayMessage struct {
-	Op   int              `json:"op"`
-	D    json.RawMessage  `json:"d,omitempty"`
-	S    *int64           `json:"s,omitempty"`
-	T    *string          `json:"t,omitempty"`
+	Op int              `json:"op"`
+	D  json.RawMessage  `json:"d,omitempty"`
+	S  *int             `json:"s,omitempty"`
+	T  *string          `json:"t,omitempty"`
 }
 
 type IdentifyPayload struct {
@@ -49,204 +48,134 @@ type IdentifyPayload struct {
 
 type DiscordGatewayHandler struct {
 	devSvc    *service.DeveloperService
+	devRepo   *repository.DeveloperRepo
 	hubRepo   *repository.HubRepo
 	streamRepo *repository.StreamRepo
-	devRepo   *repository.DeveloperRepo
+	rankRepo  *repository.RankRepo
 	upgrader  websocket.Upgrader
 }
 
 func NewDiscordGatewayHandler(
 	devSvc *service.DeveloperService,
+	devRepo *repository.DeveloperRepo,
 	hubRepo *repository.HubRepo,
 	streamRepo *repository.StreamRepo,
-	devRepo *repository.DeveloperRepo,
-	allowedOrigins []string,
+	rankRepo *repository.RankRepo,
+	origins []string,
 ) *DiscordGatewayHandler {
 	return &DiscordGatewayHandler{
 		devSvc:     devSvc,
+		devRepo:    devRepo,
 		hubRepo:    hubRepo,
 		streamRepo: streamRepo,
-		devRepo:    devRepo,
+		rankRepo:   rankRepo,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool { return true },
 		},
 	}
 }
 
-type gatewaySession struct {
-	conn        *websocket.Conn
-	mu          sync.Mutex
-	botUserID   string
-	appID       string
-	intents     int
-	sessionID   string
-	seq         int64
-	identified  bool
-	heartbeatOK atomic.Bool
-	done        chan struct{}
-}
-
-func (s *gatewaySession) sendJSON(msg interface{}) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-	return s.conn.WriteJSON(msg)
-}
-
-func (s *gatewaySession) nextSeq() int64 {
-	return atomic.AddInt64(&s.seq, 1)
-}
-
 func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 	conn, err := h.upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Printf("discord gateway upgrade error: %v", err)
+		log.Printf("gateway upgrade error: %v", err)
 		return
 	}
 	defer conn.Close()
 
-	sess := &gatewaySession{
-		conn:      conn,
-		sessionID: uuid.New().String(),
-		done:      make(chan struct{}),
-	}
-	sess.heartbeatOK.Store(true)
+	sessionID := uuid.New().String()
+	var seq int64
+	var writeMu sync.Mutex
 
-	// Send Hello (op 10)
-	hello := GatewayMessage{
-		Op: GatewayOpHello,
-		D:  mustMarshal(map[string]interface{}{"heartbeat_interval": heartbeatIntervalMs}),
-	}
-	if err := sess.sendJSON(hello); err != nil {
-		return
+	send := func(op int, d interface{}, eventName string) {
+		writeMu.Lock()
+		defer writeMu.Unlock()
+		msg := GatewayMessage{Op: op}
+		if d != nil {
+			raw, _ := json.Marshal(d)
+			msg.D = raw
+		}
+		if eventName != "" {
+			msg.T = &eventName
+			s := int(atomic.AddInt64(&seq, 1))
+			msg.S = &s
+		}
+		conn.WriteJSON(msg)
 	}
 
-	// Start heartbeat checker
-	go h.heartbeatWatchdog(sess)
+	heartbeatInterval := 41250
+	send(GatewayOpHello, map[string]interface{}{
+		"heartbeat_interval": heartbeatInterval,
+	}, "")
 
-	// Read loop
-	conn.SetReadLimit(4096)
+	var lastHeartbeat atomic.Int64
+	lastHeartbeat.Store(time.Now().UnixMilli())
+
+	go func() {
+		for {
+			time.Sleep(time.Duration(heartbeatInterval*2) * time.Millisecond)
+			if time.Now().UnixMilli()-lastHeartbeat.Load() > int64(heartbeatInterval*3) {
+				log.Printf("gateway: no heartbeat, closing session %s", sessionID)
+				conn.Close()
+				return
+			}
+		}
+	}()
+
 	for {
-		_, msgBytes, err := conn.ReadMessage()
+		_, raw, err := conn.ReadMessage()
 		if err != nil {
 			break
 		}
-
 		var msg GatewayMessage
-		if err := json.Unmarshal(msgBytes, &msg); err != nil {
+		if err := json.Unmarshal(raw, &msg); err != nil {
 			continue
 		}
 
 		switch msg.Op {
 		case GatewayOpHeartbeat:
-			sess.heartbeatOK.Store(true)
-			ack := GatewayMessage{Op: GatewayOpHeartbeatAck}
-			sess.sendJSON(ack)
+			lastHeartbeat.Store(time.Now().UnixMilli())
+			send(GatewayOpHeartbeatAck, nil, "")
 
 		case GatewayOpIdentify:
-			h.handleIdentify(sess, msg.D)
+			var payload IdentifyPayload
+			if err := json.Unmarshal(msg.D, &payload); err != nil {
+				send(GatewayOpInvalidSession, false, "")
+				continue
+			}
+			ctx := context.Background()
+			bt, err := h.devSvc.ValidateBotToken(ctx, payload.Token)
+			if err != nil {
+				send(GatewayOpInvalidSession, false, "")
+				continue
+			}
+			botUser, err := h.devRepo.GetUserByID(ctx, bt.BotUserID)
+			if err != nil {
+				send(GatewayOpInvalidSession, false, "")
+				continue
+			}
+
+			send(GatewayOpDispatch, map[string]interface{}{
+				"v":          10,
+				"user":       toDiscordUser(botUser),
+				"guilds":     h.getUnavailableGuilds(ctx, bt.BotUserID),
+				"session_id": sessionID,
+				"application": map[string]interface{}{
+					"id":    bt.ApplicationID,
+					"flags": 0,
+				},
+			}, "READY")
+
+			go h.sendGuildCreates(ctx, bt.BotUserID, send)
 
 		case GatewayOpResume:
-			// For now, treat resume as re-identify
-			h.handleIdentify(sess, msg.D)
-		}
-	}
-
-	close(sess.done)
-}
-
-func (h *DiscordGatewayHandler) handleIdentify(sess *gatewaySession, data json.RawMessage) {
-	var payload IdentifyPayload
-	if err := json.Unmarshal(data, &payload); err != nil {
-		sess.sendJSON(GatewayMessage{
-			Op: GatewayOpInvalidSession,
-			D:  mustMarshal(false),
-		})
-		return
-	}
-
-	botUserID, appID, err := h.devSvc.ValidateBotToken(context.Background(), payload.Token)
-	if err != nil {
-		sess.sendJSON(GatewayMessage{
-			Op: GatewayOpInvalidSession,
-			D:  mustMarshal(false),
-		})
-		return
-	}
-
-	sess.botUserID = botUserID
-	sess.appID = appID
-	sess.intents = payload.Intents
-	sess.identified = true
-
-	botUser, _ := h.devRepo.GetUserByID(context.Background(), botUserID)
-
-	readyEvent := "READY"
-	seq := sess.nextSeq()
-
-	readyData := map[string]interface{}{
-		"v":                  10,
-		"user":               toDiscordUser(botUser),
-		"guilds":             h.getUnavailableGuilds(botUserID),
-		"session_id":         sess.sessionID,
-		"resume_gateway_url": "wss://gateway.riftapp.io",
-		"application": map[string]interface{}{
-			"id":    appID,
-			"flags": 0,
-		},
-	}
-
-	sess.sendJSON(GatewayMessage{
-		Op: GatewayOpDispatch,
-		D:  mustMarshal(readyData),
-		S:  &seq,
-		T:  &readyEvent,
-	})
-
-	// Send GUILD_CREATE for each guild the bot is in
-	go h.sendGuildCreates(sess, botUserID)
-}
-
-func (h *DiscordGatewayHandler) sendGuildCreates(sess *gatewaySession, botUserID string) {
-	ctx := context.Background()
-	hubs, err := h.hubRepo.ListByUser(ctx, botUserID)
-	if err != nil {
-		return
-	}
-
-	eventName := "GUILD_CREATE"
-	for _, hub := range hubs {
-		streams, _ := h.streamRepo.ListByHub(ctx, hub.ID)
-		channels := make([]map[string]interface{}, 0, len(streams))
-		for _, s := range streams {
-			channels = append(channels, toDiscordChannel(&s))
-		}
-
-		guildData := toDiscordGuild(&hub)
-		guildData["channels"] = channels
-		guildData["members"] = []interface{}{}
-
-		seq := sess.nextSeq()
-		select {
-		case <-sess.done:
-			return
-		default:
-			sess.sendJSON(GatewayMessage{
-				Op: GatewayOpDispatch,
-				D:  mustMarshal(guildData),
-				S:  &seq,
-				T:  &eventName,
-			})
+			send(GatewayOpDispatch, nil, "RESUMED")
 		}
 	}
 }
 
-func (h *DiscordGatewayHandler) getUnavailableGuilds(botUserID string) []map[string]interface{} {
-	ctx := context.Background()
-	hubs, err := h.hubRepo.ListByUser(ctx, botUserID)
-	if err != nil {
-		return []map[string]interface{}{}
-	}
+func (h *DiscordGatewayHandler) getUnavailableGuilds(ctx context.Context, botUserID string) []map[string]interface{} {
+	hubs, _ := h.hubRepo.ListByUser(ctx, botUserID)
 	guilds := make([]map[string]interface{}, 0, len(hubs))
 	for _, hub := range hubs {
 		guilds = append(guilds, map[string]interface{}{
@@ -257,29 +186,36 @@ func (h *DiscordGatewayHandler) getUnavailableGuilds(botUserID string) []map[str
 	return guilds
 }
 
-func (h *DiscordGatewayHandler) heartbeatWatchdog(sess *gatewaySession) {
-	ticker := time.NewTicker(time.Duration(heartbeatIntervalMs+5000) * time.Millisecond)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-sess.done:
-			return
-		case <-ticker.C:
-			if !sess.heartbeatOK.Load() && sess.identified {
-				sess.mu.Lock()
-				sess.conn.WriteMessage(websocket.CloseMessage,
-					websocket.FormatCloseMessage(4009, "Session timed out"))
-				sess.conn.Close()
-				sess.mu.Unlock()
-				return
-			}
-			sess.heartbeatOK.Store(false)
-		}
+func (h *DiscordGatewayHandler) sendGuildCreates(ctx context.Context, botUserID string, send func(int, interface{}, string)) {
+	hubs, err := h.hubRepo.ListByUser(ctx, botUserID)
+	if err != nil {
+		return
 	}
-}
+	for _, hub := range hubs {
+		channels := make([]map[string]interface{}, 0)
+		streams, _ := h.streamRepo.ListByHub(ctx, hub.ID)
+		for _, s := range streams {
+			channels = append(channels, toDiscordChannel(&s))
+		}
 
-func mustMarshal(v interface{}) json.RawMessage {
-	b, _ := json.Marshal(v)
-	return b
+		roles := make([]map[string]interface{}, 0)
+		ranks, _ := h.rankRepo.ListByHub(ctx, hub.ID)
+		for _, rank := range ranks {
+			roles = append(roles, toDiscordRole(&rank))
+		}
+
+		members, _ := h.hubRepo.ListMembers(ctx, hub.ID)
+		discordMembers := make([]map[string]interface{}, 0, len(members))
+		for _, m := range members {
+			discordMembers = append(discordMembers, toDiscordMember(&m))
+		}
+
+		g := toDiscordGuild(&hub)
+		g["channels"] = channels
+		g["roles"] = roles
+		g["members"] = discordMembers
+		g["member_count"] = len(members)
+
+		send(GatewayOpDispatch, g, "GUILD_CREATE")
+	}
 }

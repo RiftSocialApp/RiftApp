@@ -310,10 +310,6 @@ export interface Application {
   flags: number;
   created_at: string;
   updated_at: string;
-  owner?: User;
-  bot?: User;
-  approximate_guild_count?: number;
-  approximate_user_install_count?: number;
 }
 
 export interface OAuth2Redirect {
@@ -357,8 +353,4 @@ export interface RichPresenceAsset {
   type: string;
   image_hash: string;
   created_at: string;
-}
-
-export interface DeveloperMeResponse {
-  is_super_admin: boolean;
 }

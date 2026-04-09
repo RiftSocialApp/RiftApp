@@ -1,122 +1,90 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
-
+	"github.com/google/uuid"
 	"github.com/riftapp-cloud/riftapp/internal/models"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
 )
 
-type DiscordCompatHandler struct {
-	devSvc    *service.DeveloperService
-	hubRepo   *repository.HubRepo
-	streamRepo *repository.StreamRepo
-	msgRepo   *repository.MessageRepo
-	rankRepo  *repository.RankRepo
-	devRepo   *repository.DeveloperRepo
-	db        *pgxpool.Pool
-	baseURL   string
+type DiscordCompatDeps struct {
+	DevSvc     *service.DeveloperService
+	HubRepo    *repository.HubRepo
+	StreamRepo *repository.StreamRepo
+	MsgRepo    *repository.MessageRepo
+	RankRepo   *repository.RankRepo
+	DevRepo    *repository.DeveloperRepo
+	BaseURL    string
 }
 
-type DiscordCompatDeps struct {
-	DeveloperService *service.DeveloperService
-	HubRepo          *repository.HubRepo
-	StreamRepo       *repository.StreamRepo
-	MsgRepo          *repository.MessageRepo
-	RankRepo         *repository.RankRepo
-	DeveloperRepo    *repository.DeveloperRepo
-	DB               *pgxpool.Pool
-	BaseURL          string
+type DiscordCompatHandler struct {
+	devSvc     *service.DeveloperService
+	hubRepo    *repository.HubRepo
+	streamRepo *repository.StreamRepo
+	msgRepo    *repository.MessageRepo
+	rankRepo   *repository.RankRepo
+	devRepo    *repository.DeveloperRepo
+	baseURL    string
 }
 
 func NewDiscordCompatHandler(deps DiscordCompatDeps) *DiscordCompatHandler {
 	return &DiscordCompatHandler{
-		devSvc:     deps.DeveloperService,
+		devSvc:     deps.DevSvc,
 		hubRepo:    deps.HubRepo,
 		streamRepo: deps.StreamRepo,
 		msgRepo:    deps.MsgRepo,
 		rankRepo:   deps.RankRepo,
-		devRepo:    deps.DeveloperRepo,
-		db:         deps.DB,
+		devRepo:    deps.DevRepo,
 		baseURL:    deps.BaseURL,
 	}
 }
 
-// Discord error response format
-type discordError struct {
-	Code    int                    `json:"code"`
-	Message string                 `json:"message"`
-	Errors  map[string]interface{} `json:"errors,omitempty"`
-}
-
-func writeDiscordError(w http.ResponseWriter, status int, code int, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(discordError{Code: code, Message: message})
-}
-
-func writeDiscordJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(data)
-}
-
-// Auth middleware for Discord compat routes — parses "Bot <token>" or "Bearer <token>"
 func (h *DiscordCompatHandler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			writeDiscordError(w, 401, 0, "401: Unauthorized")
+		auth := r.Header.Get("Authorization")
+		if auth == "" {
+			discordError(w, 0, "401: Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 {
-			writeDiscordError(w, 401, 0, "401: Unauthorized")
+		parts := strings.SplitN(auth, " ", 2)
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bot" {
+			discordError(w, 0, "401: Unauthorized", http.StatusUnauthorized)
 			return
 		}
-
-		scheme := strings.ToLower(parts[0])
-		token := parts[1]
-
-		switch scheme {
-		case "bot":
-			botUserID, appID, err := h.devSvc.ValidateBotToken(r.Context(), token)
-			if err != nil {
-				writeDiscordError(w, 401, 0, "401: Unauthorized")
-				return
-			}
-			ctx := r.Context()
-			ctx = setBotUserID(ctx, botUserID)
-			ctx = setAppID(ctx, appID)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		default:
-			writeDiscordError(w, 401, 0, "401: Unauthorized")
+		rawToken := parts[1]
+		bt, err := h.devSvc.ValidateBotToken(r.Context(), rawToken)
+		if err != nil {
+			discordError(w, 0, "401: Unauthorized", http.StatusUnauthorized)
+			return
 		}
+		ctx := setBotUserID(r.Context(), bt.BotUserID)
+		ctx = setAppID(ctx, bt.ApplicationID)
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
-// GET /gateway
 func (h *DiscordCompatHandler) GetGateway(w http.ResponseWriter, r *http.Request) {
-	wsURL := strings.Replace(h.baseURL, "http", "ws", 1)
-	writeDiscordJSON(w, 200, map[string]string{
-		"url": wsURL + "/gateway/",
-	})
+	url := h.baseURL
+	if url == "" {
+		url = "wss://" + r.Host
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"url": url + "/gateway/"})
 }
 
-// GET /gateway/bot
 func (h *DiscordCompatHandler) GetGatewayBot(w http.ResponseWriter, r *http.Request) {
-	wsURL := strings.Replace(h.baseURL, "http", "ws", 1)
-	writeDiscordJSON(w, 200, map[string]interface{}{
-		"url":    wsURL + "/gateway/",
+	url := h.baseURL
+	if url == "" {
+		url = "wss://" + r.Host
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"url":    url + "/gateway/",
 		"shards": 1,
 		"session_start_limit": map[string]interface{}{
 			"total":           1000,
@@ -127,260 +95,234 @@ func (h *DiscordCompatHandler) GetGatewayBot(w http.ResponseWriter, r *http.Requ
 	})
 }
 
-// GET /applications/@me
 func (h *DiscordCompatHandler) GetApplicationMe(w http.ResponseWriter, r *http.Request) {
 	appID := getAppID(r.Context())
-	if appID == "" {
-		writeDiscordError(w, 401, 0, "401: Unauthorized")
-		return
-	}
-	app, err := h.devRepo.GetApplication(r.Context(), appID)
+	app, err := h.devSvc.GetApplication(r.Context(), appID)
 	if err != nil {
-		writeDiscordError(w, 404, 10002, "Unknown Application")
+		discordError(w, 0, "application not found", http.StatusNotFound)
 		return
 	}
-
-	writeDiscordJSON(w, 200, h.toDiscordApplication(r.Context(), app))
+	writeJSON(w, http.StatusOK, toDiscordApplication(app))
 }
 
-// GET /users/@me
 func (h *DiscordCompatHandler) GetUserMe(w http.ResponseWriter, r *http.Request) {
 	botUserID := getBotUserID(r.Context())
-	user, err := h.devRepo.GetUserByID(r.Context(), botUserID)
+	u, err := h.devRepo.GetUserByID(r.Context(), botUserID)
 	if err != nil {
-		writeDiscordError(w, 404, 10013, "Unknown User")
+		discordError(w, 0, "user not found", http.StatusNotFound)
 		return
 	}
-	writeDiscordJSON(w, 200, toDiscordUser(user))
+	writeJSON(w, http.StatusOK, toDiscordUser(u))
 }
 
-// GET /users/{id}
 func (h *DiscordCompatHandler) GetUser(w http.ResponseWriter, r *http.Request) {
-	userID := chi.URLParam(r, "id")
-	user, err := h.devRepo.GetUserByID(r.Context(), userID)
+	userID := chi.URLParam(r, "userID")
+	u, err := h.devRepo.GetUserByID(r.Context(), userID)
 	if err != nil {
-		writeDiscordError(w, 404, 10013, "Unknown User")
+		discordError(w, 10013, "Unknown User", http.StatusNotFound)
 		return
 	}
-	writeDiscordJSON(w, 200, toDiscordUser(user))
+	writeJSON(w, http.StatusOK, toDiscordUser(u))
 }
 
-// GET /guilds/{id}
 func (h *DiscordCompatHandler) GetGuild(w http.ResponseWriter, r *http.Request) {
-	guildID := chi.URLParam(r, "id")
+	guildID := chi.URLParam(r, "guildID")
 	hub, err := h.hubRepo.GetByID(r.Context(), guildID)
 	if err != nil {
-		writeDiscordError(w, 404, 10004, "Unknown Guild")
+		discordError(w, 10004, "Unknown Guild", http.StatusNotFound)
 		return
 	}
-	writeDiscordJSON(w, 200, toDiscordGuild(hub))
+	writeJSON(w, http.StatusOK, toDiscordGuild(hub))
 }
 
-// GET /guilds/{id}/channels
 func (h *DiscordCompatHandler) GetGuildChannels(w http.ResponseWriter, r *http.Request) {
-	guildID := chi.URLParam(r, "id")
+	guildID := chi.URLParam(r, "guildID")
 	streams, err := h.streamRepo.ListByHub(r.Context(), guildID)
 	if err != nil {
-		writeDiscordError(w, 404, 10004, "Unknown Guild")
+		discordError(w, 10004, "Unknown Guild", http.StatusNotFound)
 		return
 	}
 	channels := make([]map[string]interface{}, 0, len(streams))
 	for _, s := range streams {
 		channels = append(channels, toDiscordChannel(&s))
 	}
-	writeDiscordJSON(w, 200, channels)
+	writeJSON(w, http.StatusOK, channels)
 }
 
-// GET /guilds/{id}/members
 func (h *DiscordCompatHandler) GetGuildMembers(w http.ResponseWriter, r *http.Request) {
-	guildID := chi.URLParam(r, "id")
+	guildID := chi.URLParam(r, "guildID")
 	members, err := h.hubRepo.ListMembers(r.Context(), guildID)
 	if err != nil {
-		writeDiscordJSON(w, 200, []interface{}{})
+		discordError(w, 10004, "Unknown Guild", http.StatusNotFound)
 		return
 	}
-	result := make([]map[string]interface{}, 0, len(members))
-	for _, m := range members {
-		result = append(result, toDiscordMember(&m))
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 1000 {
+			limit = n
+		}
 	}
-	writeDiscordJSON(w, 200, result)
+	out := make([]map[string]interface{}, 0, len(members))
+	for i, m := range members {
+		if i >= limit {
+			break
+		}
+		out = append(out, toDiscordMember(&m))
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
-// GET /guilds/{id}/members/{uid}
 func (h *DiscordCompatHandler) GetGuildMember(w http.ResponseWriter, r *http.Request) {
-	guildID := chi.URLParam(r, "id")
-	userID := chi.URLParam(r, "uid")
+	guildID := chi.URLParam(r, "guildID")
+	userID := chi.URLParam(r, "userID")
 	members, err := h.hubRepo.ListMembers(r.Context(), guildID)
 	if err != nil {
-		writeDiscordError(w, 404, 10007, "Unknown Member")
+		discordError(w, 10004, "Unknown Guild", http.StatusNotFound)
 		return
 	}
 	for _, m := range members {
 		if m.ID == userID {
-			writeDiscordJSON(w, 200, toDiscordMember(&m))
+			writeJSON(w, http.StatusOK, toDiscordMember(&m))
 			return
 		}
 	}
-	writeDiscordError(w, 404, 10007, "Unknown Member")
+	discordError(w, 10007, "Unknown Member", http.StatusNotFound)
 }
 
-// GET /guilds/{id}/roles
 func (h *DiscordCompatHandler) GetGuildRoles(w http.ResponseWriter, r *http.Request) {
-	guildID := chi.URLParam(r, "id")
+	guildID := chi.URLParam(r, "guildID")
 	ranks, err := h.rankRepo.ListByHub(r.Context(), guildID)
 	if err != nil {
-		writeDiscordJSON(w, 200, []interface{}{})
+		discordError(w, 10004, "Unknown Guild", http.StatusNotFound)
 		return
 	}
-	roles := make([]map[string]interface{}, 0, len(ranks))
+	roles := make([]map[string]interface{}, 0, len(ranks)+1)
+	// @everyone role
+	roles = append(roles, map[string]interface{}{
+		"id":          guildID,
+		"name":        "@everyone",
+		"color":       0,
+		"hoist":       false,
+		"position":    0,
+		"permissions": strconv.FormatInt(models.PermDefault, 10),
+		"managed":     false,
+		"mentionable": false,
+	})
 	for _, rank := range ranks {
 		roles = append(roles, toDiscordRole(&rank))
 	}
-	writeDiscordJSON(w, 200, roles)
+	writeJSON(w, http.StatusOK, roles)
 }
 
-// GET /channels/{id}
 func (h *DiscordCompatHandler) GetChannel(w http.ResponseWriter, r *http.Request) {
-	channelID := chi.URLParam(r, "id")
+	channelID := chi.URLParam(r, "channelID")
 	stream, err := h.streamRepo.GetByID(r.Context(), channelID)
 	if err != nil {
-		writeDiscordError(w, 404, 10003, "Unknown Channel")
+		discordError(w, 10003, "Unknown Channel", http.StatusNotFound)
 		return
 	}
-	writeDiscordJSON(w, 200, toDiscordChannel(stream))
+	writeJSON(w, http.StatusOK, toDiscordChannel(stream))
 }
 
-// GET /channels/{id}/messages
 func (h *DiscordCompatHandler) GetChannelMessages(w http.ResponseWriter, r *http.Request) {
-	channelID := chi.URLParam(r, "id")
-	q := r.URL.Query()
-
+	channelID := chi.URLParam(r, "channelID")
 	limit := 50
-	if v := q.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if n, err := strconv.Atoi(l); err == nil && n > 0 && n <= 100 {
 			limit = n
 		}
 	}
-
-	var before *string
-	if v := q.Get("before"); v != "" {
-		before = &v
-	}
-
-	msgs, err := h.msgRepo.ListByStream(r.Context(), channelID, before, limit)
+	msgs, err := h.msgRepo.ListByStream(r.Context(), channelID, nil, limit)
 	if err != nil {
-		writeDiscordJSON(w, 200, []interface{}{})
+		discordError(w, 10003, "Unknown Channel", http.StatusNotFound)
 		return
 	}
-
-	h.msgRepo.EnrichMessages(r.Context(), msgs)
-
-	result := make([]map[string]interface{}, 0, len(msgs))
-	for _, m := range msgs {
-		result = append(result, toDiscordMessage(&m))
+	out := make([]map[string]interface{}, 0, len(msgs))
+	for i := range msgs {
+		out = append(out, toDiscordMessage(&msgs[i]))
 	}
-	writeDiscordJSON(w, 200, result)
+	writeJSON(w, http.StatusOK, out)
 }
 
-// POST /channels/{id}/messages
 func (h *DiscordCompatHandler) CreateChannelMessage(w http.ResponseWriter, r *http.Request) {
-	channelID := chi.URLParam(r, "id")
+	channelID := chi.URLParam(r, "channelID")
 	botUserID := getBotUserID(r.Context())
-
 	var body struct {
 		Content string `json:"content"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeDiscordError(w, 400, 50035, "Invalid Form Body")
+	if err := readJSON(r, &body); err != nil || body.Content == "" {
+		discordError(w, 50035, "content is required", http.StatusBadRequest)
 		return
 	}
-
+	now := time.Now()
 	msg := &models.Message{
-		StreamID: &channelID,
-		AuthorID: botUserID,
-		Content:  body.Content,
+		ID:        uuid.New().String(),
+		StreamID:  &channelID,
+		AuthorID:  botUserID,
+		Content:   body.Content,
+		CreatedAt: now,
 	}
-
 	if err := h.msgRepo.Create(r.Context(), msg); err != nil {
-		writeDiscordError(w, 500, 0, "Internal Server Error")
+		discordError(w, 0, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	writeDiscordJSON(w, 200, toDiscordMessage(msg))
+	writeJSON(w, http.StatusOK, toDiscordMessage(msg))
 }
 
-// GET /channels/{id}/messages/{mid}
 func (h *DiscordCompatHandler) GetChannelMessage(w http.ResponseWriter, r *http.Request) {
-	msgID := chi.URLParam(r, "mid")
-	msg, err := h.msgRepo.GetByID(r.Context(), msgID)
+	messageID := chi.URLParam(r, "messageID")
+	msg, err := h.msgRepo.GetByID(r.Context(), messageID)
 	if err != nil {
-		writeDiscordError(w, 404, 10008, "Unknown Message")
+		discordError(w, 10008, "Unknown Message", http.StatusNotFound)
 		return
 	}
-	writeDiscordJSON(w, 200, toDiscordMessage(msg))
+	writeJSON(w, http.StatusOK, toDiscordMessage(msg))
 }
 
-// DELETE /channels/{id}/messages/{mid}
 func (h *DiscordCompatHandler) DeleteChannelMessage(w http.ResponseWriter, r *http.Request) {
-	msgID := chi.URLParam(r, "mid")
-	if err := h.msgRepo.Delete(r.Context(), msgID); err != nil {
-		writeDiscordError(w, 404, 10008, "Unknown Message")
+	messageID := chi.URLParam(r, "messageID")
+	if err := h.msgRepo.Delete(r.Context(), messageID); err != nil {
+		discordError(w, 10008, "Unknown Message", http.StatusNotFound)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Conversion functions: RiftApp models -> Discord JSON shapes
+// ─── Conversion helpers ────────────────────────────────────────────────────
 
-func (h *DiscordCompatHandler) toDiscordApplication(ctx interface{ Value(any) any }, app *models.Application) map[string]interface{} {
+func toDiscordApplication(app *models.Application) map[string]interface{} {
 	result := map[string]interface{}{
-		"id":                       app.ID,
-		"name":                     app.Name,
-		"icon":                     app.Icon,
-		"description":              app.Description,
-		"bot_public":               app.BotPublic,
-		"bot_require_code_grant":   app.BotRequireCodeGrant,
-		"terms_of_service_url":     app.TermsOfServiceURL,
-		"privacy_policy_url":       app.PrivacyPolicyURL,
-		"verify_key":               app.VerifyKey,
-		"flags":                    app.Flags,
-		"tags":                     app.Tags,
+		"id":                      app.ID,
+		"name":                    app.Name,
+		"description":             app.Description,
+		"icon":                    app.Icon,
+		"bot_public":              app.BotPublic,
+		"bot_require_code_grant":  app.BotRequireCodeGrant,
+		"verify_key":              app.VerifyKey,
+		"flags":                   app.Flags,
+		"tags":                    app.Tags,
+		"terms_of_service_url":    app.TermsOfServiceURL,
+		"privacy_policy_url":      app.PrivacyPolicyURL,
+		"custom_install_url":      app.CustomInstallURL,
 		"interactions_endpoint_url": app.InteractionsEndpointURL,
-		"role_connections_verification_url": app.RoleConnectionsVerificationURL,
-		"install_params":           nil,
-		"approximate_guild_count":  app.ApproximateGuildCount,
-	}
-
-	if app.Bot != nil {
-		result["bot"] = toDiscordUser(app.Bot)
 	}
 	if app.Owner != nil {
 		result["owner"] = toDiscordUser(app.Owner)
 	}
-
 	return result
 }
 
 func toDiscordUser(u *models.User) map[string]interface{} {
-	discrim := "0000"
-	flags := 0
-	if u.IsBot {
-		flags = 1 << 16 // VERIFIED_BOT flag
-	}
-
-	result := map[string]interface{}{
+	return map[string]interface{}{
 		"id":            u.ID,
 		"username":      u.Username,
-		"discriminator": discrim,
-		"global_name":   u.DisplayName,
+		"discriminator": "0000",
 		"avatar":        u.AvatarURL,
 		"bot":           u.IsBot,
 		"system":        false,
-		"banner":        nil,
-		"accent_color":  nil,
-		"public_flags":  flags,
+		"flags":         0,
+		"public_flags":  0,
 	}
-	return result
 }
 
 func toDiscordGuild(hub *models.Hub) map[string]interface{} {
@@ -388,191 +330,112 @@ func toDiscordGuild(hub *models.Hub) map[string]interface{} {
 		"id":                          hub.ID,
 		"name":                        hub.Name,
 		"icon":                        hub.IconURL,
-		"splash":                      nil,
-		"discovery_splash":            nil,
 		"owner_id":                    hub.OwnerID,
-		"region":                      "us-east",
-		"afk_channel_id":              nil,
-		"afk_timeout":                 300,
+		"permissions":                 strconv.FormatInt(models.PermDefault, 10),
+		"features":                    []string{},
+		"member_count":                0,
 		"verification_level":          0,
 		"default_message_notifications": 0,
 		"explicit_content_filter":     0,
-		"roles":                       []interface{}{},
-		"emojis":                      []interface{}{},
-		"features":                    []interface{}{},
 		"mfa_level":                   0,
-		"system_channel_id":           nil,
-		"system_channel_flags":        0,
-		"rules_channel_id":            nil,
-		"max_members":                 500000,
-		"vanity_url_code":             nil,
-		"description":                 nil,
-		"banner":                      hub.BannerURL,
 		"premium_tier":                0,
-		"premium_subscription_count":  0,
 		"preferred_locale":            "en-US",
-		"nsfw_level":                  0,
-		"premium_progress_bar_enabled": false,
 	}
 }
 
 func toDiscordChannel(s *models.Stream) map[string]interface{} {
 	chType := 0
 	if s.Type == 1 {
-		chType = 2 // voice
+		chType = 2
 	}
-
 	return map[string]interface{}{
-		"id":                     s.ID,
-		"type":                   chType,
-		"guild_id":               s.HubID,
-		"name":                   s.Name,
-		"position":               s.Position,
-		"permission_overwrites":  []interface{}{},
-		"nsfw":                   false,
-		"topic":                  nil,
-		"last_message_id":        nil,
-		"rate_limit_per_user":    0,
+		"id":        s.ID,
+		"type":      chType,
+		"guild_id":  s.HubID,
+		"name":      s.Name,
+		"position":  s.Position,
+		"nsfw":      false,
+		"topic":     nil,
+		"bitrate":   s.Bitrate,
+		"user_limit": s.UserLimit,
+		"parent_id": s.CategoryID,
+		"permission_overwrites": []interface{}{},
 	}
 }
 
 func toDiscordMember(m *repository.MemberWithRole) map[string]interface{} {
-	user := map[string]interface{}{
-		"id":            m.ID,
-		"username":      m.Username,
-		"discriminator": "0000",
-		"global_name":   m.DisplayName,
-		"avatar":        m.AvatarURL,
-		"bot":           m.IsBot,
-	}
-
 	roles := []string{}
 	if m.RankID != nil {
 		roles = append(roles, *m.RankID)
 	}
-
 	return map[string]interface{}{
-		"user":      user,
-		"nick":      nil,
-		"avatar":    nil,
-		"roles":     roles,
+		"user":    toDiscordUser(&m.User),
+		"nick":    nil,
+		"roles":   roles,
 		"joined_at": m.JoinedAt.Format("2006-01-02T15:04:05.000000+00:00"),
-		"deaf":      false,
-		"mute":      false,
+		"deaf":    false,
+		"mute":    false,
 	}
 }
 
-func toDiscordRole(r *models.Rank) map[string]interface{} {
-	return map[string]interface{}{
-		"id":           r.ID,
-		"name":         r.Name,
-		"color":        colorToInt(r.Color),
-		"hoist":        false,
-		"icon":         nil,
-		"position":     r.Position,
-		"permissions":  fmt.Sprintf("%d", mapPermissions(r.Permissions)),
-		"managed":      false,
-		"mentionable":  false,
-	}
-}
-
-func toDiscordMessage(m *models.Message) map[string]interface{} {
-	result := map[string]interface{}{
-		"id":               m.ID,
-		"type":             0,
-		"content":          m.Content,
-		"channel_id":       m.StreamID,
-		"pinned":           m.Pinned,
-		"tts":              false,
-		"mention_everyone": false,
-		"mentions":         []interface{}{},
-		"mention_roles":    []interface{}{},
-		"attachments":      toDiscordAttachments(m.Attachments),
-		"embeds":           []interface{}{},
-		"timestamp":        m.CreatedAt.Format("2006-01-02T15:04:05.000000+00:00"),
-		"edited_timestamp": nil,
-	}
-
-	if m.EditedAt != nil {
-		result["edited_timestamp"] = m.EditedAt.Format("2006-01-02T15:04:05.000000+00:00")
-	}
-
-	if m.Author != nil {
-		result["author"] = toDiscordUser(m.Author)
-	} else {
-		result["author"] = map[string]interface{}{
-			"id":            m.AuthorID,
-			"username":      "unknown",
-			"discriminator": "0000",
-			"avatar":        nil,
+func toDiscordRole(rank *models.Rank) map[string]interface{} {
+	color := 0
+	if rank.Color != "" {
+		if c, err := strconv.ParseInt(strings.TrimPrefix(rank.Color, "#"), 16, 64); err == nil {
+			color = int(c)
 		}
 	}
+	return map[string]interface{}{
+		"id":          rank.ID,
+		"name":        rank.Name,
+		"color":       color,
+		"hoist":       false,
+		"position":    rank.Position,
+		"permissions": strconv.FormatInt(rank.Permissions, 10),
+		"managed":     false,
+		"mentionable": false,
+	}
+}
 
+func toDiscordMessage(msg *models.Message) map[string]interface{} {
+	result := map[string]interface{}{
+		"id":         msg.ID,
+		"channel_id": msg.StreamID,
+		"content":    msg.Content,
+		"timestamp":  msg.CreatedAt.Format("2006-01-02T15:04:05.000000+00:00"),
+		"tts":        false,
+		"pinned":     msg.Pinned,
+		"type":       0,
+		"embeds":     []interface{}{},
+		"attachments": []interface{}{},
+		"mentions":   []interface{}{},
+		"mention_roles": []string{},
+		"mention_everyone": false,
+	}
+	if msg.Author != nil {
+		result["author"] = toDiscordUser(msg.Author)
+	} else {
+		result["author"] = map[string]interface{}{
+			"id":       msg.AuthorID,
+			"username": "unknown",
+		}
+	}
+	if msg.EditedAt != nil {
+		result["edited_timestamp"] = msg.EditedAt.Format("2006-01-02T15:04:05.000000+00:00")
+	} else {
+		result["edited_timestamp"] = nil
+	}
 	return result
 }
 
-func toDiscordAttachments(atts []models.Attachment) []map[string]interface{} {
-	if len(atts) == 0 {
-		return []map[string]interface{}{}
-	}
-	result := make([]map[string]interface{}, 0, len(atts))
-	for _, a := range atts {
-		result = append(result, map[string]interface{}{
-			"id":           a.ID,
-			"filename":     a.Filename,
-			"url":          a.URL,
-			"proxy_url":    a.URL,
-			"size":         a.SizeBytes,
-			"content_type": a.ContentType,
-		})
-	}
-	return result
+func discordError(w http.ResponseWriter, code int, msg string, status int) {
+	writeJSON(w, status, map[string]interface{}{
+		"code":    code,
+		"message": msg,
+	})
 }
 
-// Map RiftApp permission bits to Discord's permission bitfield format
-func mapPermissions(riftPerms int64) int64 {
-	var discord int64
-	if riftPerms&models.PermViewStreams != 0 {
-		discord |= 0x0000000000000400 // VIEW_CHANNEL
-	}
-	if riftPerms&models.PermSendMessages != 0 {
-		discord |= 0x0000000000000800 // SEND_MESSAGES
-	}
-	if riftPerms&models.PermManageMessages != 0 {
-		discord |= 0x0000000000002000 // MANAGE_MESSAGES
-	}
-	if riftPerms&models.PermManageStreams != 0 {
-		discord |= 0x0000000000000010 // MANAGE_CHANNELS
-	}
-	if riftPerms&models.PermManageHub != 0 {
-		discord |= 0x0000000000000020 // MANAGE_GUILD
-	}
-	if riftPerms&models.PermManageRanks != 0 {
-		discord |= 0x0000000010000000 // MANAGE_ROLES
-	}
-	if riftPerms&models.PermKickMembers != 0 {
-		discord |= 0x0000000000000002 // KICK_MEMBERS
-	}
-	if riftPerms&models.PermBanMembers != 0 {
-		discord |= 0x0000000000000004 // BAN_MEMBERS
-	}
-	if riftPerms&models.PermConnectVoice != 0 {
-		discord |= 0x0000000000100000 // CONNECT
-	}
-	if riftPerms&models.PermSpeakVoice != 0 {
-		discord |= 0x0000000000200000 // SPEAK
-	}
-	if riftPerms&models.PermAdministrator != 0 {
-		discord |= 0x0000000000000008 // ADMINISTRATOR
-	}
-	return discord
-}
-
-func colorToInt(hex string) int {
-	hex = strings.TrimPrefix(hex, "#")
-	val, err := strconv.ParseInt(hex, 16, 64)
-	if err != nil {
-		return 0
-	}
-	return int(val)
+// mapPermissions converts RiftApp permission bits to Discord-equivalent strings.
+func mapPermissions(perms int64) string {
+	return fmt.Sprintf("%d", perms)
 }

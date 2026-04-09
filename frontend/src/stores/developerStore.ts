@@ -7,13 +7,12 @@ interface DeveloperState {
   currentApp: Application | null;
   isSuperAdmin: boolean;
   isLoading: boolean;
-
   fetchMe: () => Promise<void>;
   fetchApplications: () => Promise<void>;
-  fetchApplication: (appId: string) => Promise<void>;
-  createApplication: (name: string) => Promise<{ application: Application; bot_token: string }>;
-  updateApplication: (appId: string, data: Partial<Application>) => Promise<void>;
-  deleteApplication: (appId: string) => Promise<void>;
+  fetchApplication: (id: string) => Promise<void>;
+  createApplication: (name: string) => Promise<{ app: Application; botToken: string }>;
+  updateApplication: (id: string, data: Partial<Application>) => Promise<void>;
+  deleteApplication: (id: string) => Promise<void>;
   setCurrentApp: (app: Application | null) => void;
   resetBotToken: (appId: string) => Promise<string>;
 }
@@ -26,10 +25,10 @@ export const useDeveloperStore = create<DeveloperState>((set, get) => ({
 
   fetchMe: async () => {
     try {
-      const resp = await api.getDeveloperMe();
-      set({ isSuperAdmin: resp.is_super_admin });
+      const res = await api.getDeveloperMe();
+      set({ isSuperAdmin: res.is_super_admin });
     } catch {
-      set({ isSuperAdmin: false });
+      // ignore
     }
   },
 
@@ -37,56 +36,51 @@ export const useDeveloperStore = create<DeveloperState>((set, get) => ({
     set({ isLoading: true });
     try {
       const apps = await api.listApplications();
-      set({ applications: apps ?? [], isLoading: false });
+      set({ applications: apps || [] });
     } catch {
-      set({ applications: [], isLoading: false });
-    }
-  },
-
-  fetchApplication: async (appId: string) => {
-    set({ isLoading: true });
-    try {
-      const app = await api.getApplication(appId);
-      set({ currentApp: app, isLoading: false });
-
-      const apps = get().applications;
-      const idx = apps.findIndex((a) => a.id === appId);
-      if (idx >= 0) {
-        const updated = [...apps];
-        updated[idx] = app;
-        set({ applications: updated });
-      }
-    } catch {
+      set({ applications: [] });
+    } finally {
       set({ isLoading: false });
     }
   },
 
+  fetchApplication: async (id: string) => {
+    try {
+      const app = await api.getApplication(id);
+      set({ currentApp: app });
+      const apps = get().applications.map(a => a.id === id ? app : a);
+      set({ applications: apps });
+    } catch {
+      // ignore
+    }
+  },
+
   createApplication: async (name: string) => {
-    const result = await api.createApplication(name);
-    set((s) => ({ applications: [result.application, ...s.applications] }));
-    return result;
+    const res = await api.createApplication(name);
+    set({ applications: [res.application, ...get().applications] });
+    return { app: res.application, botToken: res.bot_token };
   },
 
-  updateApplication: async (appId: string, data: Partial<Application>) => {
-    const updated = await api.updateApplication(appId, data);
-    set((s) => ({
-      applications: s.applications.map((a) => (a.id === appId ? updated : a)),
-      currentApp: s.currentApp?.id === appId ? updated : s.currentApp,
-    }));
+  updateApplication: async (id: string, data: Partial<Application>) => {
+    const app = await api.updateApplication(id, data);
+    set({
+      currentApp: app,
+      applications: get().applications.map(a => a.id === id ? app : a),
+    });
   },
 
-  deleteApplication: async (appId: string) => {
-    await api.deleteApplication(appId);
-    set((s) => ({
-      applications: s.applications.filter((a) => a.id !== appId),
-      currentApp: s.currentApp?.id === appId ? null : s.currentApp,
-    }));
+  deleteApplication: async (id: string) => {
+    await api.deleteApplication(id);
+    set({
+      applications: get().applications.filter(a => a.id !== id),
+      currentApp: get().currentApp?.id === id ? null : get().currentApp,
+    });
   },
 
   setCurrentApp: (app) => set({ currentApp: app }),
 
   resetBotToken: async (appId: string) => {
-    const result = await api.resetBotToken(appId);
-    return result.token;
+    const res = await api.resetBotToken(appId);
+    return res.bot_token;
   },
 }));

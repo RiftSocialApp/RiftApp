@@ -41,7 +41,13 @@ type RouterDeps struct {
 	Config                  *config.Config
 	UploadHandler           *UploadHandler
 	NotifRepo               *repository.NotificationRepo
-	DB                      interface{} // *pgxpool.Pool
+	DeveloperService        *service.DeveloperService
+	DeveloperRepo           *repository.DeveloperRepo
+	HubRepo                 *repository.HubRepo
+	StreamRepo              *repository.StreamRepo
+	MsgRepo                 *repository.MessageRepo
+	RankRepo                *repository.RankRepo
+	DB                      interface{}
 }
 
 func NewRouter(deps RouterDeps) *chi.Mux {
@@ -218,7 +224,6 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Post("/api/dms/{conversationID}/messages", dmH.SendMessage)
 		r.Put("/api/dms/{conversationID}/ack", dmH.AckDM)
 
-		// Developer Portal routes
 		if devH != nil {
 			r.Get("/api/developers/me", devH.GetMe)
 			r.Post("/api/developers/applications", devH.CreateApplication)
@@ -226,32 +231,24 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			r.Get("/api/developers/applications/{appID}", devH.GetApplication)
 			r.Patch("/api/developers/applications/{appID}", devH.UpdateApplication)
 			r.Delete("/api/developers/applications/{appID}", devH.DeleteApplication)
-
-			r.Post("/api/developers/applications/{appID}/bot/token", devH.ResetBotToken)
+			r.Post("/api/developers/applications/{appID}/bot/reset-token", devH.ResetBotToken)
 			r.Get("/api/developers/applications/{appID}/bot", devH.GetBotSettings)
 			r.Patch("/api/developers/applications/{appID}/bot", devH.UpdateBotSettings)
-
-			r.Get("/api/developers/applications/{appID}/oauth2/redirects", devH.ListOAuth2Redirects)
 			r.Post("/api/developers/applications/{appID}/oauth2/redirects", devH.CreateOAuth2Redirect)
+			r.Get("/api/developers/applications/{appID}/oauth2/redirects", devH.ListOAuth2Redirects)
 			r.Delete("/api/developers/applications/{appID}/oauth2/redirects/{redirectID}", devH.DeleteOAuth2Redirect)
-
-			r.Get("/api/developers/applications/{appID}/emojis", devH.ListAppEmojis)
 			r.Post("/api/developers/applications/{appID}/emojis", devH.CreateAppEmoji)
+			r.Get("/api/developers/applications/{appID}/emojis", devH.ListAppEmojis)
 			r.Delete("/api/developers/applications/{appID}/emojis/{emojiID}", devH.DeleteAppEmoji)
-
-			r.Get("/api/developers/applications/{appID}/webhooks", devH.ListAppWebhooks)
 			r.Post("/api/developers/applications/{appID}/webhooks", devH.CreateAppWebhook)
+			r.Get("/api/developers/applications/{appID}/webhooks", devH.ListAppWebhooks)
 			r.Delete("/api/developers/applications/{appID}/webhooks/{webhookID}", devH.DeleteAppWebhook)
-
-			r.Get("/api/developers/applications/{appID}/testers", devH.ListAppTesters)
 			r.Post("/api/developers/applications/{appID}/testers", devH.AddAppTester)
-			r.Delete("/api/developers/applications/{appID}/testers/{testerID}", devH.RemoveAppTester)
-
-			r.Get("/api/developers/applications/{appID}/rich-presence/assets", devH.ListRichPresenceAssets)
+			r.Get("/api/developers/applications/{appID}/testers", devH.ListAppTesters)
+			r.Delete("/api/developers/applications/{appID}/testers/{userID}", devH.RemoveAppTester)
 			r.Post("/api/developers/applications/{appID}/rich-presence/assets", devH.CreateRichPresenceAsset)
+			r.Get("/api/developers/applications/{appID}/rich-presence/assets", devH.ListRichPresenceAssets)
 			r.Delete("/api/developers/applications/{appID}/rich-presence/assets/{assetID}", devH.DeleteRichPresenceAsset)
-
-			r.Post("/api/developers/applications/{appID}/import-discord", devH.ImportDiscordBot)
 			r.Post("/api/developers/import-discord", devH.ImportDiscordBot)
 		}
 	})
@@ -270,27 +267,23 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Delete("/api/hubs/{hubID}/sounds/{soundID}", customH.DeleteSound)
 	})
 
-	// Discord-compatible API layer (v9/v10)
+	// Discord-compatible REST API (v9/v10) for bot libraries
 	if deps.DeveloperService != nil && deps.DeveloperRepo != nil && deps.HubRepo != nil {
-		baseURL := "http://localhost:" + deps.Config.Port
-		if len(deps.Config.AllowedOrigins) > 0 {
-			baseURL = deps.Config.AllowedOrigins[0]
-		}
 		dcH := NewDiscordCompatHandler(DiscordCompatDeps{
-			DeveloperService: deps.DeveloperService,
-			HubRepo:          deps.HubRepo,
-			StreamRepo:       deps.StreamRepo,
-			MsgRepo:          deps.MsgRepo,
-			RankRepo:         deps.RankRepo,
-			DeveloperRepo:    deps.DeveloperRepo,
-			BaseURL:          baseURL,
+			DevSvc:     deps.DeveloperService,
+			HubRepo:    deps.HubRepo,
+			StreamRepo: deps.StreamRepo,
+			MsgRepo:    deps.MsgRepo,
+			RankRepo:   deps.RankRepo,
+			DevRepo:    deps.DeveloperRepo,
+			BaseURL:    "",
 		})
-
 		gwH := NewDiscordGatewayHandler(
 			deps.DeveloperService,
+			deps.DeveloperRepo,
 			deps.HubRepo,
 			deps.StreamRepo,
-			deps.DeveloperRepo,
+			deps.RankRepo,
 			deps.Config.AllowedOrigins,
 		)
 
@@ -300,31 +293,25 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		mountDiscordRoutes := func(prefix string) {
 			r.Route(prefix, func(r chi.Router) {
 				r.Get("/gateway", dcH.GetGateway)
-
 				r.Group(func(r chi.Router) {
 					r.Use(dcH.AuthMiddleware)
-
 					r.Get("/gateway/bot", dcH.GetGatewayBot)
 					r.Get("/applications/@me", dcH.GetApplicationMe)
-
 					r.Get("/users/@me", dcH.GetUserMe)
-					r.Get("/users/{id}", dcH.GetUser)
-
-					r.Get("/guilds/{id}", dcH.GetGuild)
-					r.Get("/guilds/{id}/channels", dcH.GetGuildChannels)
-					r.Get("/guilds/{id}/members", dcH.GetGuildMembers)
-					r.Get("/guilds/{id}/members/{uid}", dcH.GetGuildMember)
-					r.Get("/guilds/{id}/roles", dcH.GetGuildRoles)
-
-					r.Get("/channels/{id}", dcH.GetChannel)
-					r.Get("/channels/{id}/messages", dcH.GetChannelMessages)
-					r.Post("/channels/{id}/messages", dcH.CreateChannelMessage)
-					r.Get("/channels/{id}/messages/{mid}", dcH.GetChannelMessage)
-					r.Delete("/channels/{id}/messages/{mid}", dcH.DeleteChannelMessage)
+					r.Get("/users/{userID}", dcH.GetUser)
+					r.Get("/guilds/{guildID}", dcH.GetGuild)
+					r.Get("/guilds/{guildID}/channels", dcH.GetGuildChannels)
+					r.Get("/guilds/{guildID}/members", dcH.GetGuildMembers)
+					r.Get("/guilds/{guildID}/members/{userID}", dcH.GetGuildMember)
+					r.Get("/guilds/{guildID}/roles", dcH.GetGuildRoles)
+					r.Get("/channels/{channelID}", dcH.GetChannel)
+					r.Get("/channels/{channelID}/messages", dcH.GetChannelMessages)
+					r.Post("/channels/{channelID}/messages", dcH.CreateChannelMessage)
+					r.Get("/channels/{channelID}/messages/{messageID}", dcH.GetChannelMessage)
+					r.Delete("/channels/{channelID}/messages/{messageID}", dcH.DeleteChannelMessage)
 				})
 			})
 		}
-
 		mountDiscordRoutes("/api/v10")
 		mountDiscordRoutes("/api/v9")
 	}

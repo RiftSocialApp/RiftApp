@@ -95,6 +95,10 @@ func main() {
 		customSvc.SetFileDeleter(uploadH)
 	}
 
+	// Developer portal
+	devRepo := repository.NewDeveloperRepo(db)
+	devSvc := service.NewDeveloperService(devRepo)
+
 	// Router
 	router := api.NewRouter(api.RouterDeps{
 		AuthService:             authService,
@@ -119,6 +123,12 @@ func main() {
 		Config:                  cfg,
 		UploadHandler:           uploadH,
 		NotifRepo:               notifRepo,
+		DeveloperService:        devSvc,
+		DeveloperRepo:           devRepo,
+		HubRepo:                 hubRepo,
+		StreamRepo:              streamRepo,
+		MsgRepo:                 msgRepo,
+		RankRepo:                rankRepo,
 	})
 
 	srv := &http.Server{
