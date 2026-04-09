@@ -681,6 +681,184 @@ function DeleteServerTab({ hub, isOwner, onCloseSettings }: { hub: Hub; isOwner:
    Members (Discord-style table)
    ═══════════════════════════════════════════════════ */
 
+const MEMBER_TABLE_DATE_FORMAT: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+};
+
+function formatMemberTableDate(value: string | null | undefined): string {
+  if (!value) return 'Unknown';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()) || parsed.getUTCFullYear() < 1900) {
+    return 'Unknown';
+  }
+  return parsed.toLocaleDateString(undefined, MEMBER_TABLE_DATE_FORMAT);
+}
+
+function DarkCheckboxMark({ checked, disabled = false }: { checked: boolean; disabled?: boolean }) {
+  return (
+    <span
+      className={`flex h-4 w-4 items-center justify-center rounded-[4px] border transition-colors ${
+        checked
+          ? 'border-[#7d84f7] bg-[#7d84f7] text-white'
+          : disabled
+            ? 'border-[#3d4048] bg-[#17181c] text-transparent'
+            : 'border-[#565b66] bg-[#17181c] text-transparent'
+      }`}
+    >
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 6L9 17l-5-5" />
+        </svg>
+      )}
+    </span>
+  );
+}
+
+function DarkCheckbox({
+  checked,
+  onToggle,
+  disabled = false,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      disabled={disabled}
+      onClick={onToggle}
+      className="rounded-[6px] focus:outline-none focus:ring-2 focus:ring-[#7d84f7]/60 focus:ring-offset-2 focus:ring-offset-[#23262d] disabled:cursor-not-allowed disabled:opacity-60"
+    >
+      <DarkCheckboxMark checked={checked} disabled={disabled} />
+    </button>
+  );
+}
+
+function MemberRoleEditorModal({
+  hub,
+  member,
+  roles,
+  busy,
+  onClose,
+  onToggleRole,
+}: {
+  hub: Hub;
+  member: User | null;
+  roles: HubRole[];
+  busy: boolean;
+  onClose: () => void;
+  onToggleRole: (member: User, nextRoleId: string) => void;
+}) {
+  return (
+    <ModalOverlay isOpen={member !== null} onClose={onClose} zIndex={350} className="p-4" contentClassName="w-full max-w-[420px]">
+      <div className="rounded-2xl border border-[#16171a] bg-[#202227] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
+        <div className="flex items-start justify-between gap-4 border-b border-white/5 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#8f96a3]">Member Roles</p>
+            <h2 className="mt-1 text-[18px] font-semibold text-white">{member?.display_name ?? 'Member'}</h2>
+            <p className="mt-1 text-[12px] leading-relaxed text-[#aeb4bf]">
+              Toggle this member&apos;s custom role. Owner and admin access remain unchanged.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2 text-[#8f96a3] transition-colors hover:bg-white/5 hover:text-white"
+            aria-label="Close role editor"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6L6 18" />
+              <path d="M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {member && (
+          <div className="px-5 py-4">
+            <div className="mb-4 flex items-center gap-3 rounded-2xl border border-white/5 bg-[#17181c] px-3 py-3">
+              {member.avatar_url ? (
+                <img src={publicAssetUrl(member.avatar_url)} alt="" className="h-11 w-11 rounded-full object-cover" />
+              ) : (
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#5865f2] text-[12px] font-bold text-white">
+                  {member.display_name.slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[14px] font-medium text-white">{member.display_name}</p>
+                <p className="truncate text-[12px] text-[#8f96a3]">@{member.username}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {roles.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-[#17181c] px-4 py-5 text-[13px] text-[#8f96a3]">
+                  No custom roles are available in this server yet.
+                </div>
+              ) : (
+                roles.map((role) => {
+                  const checked = member.rank_id === role.id;
+                  return (
+                    <button
+                      key={role.id}
+                      type="button"
+                      disabled={busy}
+                      onClick={() => onToggleRole(member, checked ? '' : role.id)}
+                      className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors ${
+                        checked
+                          ? 'border-[#7d84f7]/50 bg-[#7d84f7]/12'
+                          : 'border-white/5 bg-[#17181c] hover:border-white/10 hover:bg-[#1c1e23]'
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      <DarkCheckboxMark checked={checked} disabled={busy} />
+                      <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: role.color }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-medium text-white">{role.name}</span>
+                        <span className="block text-[11px] text-[#8f96a3]">
+                          {checked ? 'Click to remove this custom role.' : 'Click to assign this custom role.'}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4">
+              <div className="flex flex-wrap gap-1.5">
+                {member.id === hub.owner_id && (
+                  <span className="rounded-full bg-[#5865f2]/20 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#d5d8ff]">
+                    Owner
+                  </span>
+                )}
+                {member.role === 'admin' && member.id !== hub.owner_id && (
+                  <span className="rounded-full bg-[#57f287]/16 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-[#8bf7ad]">
+                    Admin
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl bg-[#2b2e34] px-3 py-2 text-[12px] font-medium text-[#d7dbe3] transition-colors hover:bg-[#33363d] hover:text-white"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </ModalOverlay>
+  );
+}
+
 function MembersDiscordTab({ hub }: { hub: Hub }) {
   const [showInList, setShowInList] = useState(true);
   const [members, setMembers] = useState<User[]>([]);
@@ -692,12 +870,18 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [assigningUserId, setAssigningUserId] = useState<string | null>(null);
+  const [roleEditorUserId, setRoleEditorUserId] = useState<string | null>(null);
   const pageSize = 10;
   const setActiveConversation = useDMStore((s) => s.setActiveConversation);
   const loadConversations = useDMStore((s) => s.loadConversations);
   const currentUser = useAuthStore((s) => s.user);
   const hubPermissions = useHubStore((s) => s.hubPermissions[hub.id]);
   const canManageRanks = hasPermission(hubPermissions, PermManageRanks);
+
+  const sortedRoles = useMemo(
+    () => [...roles].sort((a, b) => b.position - a.position || a.name.localeCompare(b.name)),
+    [roles],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -716,6 +900,12 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
       });
     return () => { cancelled = true; };
   }, [hub.id]);
+
+  useEffect(() => {
+    if (roleEditorUserId && !members.some((member) => member.id === roleEditorUserId)) {
+      setRoleEditorUserId(null);
+    }
+  }, [members, roleEditorUserId]);
 
   const handleRoleAssign = useCallback(async (member: User, nextRoleId: string) => {
     if (!canManageRanks || member.id === hub.owner_id) return;
@@ -750,12 +940,13 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
     if (sortKey === 'name') {
       return a.display_name.localeCompare(b.display_name);
     }
-    return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+    return new Date(b.joined_at ?? b.created_at).getTime() - new Date(a.joined_at ?? a.created_at).getTime();
   });
 
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const pageSafe = Math.min(page, totalPages);
   const slice = sorted.slice((pageSafe - 1) * pageSize, pageSafe * pageSize);
+  const roleEditorMember = members.find((member) => member.id === roleEditorUserId) ?? null;
 
   const toggleAllPage = () => {
     const ids = slice.map((m) => m.id);
@@ -790,12 +981,12 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
         checked={showInList}
         onChange={setShowInList}
       />
-      <div className="rounded-lg border border-[#1e1f22] bg-[#2b2d31] overflow-hidden">
-        <div className="px-4 py-3 border-b border-[#1e1f22] flex flex-wrap items-center justify-between gap-3">
+      <div className="overflow-hidden rounded-2xl border border-[#17181b] bg-[#23262d] shadow-[0_16px_40px_rgba(0,0,0,0.22)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-4 py-3">
           <h2 className="text-[15px] font-semibold text-white">Recent Members</h2>
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#949ba4] pointer-events-none">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-[#949ba4]">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
@@ -804,36 +995,35 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                 value={search}
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search"
-                className="pl-8 pr-3 py-1.5 rounded-[4px] bg-[#1e1f22] text-[13px] text-white w-40 sm:w-52 placeholder-[#949ba4] focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
+                className="w-40 rounded-[10px] border border-[#363942] bg-[#17181c] py-1.5 pl-8 pr-3 text-[13px] text-white placeholder-[#949ba4] focus:outline-none focus:ring-1 focus:ring-[#5865f2] sm:w-52"
               />
             </div>
             <button
               type="button"
               onClick={() => setSortKey((k) => (k === 'name' ? 'joined' : 'name'))}
-              className="px-3 py-1.5 rounded-[4px] bg-[#1e1f22] text-[12px] text-[#dbdee1] hover:bg-[#35373c]"
+              className="rounded-[10px] border border-[#363942] bg-[#17181c] px-3 py-1.5 text-[12px] text-[#dbdee1] transition-colors hover:bg-[#202229]"
             >
-              Sort
+              Sort: {sortKey === 'name' ? 'Name' : 'Joined'}
             </button>
-            <button type="button" className="px-3 py-1.5 rounded-[4px] text-[12px] font-medium text-[#ed4245] hover:bg-[#ed4245]/10">
+            <button type="button" className="rounded-[10px] px-3 py-1.5 text-[12px] font-medium text-[#ed4245] transition-colors hover:bg-[#ed4245]/10">
               Prune
             </button>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left text-[12px]">
-            <thead className="text-[#949ba4] uppercase tracking-wide border-b border-[#1e1f22] bg-[#1e1f22]/40">
+            <thead className="border-b border-white/5 text-[#8f96a3] uppercase tracking-wide">
               <tr>
                 <th className="w-10 px-3 py-2.5">
-                  <input
-                    type="checkbox"
-                    checked={slice.length > 0 && slice.every((m) => selected.has(m.id))}
-                    onChange={toggleAllPage}
-                    className="rounded border-[#4e5058]"
+                  <DarkCheckbox
+                    checked={slice.length > 0 && slice.every((member) => selected.has(member.id))}
+                    onToggle={toggleAllPage}
+                    ariaLabel="Select all members on this page"
                   />
                 </th>
                 <th className="px-2 py-2.5 font-semibold">Name</th>
                 <th className="px-2 py-2.5 font-semibold">Member Since</th>
-                <th className="px-2 py-2.5 font-semibold">Joined Discord</th>
+                <th className="px-2 py-2.5 font-semibold">Joined Rift</th>
                 <th className="px-2 py-2.5 font-semibold">Join Method</th>
                 <th className="px-2 py-2.5 font-semibold">Roles</th>
                 <th className="px-2 py-2.5 font-semibold w-10">Signals</th>
@@ -841,15 +1031,22 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
               </tr>
             </thead>
             <tbody>
-              {slice.map((member) => {
-                const role = member.rank_id ? roles.find((r) => r.id === member.rank_id) : undefined;
-                return (
-                  <tr key={member.id} className="border-b border-[#1e1f22]/80 hover:bg-[#35373c]/50">
+              {slice.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-12 text-center text-[13px] text-[#8f96a3]">
+                    No members match your current filters.
+                  </td>
+                </tr>
+              ) : (
+                slice.map((member) => {
+                  const role = member.rank_id ? roles.find((entry) => entry.id === member.rank_id) : undefined;
+                  const canEditRoles = canManageRanks && member.id !== hub.owner_id;
+                  return (
+                    <tr key={member.id} className="border-b border-white/5 transition-colors hover:bg-white/[0.03]">
                     <td className="px-3 py-2 align-middle">
-                      <input
-                        type="checkbox"
+                      <DarkCheckbox
                         checked={selected.has(member.id)}
-                        onChange={() => {
+                        onToggle={() => {
                           setSelected((prev) => {
                             const next = new Set(prev);
                             if (next.has(member.id)) next.delete(member.id);
@@ -857,7 +1054,7 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                             return next;
                           });
                         }}
-                        className="rounded border-[#4e5058]"
+                        ariaLabel={`Select ${member.display_name}`}
                       />
                     </td>
                     <td className="px-2 py-2 align-middle">
@@ -870,7 +1067,7 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                               {member.display_name.slice(0, 2).toUpperCase()}
                             </div>
                           )}
-                          <StatusDot userId={member.id} fallbackStatus={member.status} size="sm" className="absolute -bottom-0.5 -right-0.5 border-2 border-[#2b2d31]" />
+                          <StatusDot userId={member.id} fallbackStatus={member.status} size="sm" className="absolute -bottom-0.5 -right-0.5 border-2 border-[#23262d]" />
                         </div>
                         <div className="min-w-0">
                           <p className="text-[13px] text-white font-medium truncate">{member.display_name}</p>
@@ -878,9 +1075,11 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 py-2 text-[#b5bac1] whitespace-nowrap">—</td>
                     <td className="px-2 py-2 text-[#b5bac1] whitespace-nowrap">
-                      {formatDistanceToNow(new Date(member.created_at), { addSuffix: true })}
+                      {formatMemberTableDate(member.joined_at)}
+                    </td>
+                    <td className="px-2 py-2 text-[#b5bac1] whitespace-nowrap">
+                      {formatMemberTableDate(member.created_at)}
                     </td>
                     <td className="px-2 py-2">
                       <span className="inline-flex items-center gap-1 text-[#00a8fc]">
@@ -892,32 +1091,52 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                       </span>
                     </td>
                     <td className="px-2 py-2">
-                      <div className="flex flex-wrap gap-1 max-w-[140px]">
-                        {member.id === hub.owner_id && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#5865f2]/25 text-[#c9cdfb]">Owner</span>
-                        )}
-                        {member.role === 'admin' && member.id !== hub.owner_id && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#57f287]/20 text-[#57f287]">Admin</span>
-                        )}
-                        {role && (
-                          <span className="px-1.5 py-0.5 rounded-full text-[10px] font-semibold truncate max-w-[100px]" style={{ backgroundColor: `${role.color}33`, color: role.color }}>
-                            {role.name}
-                          </span>
+                      <div
+                        className={`group relative min-h-[42px] rounded-xl border border-transparent px-2 py-1.5 transition-colors ${
+                          canEditRoles ? 'cursor-pointer hover:border-white/5 hover:bg-[#17181c]' : ''
+                        }`}
+                        onClick={canEditRoles ? () => setRoleEditorUserId(member.id) : undefined}
+                        onKeyDown={canEditRoles ? (event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            setRoleEditorUserId(member.id);
+                          }
+                        } : undefined}
+                        role={canEditRoles ? 'button' : undefined}
+                        tabIndex={canEditRoles ? 0 : undefined}
+                      >
+                        <div className="flex max-w-[180px] flex-wrap items-center gap-1 pr-10">
+                          {member.id === hub.owner_id && (
+                            <span className="rounded-full bg-[#5865f2]/25 px-1.5 py-0.5 text-[10px] font-semibold text-[#c9cdfb]">Owner</span>
+                          )}
+                          {member.role === 'admin' && member.id !== hub.owner_id && (
+                            <span className="rounded-full bg-[#57f287]/20 px-1.5 py-0.5 text-[10px] font-semibold text-[#57f287]">Admin</span>
+                          )}
+                          {role ? (
+                            <span className="max-w-[118px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: `${role.color}33`, color: role.color }}>
+                              {role.name}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-[#7f8692]">No custom role</span>
+                          )}
+                        </div>
+                        {canEditRoles && (
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setRoleEditorUserId(member.id);
+                            }}
+                            className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-[#2c3038] text-[#d4d8df] opacity-0 transition-all hover:bg-[#353943] hover:text-white group-hover:opacity-100 group-focus-within:opacity-100"
+                            aria-label={`Edit roles for ${member.display_name}`}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                              <path d="M12 5v14" />
+                              <path d="M5 12h14" />
+                            </svg>
+                          </button>
                         )}
                       </div>
-                      {canManageRanks && member.id !== hub.owner_id && (
-                        <select
-                          value={member.rank_id ?? ''}
-                          onChange={(e) => void handleRoleAssign(member, e.target.value)}
-                          disabled={assigningUserId === member.id}
-                          className="mt-1 w-full max-w-[120px] bg-[#1e1f22] text-[#dbdee1] text-[11px] rounded px-1 py-0.5 border border-[#404249]"
-                        >
-                          <option value="">Role…</option>
-                          {roles.map((r) => (
-                            <option key={r.id} value={r.id}>{r.name}</option>
-                          ))}
-                        </select>
-                      )}
                     </td>
                     <td className="px-2 py-2 text-[#949ba4]">
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="opacity-60">
@@ -941,24 +1160,21 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                         </button>
                       )}
                     </td>
-                  </tr>
-                );
-              })}
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-3 border-t border-[#1e1f22] flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#b5bac1]">
-          <span>
-            {slice.length === 0
-              ? `Showing 0 of ${sorted.length}`
-              : `Showing ${(pageSafe - 1) * pageSize + 1}–${(pageSafe - 1) * pageSize + slice.length} of ${sorted.length}`}
-          </span>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/5 px-4 py-3 text-[12px] text-[#b5bac1]">
+          <span>Showing {sorted.length} member{sorted.length === 1 ? '' : 's'}</span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               disabled={pageSafe <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="px-2 py-1 rounded bg-[#1e1f22] text-[#dbdee1] disabled:opacity-40"
+              className="rounded-[10px] border border-[#363942] bg-[#17181c] px-2 py-1 text-[#dbdee1] transition-colors disabled:opacity-40"
             >
               Back
             </button>
@@ -968,7 +1184,7 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
                   key={n}
                   type="button"
                   onClick={() => setPage(n)}
-                  className={`min-w-[28px] py-1 rounded text-[12px] ${n === pageSafe ? 'bg-[#5865f2] text-white' : 'bg-[#1e1f22] text-[#b5bac1] hover:bg-[#35373c]'}`}
+                  className={`min-w-[28px] rounded-[10px] py-1 text-[12px] ${n === pageSafe ? 'bg-[#5865f2] text-white' : 'border border-[#363942] bg-[#17181c] text-[#b5bac1] hover:bg-[#202229]'}`}
                 >
                   {n}
                 </button>
@@ -978,13 +1194,22 @@ function MembersDiscordTab({ hub }: { hub: Hub }) {
               type="button"
               disabled={pageSafe >= totalPages}
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="px-2 py-1 rounded bg-[#1e1f22] text-[#dbdee1] disabled:opacity-40"
+              className="rounded-[10px] border border-[#363942] bg-[#17181c] px-2 py-1 text-[#dbdee1] transition-colors disabled:opacity-40"
             >
               Next
             </button>
           </div>
         </div>
       </div>
+
+      <MemberRoleEditorModal
+        hub={hub}
+        member={roleEditorMember}
+        roles={sortedRoles}
+        busy={assigningUserId === roleEditorMember?.id}
+        onClose={() => setRoleEditorUserId(null)}
+        onToggleRole={(member, nextRoleId) => void handleRoleAssign(member, nextRoleId)}
+      />
     </div>
   );
 }

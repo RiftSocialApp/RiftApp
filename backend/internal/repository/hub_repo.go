@@ -184,13 +184,14 @@ func (r *HubRepo) GetOwnerID(ctx context.Context, hubID string) (string, error) 
 
 type MemberWithRole struct {
 	models.User
-	Role   string  `json:"role"`
-	RankID *string `json:"rank_id,omitempty"`
+	Role     string    `json:"role"`
+	RankID   *string   `json:"rank_id,omitempty"`
+	JoinedAt time.Time `json:"joined_at"`
 }
 
 func (r *HubRepo) ListMembers(ctx context.Context, hubID string) ([]MemberWithRole, error) {
 	rows, err := r.db.Query(ctx,
-		`SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, u.status, u.last_seen, hm.role, hm.rank_id
+		`SELECT u.id, u.username, u.display_name, u.avatar_url, u.bio, u.status, u.last_seen, u.created_at, u.updated_at, u.is_bot, hm.role, hm.rank_id, hm.joined_at
 		 FROM users u JOIN hub_members hm ON u.id = hm.user_id
 		 WHERE hm.hub_id = $1
 		 ORDER BY CASE hm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END, hm.joined_at`, hubID)
@@ -202,7 +203,7 @@ func (r *HubRepo) ListMembers(ctx context.Context, hubID string) ([]MemberWithRo
 	var members []MemberWithRole
 	for rows.Next() {
 		var m MemberWithRole
-		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarURL, &m.Bio, &m.Status, &m.LastSeen, &m.Role, &m.RankID); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.DisplayName, &m.AvatarURL, &m.Bio, &m.Status, &m.LastSeen, &m.CreatedAt, &m.UpdatedAt, &m.IsBot, &m.Role, &m.RankID, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, m)

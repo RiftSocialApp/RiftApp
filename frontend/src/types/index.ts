@@ -14,6 +14,8 @@ export interface User {
   role?: string;
   /** Set when user is loaded from `GET /hubs/:id/members` and has a custom role assigned. */
   rank_id?: string;
+  /** Set when user is loaded from `GET /hubs/:id/members`; when they joined that hub. */
+  joined_at?: string;
 }
 
 export interface HubRole {
