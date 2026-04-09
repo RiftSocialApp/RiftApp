@@ -1231,16 +1231,23 @@ async function requestDesktopScreenSharePicker(kind: ScreenShareKind): Promise<b
     return false;
   }
 
+  const currentState = useVoiceStore.getState();
+  if (currentState.desktopScreenSharePickerLoading || currentState.screenShareRequesting) {
+    return true;
+  }
+
   useVoiceStore.setState({
     desktopScreenSharePickerOpen: false,
     desktopScreenSharePickerLoading: true,
     desktopScreenShareSources: [],
+    screenShareRequesting: true,
   });
   setScreenShareNotice(null);
 
   try {
     const sources = filterDesktopScreenShareSources(await desktop.listDisplaySources(), kind);
     if (!sources.length) {
+      useVoiceStore.setState({ screenShareRequesting: false });
       closeDesktopScreenSharePicker();
       setScreenShareNotice({
         tone: 'error',
@@ -1253,9 +1260,11 @@ async function requestDesktopScreenSharePicker(kind: ScreenShareKind): Promise<b
       desktopScreenSharePickerOpen: true,
       desktopScreenSharePickerLoading: false,
       desktopScreenShareSources: sources,
+      screenShareRequesting: false,
     });
   } catch (err) {
     console.error('Failed to load desktop screen share sources:', err);
+    useVoiceStore.setState({ screenShareRequesting: false });
     closeDesktopScreenSharePicker();
     setScreenShareNotice({ tone: 'error', message: 'Unable to open screen share picker' });
   }

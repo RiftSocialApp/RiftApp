@@ -49,15 +49,14 @@ function EmptyThumbnail({ kind }: { kind: 'screen' | 'window' }) {
 
 export default function DesktopScreenSharePickerModal() {
   const isOpen = useVoiceStore((s) => s.desktopScreenSharePickerOpen);
-  const isLoading = useVoiceStore((s) => s.desktopScreenSharePickerLoading);
   const sources = useVoiceStore((s) => s.desktopScreenShareSources);
   const requesting = useVoiceStore((s) => s.screenShareRequesting);
   const kind = useVoiceStore((s) => s.screenShareKind);
   const closePicker = useVoiceStore((s) => s.closeDesktopScreenSharePicker);
   const chooseSource = useVoiceStore((s) => s.chooseDesktopScreenShareSource);
 
-  const visible = isOpen || isLoading;
-  const canClose = !isLoading && !requesting;
+  const visible = isOpen;
+  const canClose = !requesting;
   const description = useMemo(() => pickerDescription(kind), [kind]);
 
   if (!visible) {
@@ -81,60 +80,50 @@ export default function DesktopScreenSharePickerModal() {
         </div>
 
         <div className="px-6 pb-6 pt-5">
-          {isLoading ? (
-            <div className="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-riftapp-border/70 bg-riftapp-content/35 text-center text-riftapp-text-muted">
-              <div className="h-10 w-10 animate-spin rounded-full border-2 border-riftapp-border/70 border-t-riftapp-accent" />
-              <div>
-                <p className="text-sm font-semibold text-white">Loading share targets</p>
-                <p className="mt-1 text-xs text-riftapp-text-muted">Rift is asking the desktop shell for available screens and windows.</p>
-              </div>
-            </div>
-          ) : (
-            <div className="grid max-h-[68vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
-              {sources.map((source) => (
-                <button
-                  key={source.id}
-                  type="button"
-                  disabled={requesting}
-                  onClick={() => void chooseSource(source.id)}
-                  className="group overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-content-elevated text-left transition-all duration-150 hover:border-riftapp-accent/60 hover:bg-riftapp-content disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  <div className="relative aspect-video overflow-hidden border-b border-riftapp-border/60 bg-riftapp-bg">
-                    {source.thumbnailDataUrl ? (
-                      <img
-                        src={source.thumbnailDataUrl}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
-                      />
-                    ) : (
-                      <EmptyThumbnail kind={source.kind} />
-                    )}
-                    <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-black/20 bg-black/55 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
+          <div className="grid max-h-[68vh] grid-cols-1 gap-4 overflow-y-auto pr-1 sm:grid-cols-2">
+            {sources.map((source) => (
+              <button
+                key={source.id}
+                type="button"
+                disabled={requesting}
+                onClick={() => void chooseSource(source.id)}
+                className="group overflow-hidden rounded-2xl border border-riftapp-border/60 bg-riftapp-content-elevated text-left transition-all duration-150 hover:border-riftapp-accent/60 hover:bg-riftapp-content disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <div className="relative aspect-video overflow-hidden border-b border-riftapp-border/60 bg-riftapp-bg">
+                  {source.thumbnailDataUrl ? (
+                    <img
+                      src={source.thumbnailDataUrl}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.015]"
+                    />
+                  ) : (
+                    <EmptyThumbnail kind={source.kind} />
+                  )}
+                  <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-full border border-black/20 bg-black/55 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/90 backdrop-blur-sm">
+                    <SourceKindIcon kind={source.kind} />
+                    {source.kind === 'screen' ? 'Screen' : 'Window'}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  {source.appIconDataUrl ? (
+                    <img src={source.appIconDataUrl} alt="" className="h-9 w-9 rounded-xl border border-riftapp-border/60 bg-riftapp-panel object-contain p-1" />
+                  ) : (
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-riftapp-border/60 bg-riftapp-panel text-riftapp-text-muted">
                       <SourceKindIcon kind={source.kind} />
-                      {source.kind === 'screen' ? 'Screen' : 'Window'}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-3 px-4 py-3.5">
-                    {source.appIconDataUrl ? (
-                      <img src={source.appIconDataUrl} alt="" className="h-9 w-9 rounded-xl border border-riftapp-border/60 bg-riftapp-panel object-contain p-1" />
-                    ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-riftapp-border/60 bg-riftapp-panel text-riftapp-text-muted">
-                        <SourceKindIcon kind={source.kind} />
-                      </div>
-                    )}
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-white">{source.name}</p>
-                      <p className="mt-0.5 text-xs text-riftapp-text-muted">
-                        {source.kind === 'screen' ? 'Display capture' : 'Application window'}
-                      </p>
                     </div>
+                  )}
+
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-white">{source.name}</p>
+                    <p className="mt-0.5 text-xs text-riftapp-text-muted">
+                      {source.kind === 'screen' ? 'Display capture' : 'Application window'}
+                    </p>
                   </div>
-                </button>
-              ))}
-            </div>
-          )}
+                </div>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     </ModalOverlay>
