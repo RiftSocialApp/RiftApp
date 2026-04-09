@@ -125,16 +125,19 @@ function VoiceSquareButton({
   onClick,
   disabled,
   active,
+  buttonRef,
   children,
 }: {
   title: string;
   onClick?: () => void;
   disabled?: boolean;
   active?: boolean;
+  buttonRef?: RefObject<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       title={title}
       onClick={onClick}
@@ -536,6 +539,7 @@ function VoiceControlsRow({
   screenShareRequesting,
   soundboardOpen,
   disabled,
+  soundboardTriggerRef,
   onToggleCamera,
   onToggleScreenShare,
   onToggleSoundboard,
@@ -545,6 +549,7 @@ function VoiceControlsRow({
   screenShareRequesting: boolean;
   soundboardOpen: boolean;
   disabled: boolean;
+  soundboardTriggerRef: RefObject<HTMLButtonElement>;
   onToggleCamera: () => void;
   onToggleScreenShare: () => void;
   onToggleSoundboard: () => void;
@@ -577,7 +582,13 @@ function VoiceControlsRow({
         <ActivitiesIcon size={18} />
       </VoiceSquareButton>
 
-      <VoiceSquareButton title="Soundboard" onClick={onToggleSoundboard} disabled={disabled} active={soundboardOpen}>
+      <VoiceSquareButton
+        title="Soundboard"
+        onClick={onToggleSoundboard}
+        disabled={disabled}
+        active={soundboardOpen}
+        buttonRef={soundboardTriggerRef}
+      >
         <SoundboardControlIcon size={18} />
       </VoiceSquareButton>
     </div>
@@ -683,9 +694,10 @@ export default function VoiceBottomBar() {
   const connectionBars = useVoiceStore((s) => s.connectionStats.bars);
   const connectionEndpoint = useVoiceStore((s) => s.connectionEndpoint);
 
-  const activeHubId = useHubStore((s) => s.activeHubId);
   const hubs = useHubStore((s) => s.hubs);
   const streams = useStreamStore((s) => s.streams);
+  const streamHubMap = useStreamStore((s) => s.streamHubMap);
+  const hubLayoutCache = useStreamStore((s) => s.hubLayoutCache);
   const activeVoiceChannelId = useVoiceChannelUiStore((s) => s.activeChannelId);
   const closeVoiceView = useVoiceChannelUiStore((s) => s.closeVoiceView);
 
@@ -698,9 +710,31 @@ export default function VoiceBottomBar() {
   const [pingHistory, setPingHistory] = useState<number[]>([]);
   const connectionTriggerRef = useRef<HTMLButtonElement>(null);
   const connectionPopoverRef = useRef<HTMLDivElement>(null);
+  const soundboardTriggerRef = useRef<HTMLButtonElement>(null);
+  const soundboardPopoverRef = useRef<HTMLDivElement>(null);
 
-  const activeHub = hubs.find((hub) => hub.id === activeHubId);
-  const voiceStream = streams.find((stream) => stream.id === (voiceStreamId ?? activeVoiceChannelId));
+  const connectedVoiceStreamId = voiceStreamId ?? activeVoiceChannelId;
+  const voiceStream = useMemo(() => {
+    if (!connectedVoiceStreamId) {
+      return null;
+    }
+
+    const currentStream = streams.find((stream) => stream.id === connectedVoiceStreamId);
+    if (currentStream) {
+      return currentStream;
+    }
+
+    for (const cachedLayout of Object.values(hubLayoutCache)) {
+      const cachedStream = cachedLayout.streams.find((stream) => stream.id === connectedVoiceStreamId);
+      if (cachedStream) {
+        return cachedStream;
+      }
+    }
+
+    return null;
+  }, [connectedVoiceStreamId, hubLayoutCache, streams]);
+  const voiceHubId = voiceStream?.hub_id ?? (connectedVoiceStreamId ? streamHubMap[connectedVoiceStreamId] ?? null : null);
+  const voiceHub = hubs.find((hub) => hub.id === voiceHubId) ?? null;
   const inVoice = voiceConnected || voiceConnecting;
   const controlsDisabled = !voiceConnected || voiceConnecting;
   const averagePingMs = useMemo(() => averagePing(pingHistory), [pingHistory]);
@@ -733,8 +767,28 @@ export default function VoiceBottomBar() {
   }, [connectionPopoverOpen]);
 
   useEffect(() => {
+    if (!soundboardOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (soundboardPopoverRef.current?.contains(target) || soundboardTriggerRef.current?.contains(target)) {
+        return;
+      }
+      setSoundboardOpen(false);
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+    };
+  }, [soundboardOpen]);
+
+  useEffect(() => {
     if (!inVoice) {
       setConnectionPopoverOpen(false);
+      setSoundboardOpen(false);
       setPingHistory([]);
       return;
     }
@@ -770,7 +824,13 @@ export default function VoiceBottomBar() {
   }, [openSettings]);
 
   const handleToggleConnectionPopover = useCallback(() => {
+    setSoundboardOpen(false);
     setConnectionPopoverOpen((current) => !current);
+  }, []);
+
+  const handleToggleSoundboard = useCallback(() => {
+    setConnectionPopoverOpen(false);
+    setSoundboardOpen((current) => !current);
   }, []);
 
   const voiceStatus = useMemo(() => {
@@ -794,7 +854,7 @@ export default function VoiceBottomBar() {
 
   const currentStatusText = statusLabel(liveStatus ?? user.status);
   const channelLabel = voiceStream
-    ? `${voiceStream.name}${activeHub ? ` / ${activeHub.name}` : ''}`
+    ? `${voiceStream.name}${voiceHub ? ` / ${voiceHub.name}` : ''}`
     : 'Voice Channel';
 
   return (
@@ -827,17 +887,21 @@ export default function VoiceBottomBar() {
             screenShareRequesting={voiceScreenShareRequesting}
             soundboardOpen={soundboardOpen}
             disabled={controlsDisabled}
+            soundboardTriggerRef={soundboardTriggerRef}
             onToggleCamera={voiceToggleCamera}
             onToggleScreenShare={voiceToggleScreenShare}
-            onToggleSoundboard={() => setSoundboardOpen((value) => !value)}
+            onToggleSoundboard={handleToggleSoundboard}
           />
-
-          {soundboardOpen && activeHubId ? (
-            <div className="px-3 pb-3">
-              <SoundboardPanel hubId={activeHubId} onClose={() => setSoundboardOpen(false)} />
-            </div>
-          ) : null}
         </>
+      ) : null}
+
+      {soundboardOpen && voiceHubId ? (
+        <div
+          ref={soundboardPopoverRef}
+          className="absolute bottom-full left-3 z-40 mb-2 w-[398px] max-w-[calc(100vw-24px)]"
+        >
+          <SoundboardPanel hubId={voiceHubId} onClose={() => setSoundboardOpen(false)} />
+        </div>
       ) : null}
 
       {voiceScreenShareNotice ? (
