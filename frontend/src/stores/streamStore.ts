@@ -201,10 +201,6 @@ export const useStreamStore = create<StreamState>((set, get) => ({
       return;
     }
 
-    if (!currentActiveStreamId) {
-      return;
-    }
-
     const nextActiveStreamId = streams.find((stream) => stream.type === 0)?.id ?? null;
     if (!isActiveHub()) {
       return;
