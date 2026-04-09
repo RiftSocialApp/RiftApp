@@ -167,6 +167,7 @@ export const useDMStore = create<DMState>((set, get) => ({
       }
 
       const isActive = nextMessage.conversation_id === s.activeConversationId;
+	  const alreadyKnown = s.dmMessages.some((m) => m.id === nextMessage.id);
 
       const conversations = s.conversations.map((c) => {
         if (c.id !== nextMessage.conversation_id) return c;
@@ -174,7 +175,7 @@ export const useDMStore = create<DMState>((set, get) => ({
           ...c,
           last_message: nextMessage,
           updated_at: nextMessage.created_at,
-          unread_count: isActive ? 0 : (c.unread_count ?? 0) + 1,
+		  unread_count: isActive || alreadyKnown ? 0 : (c.unread_count ?? 0) + 1,
         };
       }).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
 
@@ -183,7 +184,7 @@ export const useDMStore = create<DMState>((set, get) => ({
       if (!isActive) {
         return { conversations, dmTotalUnread };
       }
-      if (s.dmMessages.some((m) => m.id === nextMessage.id)) {
+      if (alreadyKnown) {
         return { conversations, dmTotalUnread };
       }
       return { dmMessages: [...s.dmMessages, nextMessage], conversations, dmTotalUnread };

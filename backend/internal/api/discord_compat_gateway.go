@@ -16,24 +16,24 @@ import (
 )
 
 const (
-	GatewayOpDispatch        = 0
-	GatewayOpHeartbeat       = 1
-	GatewayOpIdentify        = 2
-	GatewayOpStatusUpdate    = 3
-	GatewayOpVoiceStateUpdate = 4
-	GatewayOpResume          = 6
-	GatewayOpReconnect       = 7
+	GatewayOpDispatch            = 0
+	GatewayOpHeartbeat           = 1
+	GatewayOpIdentify            = 2
+	GatewayOpStatusUpdate        = 3
+	GatewayOpVoiceStateUpdate    = 4
+	GatewayOpResume              = 6
+	GatewayOpReconnect           = 7
 	GatewayOpRequestGuildMembers = 8
-	GatewayOpInvalidSession  = 9
-	GatewayOpHello           = 10
-	GatewayOpHeartbeatAck    = 11
+	GatewayOpInvalidSession      = 9
+	GatewayOpHello               = 10
+	GatewayOpHeartbeatAck        = 11
 )
 
 type GatewayMessage struct {
-	Op int              `json:"op"`
-	D  json.RawMessage  `json:"d,omitempty"`
-	S  *int             `json:"s,omitempty"`
-	T  *string          `json:"t,omitempty"`
+	Op int             `json:"op"`
+	D  json.RawMessage `json:"d,omitempty"`
+	S  *int            `json:"s,omitempty"`
+	T  *string         `json:"t,omitempty"`
 }
 
 type IdentifyPayload struct {
@@ -49,8 +49,8 @@ type IdentifyPayload struct {
 type DiscordGatewayHandler struct {
 	devSvc    *service.DeveloperService
 	devRepo   *repository.DeveloperRepo
-	hubRepo   *repository.HubRepo
-	streamRepo *repository.StreamRepo
+	hubSvc    *service.HubService
+	streamSvc *service.StreamService
 	rankRepo  *repository.RankRepo
 	upgrader  websocket.Upgrader
 }
@@ -58,19 +58,33 @@ type DiscordGatewayHandler struct {
 func NewDiscordGatewayHandler(
 	devSvc *service.DeveloperService,
 	devRepo *repository.DeveloperRepo,
-	hubRepo *repository.HubRepo,
-	streamRepo *repository.StreamRepo,
+	hubSvc *service.HubService,
+	streamSvc *service.StreamService,
 	rankRepo *repository.RankRepo,
 	origins []string,
 ) *DiscordGatewayHandler {
+	originSet := make(map[string]struct{}, len(origins))
+	for _, origin := range origins {
+		originSet[origin] = struct{}{}
+	}
 	return &DiscordGatewayHandler{
-		devSvc:     devSvc,
-		devRepo:    devRepo,
-		hubRepo:    hubRepo,
-		streamRepo: streamRepo,
-		rankRepo:   rankRepo,
+		devSvc:    devSvc,
+		devRepo:   devRepo,
+		hubSvc:    hubSvc,
+		streamSvc: streamSvc,
+		rankRepo:  rankRepo,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
+			CheckOrigin: func(r *http.Request) bool {
+				if len(originSet) == 0 {
+					return true
+				}
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				_, ok := originSet[origin]
+				return ok
+			},
 		},
 	}
 }
@@ -92,7 +106,11 @@ func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		defer writeMu.Unlock()
 		msg := GatewayMessage{Op: op}
 		if d != nil {
-			raw, _ := json.Marshal(d)
+			raw, err := json.Marshal(d)
+			if err != nil {
+				log.Printf("gateway: marshal error: %v", err)
+				return
+			}
 			msg.D = raw
 		}
 		if eventName != "" {
@@ -100,7 +118,9 @@ func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 			s := int(atomic.AddInt64(&seq, 1))
 			msg.S = &s
 		}
-		conn.WriteJSON(msg)
+		if err := conn.WriteJSON(msg); err != nil {
+			log.Printf("gateway: write error: %v", err)
+		}
 	}
 
 	heartbeatInterval := 41250
@@ -175,7 +195,7 @@ func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *DiscordGatewayHandler) getUnavailableGuilds(ctx context.Context, botUserID string) []map[string]interface{} {
-	hubs, _ := h.hubRepo.ListByUser(ctx, botUserID)
+	hubs, _ := h.hubSvc.List(ctx, botUserID)
 	guilds := make([]map[string]interface{}, 0, len(hubs))
 	for _, hub := range hubs {
 		guilds = append(guilds, map[string]interface{}{
@@ -187,24 +207,33 @@ func (h *DiscordGatewayHandler) getUnavailableGuilds(ctx context.Context, botUse
 }
 
 func (h *DiscordGatewayHandler) sendGuildCreates(ctx context.Context, botUserID string, send func(int, interface{}, string)) {
-	hubs, err := h.hubRepo.ListByUser(ctx, botUserID)
+	hubs, err := h.hubSvc.List(ctx, botUserID)
 	if err != nil {
 		return
 	}
 	for _, hub := range hubs {
 		channels := make([]map[string]interface{}, 0)
-		streams, _ := h.streamRepo.ListByHub(ctx, hub.ID)
+		streams, err := h.streamSvc.List(ctx, hub.ID, botUserID)
+		if err != nil {
+			log.Printf("gateway: failed to load visible channels for hub %s: %v", hub.ID, err)
+			streams = nil
+		}
 		for _, s := range streams {
 			channels = append(channels, toDiscordChannel(&s))
 		}
 
-		roles := make([]map[string]interface{}, 0)
-		ranks, _ := h.rankRepo.ListByHub(ctx, hub.ID)
-		for _, rank := range ranks {
-			roles = append(roles, toDiscordRole(&rank))
+		ranks, err := h.rankRepo.ListByHub(ctx, hub.ID)
+		if err != nil {
+			log.Printf("gateway: failed to load roles for hub %s: %v", hub.ID, err)
+			ranks = nil
 		}
+		roles := discordRolesForGuild(&hub, ranks)
 
-		members, _ := h.hubRepo.ListMembers(ctx, hub.ID)
+		members, err := h.hubSvc.Members(ctx, hub.ID, botUserID)
+		if err != nil {
+			log.Printf("gateway: failed to load members for hub %s: %v", hub.ID, err)
+			members = nil
+		}
 		discordMembers := make([]map[string]interface{}, 0, len(members))
 		for _, m := range members {
 			discordMembers = append(discordMembers, toDiscordMember(&m))
@@ -214,7 +243,7 @@ func (h *DiscordGatewayHandler) sendGuildCreates(ctx context.Context, botUserID 
 		g["channels"] = channels
 		g["roles"] = roles
 		g["members"] = discordMembers
-		g["member_count"] = len(members)
+		g["member_count"] = len(discordMembers)
 
 		send(GatewayOpDispatch, g, "GUILD_CREATE")
 	}

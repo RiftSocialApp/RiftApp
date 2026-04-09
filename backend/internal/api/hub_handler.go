@@ -30,7 +30,7 @@ func (h *HubHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeAppError(w, err)
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	hub, err := h.svc.Create(r.Context(), userID, body.Name)
@@ -57,7 +57,7 @@ func (h *HubHandler) ImportDiscordTemplate(w http.ResponseWriter, r *http.Reques
 		Input string `json:"input"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeAppError(w, err)
+		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	hub, err := h.svc.ImportDiscordTemplate(r.Context(), userID, body.Input)
@@ -160,7 +160,10 @@ func (h *HubHandler) CreateInvite(w http.ResponseWriter, r *http.Request) {
 		MaxUses   int  `json:"max_uses"`
 		ExpiresIn *int `json:"expires_in"`
 	}
-	readJSON(r, &body)
+	if err := readJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	invite, err := h.svc.CreateInvite(r.Context(), hubID, userID, body.MaxUses, body.ExpiresIn)
 	if err != nil {
 		writeAppError(w, err)

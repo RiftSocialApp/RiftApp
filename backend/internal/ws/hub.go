@@ -22,8 +22,6 @@ type streamSubscription struct {
 	authorized bool
 }
 
-const voiceJoinGrantTTL = 30 * time.Second
-
 type Hub struct {
 	clients                map[string]map[string]*Client             // userID -> sessionID -> client
 	streamSubs             map[string]map[string]*streamSubscription // streamID -> sessionKey -> subscription
@@ -145,11 +143,15 @@ func (h *Hub) setPresence(userID string, status int) {
 	ctx := context.Background()
 
 	if status == 0 {
-		_, _ = h.db.Exec(ctx,
-			`UPDATE users SET status = 0, last_seen = now(), updated_at = now() WHERE id = $1`, userID)
+		if _, err := h.db.Exec(ctx,
+			`UPDATE users SET status = 0, last_seen = now(), updated_at = now() WHERE id = $1`, userID); err != nil {
+			log.Printf("ws: failed to update offline presence for %s: %v", userID, err)
+		}
 	} else {
-		_, _ = h.db.Exec(ctx,
-			`UPDATE users SET status = $2, updated_at = now() WHERE id = $1`, userID, status)
+		if _, err := h.db.Exec(ctx,
+			`UPDATE users SET status = $2, updated_at = now() WHERE id = $1`, userID, status); err != nil {
+			log.Printf("ws: failed to update presence for %s: %v", userID, err)
+		}
 	}
 
 	recipients := make(map[string]struct{})
@@ -513,13 +515,21 @@ func (h *Hub) sendToUsers(userIDs []string, data []byte) {
 }
 
 func (h *Hub) handleClientEvent(c *Client, evt *Event) {
+	if c == nil || evt == nil {
+		return
+	}
+
 	switch evt.Op {
 	case OpHeartbeat:
 		c.Send(NewEvent(OpHeartbeatAck, nil))
 
 	case OpSubscribe:
 		var data SubscribeData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid subscribe payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		authorized := h.canViewStream(data.StreamID, c.userID)
@@ -531,7 +541,11 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 
 	case OpUnsubscribe:
 		var data SubscribeData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid unsubscribe payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		c.Unsubscribe(data.StreamID)
@@ -547,7 +561,11 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 
 	case OpTyping:
 		var data TypingData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid typing payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		if !h.canSendMessages(data.StreamID, c.userID) {
@@ -560,7 +578,11 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 
 	case OpTypingStop:
 		var data TypingData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid typing-stop payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		if !h.canSendMessages(data.StreamID, c.userID) {
@@ -574,6 +596,7 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 	case OpSetStatus:
 		var data SetStatusData
 		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid status payload user=%s: %v", c.userID, err)
 			return
 		}
 		if data.Status < 1 || data.Status > 3 {
@@ -583,28 +606,44 @@ func (h *Hub) handleClientEvent(c *Client, evt *Event) {
 
 	case OpVoiceStateUpdate:
 		var data VoiceStateClientData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid voice-state payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		go h.handleVoiceState(c.userID, data.StreamID, data.Action)
 
 	case OpVoiceSpeakingUpdate:
 		var data VoiceSpeakingClientData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid voice-speaking payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		go h.handleVoiceSpeaking(c.userID, data.StreamID, data.Speaking)
 
 	case OpVoiceScreenShareUpdate:
 		var data VoiceScreenShareClientData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid voice-screenshare payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		go h.handleVoiceScreenShare(c.userID, data.StreamID, data.Sharing)
 
 	case OpVoiceDeafenUpdate:
 		var data VoiceDeafenClientData
-		if err := json.Unmarshal(evt.Data, &data); err != nil || data.StreamID == "" {
+		if err := json.Unmarshal(evt.Data, &data); err != nil {
+			log.Printf("ws: invalid voice-deafen payload user=%s: %v", c.userID, err)
+			return
+		}
+		if data.StreamID == "" {
 			return
 		}
 		go h.handleVoiceDeafen(c.userID, data.StreamID, data.Deafened)

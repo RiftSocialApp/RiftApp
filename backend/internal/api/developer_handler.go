@@ -15,11 +15,12 @@ import (
 
 type DeveloperHandler struct {
 	svc     *service.DeveloperService
+	hubSvc  *service.HubService
 	hubRepo *repository.HubRepo
 }
 
-func NewDeveloperHandler(svc *service.DeveloperService, hubRepo *repository.HubRepo) *DeveloperHandler {
-	return &DeveloperHandler{svc: svc, hubRepo: hubRepo}
+func NewDeveloperHandler(svc *service.DeveloperService, hubSvc *service.HubService, hubRepo *repository.HubRepo) *DeveloperHandler {
+	return &DeveloperHandler{svc: svc, hubSvc: hubSvc, hubRepo: hubRepo}
 }
 
 func (h *DeveloperHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -505,9 +506,9 @@ func (h *DeveloperHandler) AddBotToHub(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "application has no bot")
 		return
 	}
+	requesterID := middleware.GetUserID(r.Context())
 	if !app.BotPublic {
-		userID := middleware.GetUserID(r.Context())
-		if app.OwnerID != userID {
+		if app.OwnerID != requesterID {
 			writeError(w, http.StatusForbidden, "this bot is not public")
 			return
 		}
@@ -516,23 +517,26 @@ func (h *DeveloperHandler) AddBotToHub(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		HubID string `json:"hub_id"`
 	}
-	if err := readJSON(r, &body); err != nil || body.HubID == "" {
+	if err := readJSON(r, &body); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if body.HubID == "" {
 		writeError(w, http.StatusBadRequest, "hub_id is required")
 		return
 	}
 
-	userID := middleware.GetUserID(r.Context())
-	ownerID, err := h.hubRepo.GetOwnerID(r.Context(), body.HubID)
-	if err != nil {
+	if h.hubSvc == nil || h.hubRepo == nil {
+		writeError(w, http.StatusInternalServerError, "hub services unavailable")
+		return
+	}
+	if _, err := h.hubRepo.GetOwnerID(r.Context(), body.HubID); err != nil {
 		writeError(w, http.StatusNotFound, "hub not found")
 		return
 	}
-	if ownerID != userID {
-		role := h.hubRepo.GetMemberRole(r.Context(), body.HubID, userID)
-		if role != "owner" && role != "admin" {
-			writeError(w, http.StatusForbidden, "you must be a hub owner or admin to add bots")
-			return
-		}
+	if !h.hubSvc.HasPermission(r.Context(), body.HubID, requesterID, models.PermManageHub) {
+		writeError(w, http.StatusForbidden, "you must have permission to manage this hub to add bots")
+		return
 	}
 
 	if h.hubRepo.IsMember(r.Context(), body.HubID, *app.BotUserID) {
@@ -540,7 +544,7 @@ func (h *DeveloperHandler) AddBotToHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.hubRepo.AddMember(r.Context(), body.HubID, *app.BotUserID, "member"); err != nil {
+	if err := h.hubRepo.AddMember(r.Context(), body.HubID, *app.BotUserID, models.RoleMember); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to add bot: "+err.Error())
 		return
 	}
@@ -641,19 +645,9 @@ func fetchDiscordApplicationInfo(botToken string) (*service.DiscordApplicationIn
 		Flags:                          discordResp.Flags,
 	}
 
-	botReq, _ := http.NewRequest("GET", "https://discord.com/api/v10/users/@me", nil)
-	botReq.Header.Set("Authorization", "Bot "+botToken)
-	botResp, err := client.Do(botReq)
-	if err == nil && botResp.StatusCode == http.StatusOK {
-		defer botResp.Body.Close()
-		var botUser struct {
-			Username string `json:"username"`
-			Avatar   string `json:"avatar"`
-		}
-		if json.NewDecoder(botResp.Body).Decode(&botUser) == nil {
-			info.BotUsername = botUser.Username
-			info.BotAvatar = botUser.Avatar
-		}
+	if botUser, err := fetchDiscordBotInfo(botToken); err == nil {
+		info.BotUsername = botUser.Username
+		info.BotAvatar = botUser.Avatar
 	}
 
 	return info, nil

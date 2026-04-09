@@ -5,7 +5,6 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/models"
-	"github.com/riftapp-cloud/riftapp/internal/repository"
 )
 
 type memberPermissionState struct {
@@ -177,24 +176,6 @@ func (s *HubService) GetVisibleStreamIDSet(ctx context.Context, hubID, userID st
 	return result, nil
 }
 
-func filterOverwritesForTemplateImport(overwrites []models.StreamPermissionOverwrite, targetIDByPlaceholder map[string]string) []models.StreamPermissionOverwrite {
-	filtered := make([]models.StreamPermissionOverwrite, 0, len(overwrites))
-	for _, overwrite := range overwrites {
-		switch overwrite.TargetType {
-		case models.StreamPermissionTargetEveryone:
-			filtered = append(filtered, overwrite)
-		case models.StreamPermissionTargetRole:
-			mappedTargetID, ok := targetIDByPlaceholder[overwrite.TargetID]
-			if !ok {
-				continue
-			}
-			overwrite.TargetID = mappedTargetID
-			filtered = append(filtered, overwrite)
-		}
-	}
-	return filtered
-}
-
 func mergeStreamPermissionOverwrites(parent []models.StreamPermissionOverwrite, child []models.StreamPermissionOverwrite) []models.StreamPermissionOverwrite {
 	merged := make(map[string]models.StreamPermissionOverwrite, len(parent)+len(child))
 	for _, overwrite := range parent {
@@ -253,12 +234,4 @@ func everyoneVisibilityOverwrite(isPrivate bool) []models.StreamPermissionOverwr
 		TargetID:   models.StreamPermissionTargetEveryone,
 		Deny:       models.PermViewStreams,
 	}}
-}
-
-func hasManageStreamsPermission(basePermissions int64) bool {
-	return models.HasPermission(basePermissions, models.PermManageStreams)
-}
-
-func permissionStateFromContext(memberCtx *repository.MemberPermissionContext, rankPermissions int64) int64 {
-	return memberCtx.DefaultPermissions | models.RolePermissions[memberCtx.Role] | rankPermissions
 }

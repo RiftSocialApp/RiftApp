@@ -8,14 +8,16 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
 	"github.com/riftapp-cloud/riftapp/internal/service"
+	userpkg "github.com/riftapp-cloud/riftapp/internal/user"
 )
 
 type FriendHandler struct {
-	svc *service.FriendService
+	svc     *service.FriendService
+	userSvc *userpkg.Service
 }
 
-func NewFriendHandler(svc *service.FriendService) *FriendHandler {
-	return &FriendHandler{svc: svc}
+func NewFriendHandler(svc *service.FriendService, userSvc *userpkg.Service) *FriendHandler {
+	return &FriendHandler{svc: svc, userSvc: userSvc}
 }
 
 func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +32,16 @@ func (h *FriendHandler) SendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	targetID := body.UserID
 	if targetID == "" && body.Username != "" {
-		targetID = body.Username
+		if h.userSvc == nil {
+			writeError(w, http.StatusBadRequest, "username lookup unavailable")
+			return
+		}
+		targetUser, err := h.userSvc.SearchByUsername(r.Context(), body.Username)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		targetID = targetUser.ID
 	}
 	if targetID == "" {
 		writeError(w, http.StatusBadRequest, "user_id or username required")

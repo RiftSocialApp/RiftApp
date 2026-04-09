@@ -69,11 +69,11 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	voiceH := NewVoiceHandler(deps.Config, deps.HubService, deps.StreamService, deps.WSHub, deps.HubCustomizationRepo)
 	notifH := NewNotifHandler(deps.NotifService)
 	dmH := NewDMHandler(deps.DMService)
-	friendH := NewFriendHandler(deps.FriendService)
+	friendH := NewFriendHandler(deps.FriendService, deps.UserService)
 
 	var devH *DeveloperHandler
 	if deps.DeveloperService != nil {
-		devH = NewDeveloperHandler(deps.DeveloperService, deps.HubRepo)
+		devH = NewDeveloperHandler(deps.DeveloperService, deps.HubService, deps.HubRepo)
 	}
 
 	r.Get("/ws", wsH.Handle)
@@ -262,9 +262,12 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	})
 
 	// Discord-compatible REST API (v9/v10) for bot libraries
-	if deps.DeveloperService != nil && deps.DeveloperRepo != nil && deps.HubRepo != nil {
+	if deps.DeveloperService != nil && deps.DeveloperRepo != nil && deps.HubService != nil && deps.HubRepo != nil && deps.StreamService != nil && deps.StreamRepo != nil && deps.MsgService != nil && deps.MsgRepo != nil && deps.RankRepo != nil {
 		dcH := NewDiscordCompatHandler(DiscordCompatDeps{
 			DevSvc:     deps.DeveloperService,
+			HubSvc:     deps.HubService,
+			StreamSvc:  deps.StreamService,
+			MsgSvc:     deps.MsgService,
 			HubRepo:    deps.HubRepo,
 			StreamRepo: deps.StreamRepo,
 			MsgRepo:    deps.MsgRepo,
@@ -275,8 +278,8 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		gwH := NewDiscordGatewayHandler(
 			deps.DeveloperService,
 			deps.DeveloperRepo,
-			deps.HubRepo,
-			deps.StreamRepo,
+			deps.HubService,
+			deps.StreamService,
 			deps.RankRepo,
 			deps.Config.AllowedOrigins,
 		)

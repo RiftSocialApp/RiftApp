@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/riftapp-cloud/riftapp/internal/auth"
@@ -82,7 +83,10 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		RefreshToken string `json:"refresh_token"`
 	}
-	readJSON(r, &body)
+	if err := readJSON(r, &body); err != nil && !errors.Is(err, io.EOF) {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	if body.RefreshToken != "" {
 		h.service.Logout(r.Context(), body.RefreshToken)
 	}

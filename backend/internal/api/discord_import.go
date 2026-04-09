@@ -2,7 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -15,6 +17,11 @@ type discordBotInfo struct {
 }
 
 func fetchDiscordBotInfo(botToken string) (*discordBotInfo, error) {
+	botToken = strings.TrimSpace(botToken)
+	if botToken == "" {
+		return nil, fmt.Errorf("bot token is required")
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequest("GET", "https://discord.com/api/v10/users/@me", nil)
 	if err != nil {
@@ -27,10 +34,16 @@ func fetchDiscordBotInfo(botToken string) (*discordBotInfo, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("discord bot info request failed: %s", resp.Status)
+	}
 
 	var info discordBotInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
 		return nil, err
+	}
+	if info.ID == "" || strings.TrimSpace(info.Username) == "" || !info.Bot {
+		return nil, fmt.Errorf("discord returned invalid bot identity")
 	}
 	return &info, nil
 }
