@@ -12,6 +12,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/models"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 )
 
@@ -24,6 +25,7 @@ type HubService struct {
 	hubNotifRepo   *repository.HubNotificationSettingsRepo
 	rankRepo       *repository.RankRepo
 	discordHTTP    *http.Client
+	modSvc         *moderation.Service
 }
 
 func NewHubService(
@@ -47,9 +49,19 @@ func NewHubService(
 	}
 }
 
+func (s *HubService) SetModerationService(mod *moderation.Service) {
+	s.modSvc = mod
+}
+
 func (s *HubService) Create(ctx context.Context, userID, name string) (*models.Hub, error) {
 	if name == "" {
 		return nil, apperror.BadRequest("name is required")
+	}
+
+	if s.modSvc != nil {
+		if result := s.modSvc.CheckText(ctx, name); result != nil && result.Flagged {
+			return nil, apperror.BadRequest("hub name blocked by content moderation: " + result.Category)
+		}
 	}
 
 	hub := &models.Hub{
@@ -120,6 +132,12 @@ func (s *HubService) Update(ctx context.Context, hubID, userID string, name *str
 
 	if name == nil && iconURL == nil && bannerURL == nil {
 		return nil, apperror.BadRequest("no fields to update")
+	}
+
+	if name != nil && s.modSvc != nil {
+		if result := s.modSvc.CheckText(ctx, *name); result != nil && result.Flagged {
+			return nil, apperror.BadRequest("hub name blocked by content moderation: " + result.Category)
+		}
 	}
 
 	hub, err := s.hubRepo.Update(ctx, hubID, name, iconURL, bannerURL)

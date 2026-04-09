@@ -182,9 +182,9 @@ function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: () => void }) {
       case 'audit-log':
         return <AuditLogPanel />;
       case 'bans':
-        return <BansPanel />;
+        return <BansPanel hubId={hub.id} />;
       case 'automod':
-        return <AutoModPanel />;
+        return <AutoModPanel hubId={hub.id} />;
       case 'enable-community':
         return <EnableCommunityPanel />;
       case 'server-template':

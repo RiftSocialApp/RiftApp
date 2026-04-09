@@ -4,6 +4,7 @@ import type { Message } from '../../types';
 import { useMessageStore } from '../../stores/messageStore';
 import { useReplyDraftStore } from '../../stores/replyDraftStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
+import ReportModal from '../modals/ReportModal';
 
 const QUICK_ROW = ['😂', '✨', '🔥', '👍'];
 const REACTION_PICK = ['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '✨', '👀', '🎉'];
@@ -182,6 +183,7 @@ export default function MessageContextMenu({
   const developerMode = useAppSettingsStore((s) => s.developerMode);
 
   const [reactionOpen, setReactionOpen] = useState(false);
+  const [showReport, setShowReport] = useState(false);
 
   const plainText = message.content ?? '';
   const trimmedText = plainText.trim();
@@ -421,7 +423,10 @@ export default function MessageContextMenu({
             )
           : null}
 
-        {!isOwn ? row('Report Message', <IconFlag />, closeOnly, { danger: true }) : null}
+        {!isOwn ? row('Report Message', <IconFlag />, () => {
+          onClose();
+          setShowReport(true);
+        }, { danger: true }) : null}
 
         {developerMode
           ? row(
@@ -431,6 +436,15 @@ export default function MessageContextMenu({
             )
           : null}
       </div>
+      {showReport && (
+        <ReportModal
+          onClose={() => setShowReport(false)}
+          reportedUserId={message.author?.id}
+          messageId={message.id}
+          hubId={hubId ?? undefined}
+          messageContent={message.content}
+        />
+      )}
     </MenuOverlay>
   );
 }

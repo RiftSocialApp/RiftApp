@@ -354,3 +354,46 @@ export interface RichPresenceAsset {
   image_hash: string;
   created_at: string;
 }
+
+export interface Report {
+  id: string;
+  reporter_id: string;
+  reported_user_id?: string;
+  message_id?: string;
+  hub_id?: string;
+  reason: string;
+  category: string;
+  status: string;
+  moderator_id?: string;
+  moderator_note?: string;
+  auto_moderation?: {
+    flagged: boolean;
+    results: { classifier: string; flagged: boolean; confidence: number; severity: string }[];
+  };
+  created_at: string;
+  resolved_at?: string;
+  reporter_name?: string;
+  reported_name?: string;
+  message_content?: string;
+  hub_name?: string;
+}
+
+export interface HubAutoModSettings {
+  hub_id: string;
+  enabled: boolean;
+  classifiers: string[];
+  toxicity_threshold: number;
+  spam_threshold: number;
+  nsfw_threshold: number;
+}
+
+export interface HubBan {
+  hub_id: string;
+  user_id: string;
+  banned_by: string;
+  reason: string;
+  created_at: string;
+  username?: string;
+  display_name?: string;
+  avatar_url?: string;
+}

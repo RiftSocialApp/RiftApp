@@ -11,6 +11,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/models"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
@@ -28,6 +29,7 @@ type MessageService struct {
 	hub             *ws.Hub
 	hubNotifRepo    *repository.HubNotificationSettingsRepo
 	streamNotifRepo *repository.StreamNotificationSettingsRepo
+	modSvc          *moderation.Service
 }
 
 func NewMessageService(
@@ -48,6 +50,10 @@ func NewMessageService(
 		hubNotifRepo:    hubNotifRepo,
 		streamNotifRepo: streamNotifRepo,
 	}
+}
+
+func (s *MessageService) SetModerationService(mod *moderation.Service) {
+	s.modSvc = mod
 }
 
 type CreateMessageInput struct {
@@ -121,6 +127,12 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 		return nil, err
 	}
 
+	if input.Content != "" && s.modSvc != nil {
+		if result := s.modSvc.CheckText(ctx, input.Content); result != nil && result.Flagged {
+			return nil, apperror.BadRequest("message blocked by content moderation: " + result.Category)
+		}
+	}
+
 	msg := &models.Message{
 		ID:               uuid.New().String(),
 		StreamID:         &streamID,
@@ -161,6 +173,13 @@ func (s *MessageService) Update(ctx context.Context, msgID, userID, content stri
 	if content == "" {
 		return nil, apperror.BadRequest("content is required")
 	}
+
+	if s.modSvc != nil {
+		if result := s.modSvc.CheckText(ctx, content); result != nil && result.Flagged {
+			return nil, apperror.BadRequest("message blocked by content moderation: " + result.Category)
+		}
+	}
+
 	existing, err := s.msgRepo.GetByID(ctx, msgID)
 	if err != nil {
 		return nil, apperror.NotFound("message not found or unauthorized")

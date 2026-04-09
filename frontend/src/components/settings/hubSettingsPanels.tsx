@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   SettingsDivider,
   InfoBanner,
@@ -10,6 +10,7 @@ import {
   PromoBannerBoosted,
 } from './hubSettingsUi';
 import { hsTw } from './hubSettingsTokens';
+import { api } from '../../api/client';
 
 const BADGE_ICONS = ['🍃', '⚔️', '❤️', '🔥', '💧', '💀', '🌙', '⚡', '✨', '🍄'];
 const SWORD_COLORS = ['#eb459e', '#fee75c', '#57f287', '#ed4245', '#5865f2', '#99aab5', '#ffffff'];
@@ -570,7 +571,29 @@ export function AuditLogPanel() {
   );
 }
 
-export function BansPanel() {
+export function BansPanel({ hubId }: { hubId?: string }) {
+  const [bans, setBans] = useState<import('../../types').HubBan[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!hubId) return;
+    setLoading(true);
+    api.listBans(hubId).then((res) => setBans(res.bans)).catch(() => {}).finally(() => setLoading(false));
+  }, [hubId]);
+
+  const handleUnban = async (userId: string) => {
+    if (!hubId) return;
+    try {
+      await api.unbanMember(hubId, userId);
+      setBans((prev) => prev.filter((b) => b.user_id !== userId));
+    } catch { /* ignore */ }
+  };
+
+  const filtered = search.trim()
+    ? bans.filter((b) => b.username?.toLowerCase().includes(search.toLowerCase()) || b.user_id.includes(search))
+    : bans;
+
   return (
     <div className="max-w-3xl">
       <h1 className={hsTw.title}>Server Ban List</h1>
@@ -586,71 +609,143 @@ export function BansPanel() {
             <circle cx="11" cy="11" r="8" />
             <path d="M21 21l-4.35-4.35" />
           </svg>
-          <input placeholder="Search Bans by User Id or Username" className={hsTw.input + ' pl-10'} />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search Bans by User Id or Username" className={hsTw.input + ' pl-10'} />
         </div>
-        <button type="button" className={hsTw.btnPrimary}>
-          Search
-        </button>
       </div>
       <div className={`${hsTw.card} divide-y divide-[#1e1f22]`}>
-        <p className="p-6 text-[13px] text-[#949ba4] text-center">No banned users to display.</p>
+        {loading ? (
+          <p className="p-6 text-[13px] text-[#949ba4] text-center">Loading...</p>
+        ) : filtered.length === 0 ? (
+          <p className="p-6 text-[13px] text-[#949ba4] text-center">No banned users to display.</p>
+        ) : (
+          filtered.map((b) => (
+            <div key={b.user_id} className="p-4 flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-[#5865f2] shrink-0 flex items-center justify-center text-white text-sm font-bold">
+                {(b.display_name || b.username || '?')[0]?.toUpperCase()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] text-white font-medium truncate">{b.display_name || b.username || b.user_id.slice(0, 8)}</p>
+                {b.reason && <p className="text-[12px] text-[#949ba4] truncate">{b.reason}</p>}
+                <p className="text-[11px] text-[#949ba4]">{new Date(b.created_at).toLocaleDateString()}</p>
+              </div>
+              <button onClick={() => handleUnban(b.user_id)} className="px-3 py-1.5 text-xs font-medium rounded bg-[#ed4245]/20 text-[#ed4245] hover:bg-[#ed4245]/30 transition-colors">
+                Revoke Ban
+              </button>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
 }
 
-export function AutoModPanel() {
-  const cards = [
-    { title: 'Block Mention Spam', desc: 'Block messages with an excessive # of role and user mentions', btn: 'Set Up' },
-    { title: 'Block Suspected Spam Content', desc: 'Monitor messages for potentially spammy content or activity.', btn: 'Set Up' },
-    { title: 'Block Commonly Flagged Words', desc: 'Flag messages that contain profanity and more.', btn: 'Set Up' },
-    { title: 'Block Custom Words', desc: 'Create your own filter to block specific language from your server.', btn: 'Create' },
-  ];
+export function AutoModPanel({ hubId }: { hubId?: string }) {
+  const [settings, setSettings] = useState<import('../../types').HubAutoModSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!hubId) return;
+    api.getAutoModSettings(hubId).then(setSettings).catch(() => {});
+  }, [hubId]);
+
+  const handleToggle = async (enabled: boolean) => {
+    if (!settings || !hubId) return;
+    const updated = { ...settings, enabled };
+    setSettings(updated);
+    setSaving(true);
+    try {
+      const res = await api.updateAutoModSettings(hubId, updated);
+      setSettings(res);
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
+  const handleThreshold = async (field: 'toxicity_threshold' | 'spam_threshold' | 'nsfw_threshold', value: number) => {
+    if (!settings || !hubId) return;
+    const updated = { ...settings, [field]: value };
+    setSettings(updated);
+  };
+
+  const handleSave = async () => {
+    if (!settings || !hubId) return;
+    setSaving(true);
+    try {
+      const res = await api.updateAutoModSettings(hubId, settings);
+      setSettings(res);
+    } catch { /* ignore */ }
+    setSaving(false);
+  };
+
   return (
     <div className="max-w-3xl">
       <h1 className={hsTw.title}>AutoMod</h1>
       <p className={`${hsTw.subtitle} mt-2 mb-6`}>
-        Give your mods a break while keeping your server safe! Set up filters to moderate content.{' '}
-        <button type="button" className="text-[#00a8fc] hover:underline">
-          Learn More
-        </button>
+        Content moderation powered by LocalMod AI. Automatically filter messages for toxicity, spam, and NSFW content.
       </p>
-      <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#949ba4] mb-3">Content</h2>
-      <div className="space-y-3">
-        {cards.map((c) => (
-          <div key={c.title} className={`${hsTw.card} p-4 flex flex-col sm:flex-row sm:items-center gap-4`}>
-            <div className="w-10 h-10 rounded-full bg-[#1e1f22] flex items-center justify-center text-white shrink-0">@</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[15px] font-semibold text-white">{c.title}</p>
-              <p className="text-[13px] text-[#949ba4] mt-0.5">{c.desc}</p>
-              <div className="flex flex-wrap gap-2 mt-2">
-                <span className="text-[11px] px-2 py-0.5 rounded bg-[#2b2d31] text-[#b5bac1]">block message</span>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-[#2b2d31] text-[#b5bac1]">send alert</span>
+
+      {settings && (
+        <>
+          <ToggleRow
+            label="Enable AutoMod"
+            description="When enabled, messages in this server are automatically checked by AI moderation."
+            checked={settings.enabled}
+            onChange={handleToggle}
+          />
+          <SettingsDivider />
+
+          {settings.enabled && (
+            <>
+              <h2 className="text-[12px] font-bold uppercase tracking-wider text-[#949ba4] mb-3">Sensitivity Thresholds</h2>
+              <p className="text-[13px] text-[#949ba4] mb-4">Lower values are more strict. Messages scoring above the threshold will be blocked.</p>
+
+              <div className="space-y-4 mb-6">
+                <ThresholdSlider label="Toxicity" value={settings.toxicity_threshold} onChange={(v) => handleThreshold('toxicity_threshold', v)} />
+                <ThresholdSlider label="Spam" value={settings.spam_threshold} onChange={(v) => handleThreshold('spam_threshold', v)} />
+                <ThresholdSlider label="NSFW Text" value={settings.nsfw_threshold} onChange={(v) => handleThreshold('nsfw_threshold', v)} />
               </div>
-            </div>
-            <button type="button" className={hsTw.btnPrimary + ' shrink-0'}>
-              {c.btn}
-            </button>
-          </div>
-        ))}
-      </div>
-      <SettingsDivider />
+
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={hsTw.btnPrimary + ' disabled:opacity-50'}
+              >
+                {saving ? 'Saving...' : 'Save Changes'}
+              </button>
+              <SettingsDivider />
+            </>
+          )}
+        </>
+      )}
+
       <h2 className="text-[16px] font-semibold text-white mb-2">Sensitive content filters</h2>
       <p className="text-[13px] text-[#949ba4] mb-3">
-        Choose if server members can share image-based media detected by sensitive content filters.{' '}
-        <button type="button" className="text-[#00a8fc] hover:underline">
-          Learn more
-        </button>
+        Image-based media is automatically scanned for NSFW content when uploaded. Flagged images are removed.
       </p>
       <div className={`${hsTw.card} p-4 flex items-center justify-between`}>
         <div>
-          <p className="text-[15px] text-white font-medium">Do not filter</p>
-          <p className="text-[13px] text-[#949ba4]">Messages will not be filtered for sensitive image-based media.</p>
+          <p className="text-[15px] text-white font-medium">Image NSFW Detection</p>
+          <p className="text-[13px] text-[#949ba4]">Automatically enabled for all image uploads.</p>
         </div>
-        <button type="button" className="text-[#00a8fc] text-[13px] font-medium hover:underline">
-          Change
-        </button>
+        <span className="text-[#57f287] text-[13px] font-medium">Active</span>
       </div>
+    </div>
+  );
+}
+
+function ThresholdSlider({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="flex items-center gap-4">
+      <span className="text-[14px] text-[#dbdee1] w-24">{label}</span>
+      <input
+        type="range"
+        min={0.1}
+        max={1.0}
+        step={0.05}
+        value={value}
+        onChange={(e) => onChange(parseFloat(e.target.value))}
+        className="flex-1 accent-[#5865f2]"
+      />
+      <span className="text-[13px] text-[#949ba4] w-12 text-right">{(value * 100).toFixed(0)}%</span>
     </div>
   );
 }

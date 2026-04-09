@@ -28,6 +28,7 @@ const RichPresencePage = lazy(() => import('./components/developers/RichPresence
 const AppTestersPage = lazy(() => import('./components/developers/AppTestersPage'));
 const AppVerificationPage = lazy(() => import('./components/developers/AppVerificationPage'));
 const BotAuthorizePage = lazy(() => import('./components/developers/BotAuthorizePage'));
+const ModerationDashboard = lazy(() => import('./components/admin/ModerationDashboard'));
 
 type SettingsModalModule = typeof import('./components/settings/SettingsModal');
 type SettingsModalComponent = ComponentType;
@@ -219,6 +220,9 @@ export default function App() {
 
               {/* Bot authorization / invite page */}
               <Route path="/oauth2/authorize" element={<RequireAuth><BotAuthorizePage /></RequireAuth>} />
+
+              {/* Admin moderation dashboard */}
+              <Route path="/admin/moderation" element={<RequireAuth><ModerationDashboard /></RequireAuth>} />
 
               {/* Developer Portal */}
               <Route path="/developers" element={<RequireAuth><DevPortalLayout /></RequireAuth>}>

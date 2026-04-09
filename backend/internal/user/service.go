@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/riftapp-cloud/riftapp/internal/models"
+	"github.com/riftapp-cloud/riftapp/internal/moderation"
 )
 
 // Validation limits
@@ -27,15 +28,20 @@ var (
 	ErrBioTooLong       = errors.New("bio must be at most 190 characters")
 	ErrAvatarURLTooLong = errors.New("avatar url must be at most 512 characters")
 	ErrNothingToUpdate  = errors.New("no fields to update")
+	ErrContentBlocked   = errors.New("content blocked by moderation")
 )
 
-// Service contains user profile business logic.
 type Service struct {
-	repo *Repo
+	repo   *Repo
+	modSvc *moderation.Service
 }
 
 func NewService(repo *Repo) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetModerationService(mod *moderation.Service) {
+	s.modSvc = mod
 }
 
 // GetProfile returns the full profile for a user by ID.
@@ -106,6 +112,21 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, input Update
 
 	if !hasChange {
 		return nil, ErrNothingToUpdate
+	}
+
+	if s.modSvc != nil {
+		var textsToCheck []string
+		if update.DisplayName != nil && *update.DisplayName != "" {
+			textsToCheck = append(textsToCheck, *update.DisplayName)
+		}
+		if update.Bio != nil && *update.Bio != "" {
+			textsToCheck = append(textsToCheck, *update.Bio)
+		}
+		for _, text := range textsToCheck {
+			if result := s.modSvc.CheckText(ctx, text); result != nil && result.Flagged {
+				return nil, ErrContentBlocked
+			}
+		}
 	}
 
 	return s.repo.UpdateProfile(ctx, userID, update)
