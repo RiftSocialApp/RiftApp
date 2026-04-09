@@ -8,6 +8,10 @@ on:
       - 'app/**'
       - '.github/workflows/desktop.yml'
 
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
@@ -36,18 +40,33 @@ jobs:
         shell: pwsh
         working-directory: .
         run: |
-          $ErrorActionPreference = "SilentlyContinue"
-          $tag = git describe --tags --abbrev=0 --match "v*" 2>&1
-          $ErrorActionPreference = "Stop"
-          if (-not $tag -or $tag -like "fatal:*") {
-            $version = "0.1.0"
+          git fetch --tags --force origin | Out-Null
+
+          $headTag = git tag --points-at HEAD --list "v*" |
+            Sort-Object { [version]($_.TrimStart("v")) } -Descending |
+            Select-Object -First 1
+
+          if ($headTag) {
+            $version = $headTag.TrimStart("v")
           } else {
-            $parts = $tag.TrimStart("v").Split(".")
-            $major = [int]$parts[0]
-            $minor = [int]$parts[1]
-            $patch = [int]$parts[2] + 1
-            $version = "$major.$minor.$patch"
+            $remoteVersions = git ls-remote --tags --refs origin "v*" |
+              ForEach-Object {
+                $parts = $_ -split "`t"
+                if ($parts.Length -eq 2) {
+                  $parts[1] -replace "^refs/tags/v", ""
+                }
+              } |
+              Where-Object { $_ } |
+              Sort-Object { [version]$_ } -Descending
+
+            if (-not $remoteVersions) {
+              $version = "0.1.0"
+            } else {
+              $latest = [version]($remoteVersions | Select-Object -First 1)
+              $version = "$($latest.Major).$($latest.Minor).$($latest.Build + 1)"
+            }
           }
+
           Write-Host "Version: $version"
           "value=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
@@ -77,18 +96,26 @@ jobs:
       - name: Prune old R2 artifacts
         shell: bash
         run: |
+          current_version="${{ steps.version.outputs.value }}"
           keep_count=2
           mapfile -t keep_versions < <(
-            git tag --sort=-version:refname --list "v*" \
-              | sed 's/^v//' \
+            git ls-remote --tags --refs origin "v*" \
+              | awk '{print $2}' \
+              | sed 's#refs/tags/v##' \
+              | grep -v "^${current_version}$" \
+              | sort -Vr \
               | head -n "$keep_count"
           )
 
           echo "Keeping previous versions in bucket: ${keep_versions[*]:-none}"
-          echo "Keeping current build version in bucket: ${{ steps.version.outputs.value }}"
+          echo "Keeping current build version in bucket: $current_version"
 
           while IFS= read -r version; do
             [ -n "$version" ] || continue
+
+            if [ "$version" = "$current_version" ]; then
+              continue
+            fi
 
             skip=false
             for keep in "${keep_versions[@]}"; do
@@ -106,7 +133,10 @@ jobs:
             wrangler r2 object delete "rift-updates/Rift Setup $version.exe" --remote --force || true
             wrangler r2 object delete "rift-updates/Rift Setup $version.exe.blockmap" --remote --force || true
           done < <(
-            git tag --sort=-version:refname --list "v*" | sed 's/^v//'
+            git ls-remote --tags --refs origin "v*" \
+              | awk '{print $2}' \
+              | sed 's#refs/tags/v##' \
+              | sort -Vr
           )
 
           wrangler r2 object delete "rift-updates/builder-debug.yml" --remote --force || true
@@ -142,10 +172,27 @@ jobs:
         shell: pwsh
         working-directory: .
         run: |
+          git fetch --tags --force origin | Out-Null
+
+          $tag = "v${{ steps.version.outputs.value }}"
+          $headSha = (git rev-parse HEAD).Trim()
+          $remoteSha = git ls-remote --tags --refs origin $tag |
+            ForEach-Object { ($_ -split "`t")[0] } |
+            Select-Object -First 1
+
+          if ($remoteSha) {
+            if ($remoteSha.Trim() -eq $headSha) {
+              Write-Host "$tag already exists on origin for this commit; skipping tag creation."
+              exit 0
+            }
+
+            throw "$tag already exists on origin for a different commit."
+          }
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag "v${{ steps.version.outputs.value }}"
-          git push origin "v${{ steps.version.outputs.value }}"
+          git tag $tag
+          git push origin $tag
 
       # GitHub Release (optional but kept)
       - name: Create GitHub Release
