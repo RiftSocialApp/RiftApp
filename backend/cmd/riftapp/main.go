@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/riftapp-cloud/riftapp/internal/admin"
 	"github.com/riftapp-cloud/riftapp/internal/api"
 	"github.com/riftapp-cloud/riftapp/internal/auth"
 	"github.com/riftapp-cloud/riftapp/internal/config"
@@ -17,6 +18,7 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/pubsub"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
+	"github.com/riftapp-cloud/riftapp/internal/smtp"
 	"github.com/riftapp-cloud/riftapp/internal/user"
 	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
@@ -125,6 +127,19 @@ func main() {
 		}
 	}
 
+	// SMTP service
+	smtpSvc := smtp.NewService(db)
+
+	// Admin panel service
+	seedEmails := map[string]bool{
+		"skila@riftapp.io":  true,
+		"lovely@riftapp.io": true,
+	}
+	adminRepo := admin.NewRepo(db)
+	adminSvc := admin.NewService(adminRepo, cfg.JWTSecret, seedEmails)
+	adminSvc.SetEmailSender(smtpSvc)
+	adminSvc.EnsureSeedAdmins(context.Background())
+
 	// Router
 	router := api.NewRouter(api.RouterDeps{
 		AuthService:             authService,
@@ -154,6 +169,9 @@ func main() {
 		ReportService:           reportSvc,
 		HubModerationRepo:       hubModRepo,
 		DB:                      db,
+		AdminService:            adminSvc,
+		SMTPService:             smtpSvc,
+		DBPool:                  db,
 	})
 
 	srv := &http.Server{
