@@ -32,15 +32,7 @@ func (h *ReportHandler) getActorID(r *http.Request) string {
 }
 
 func (h *ReportHandler) canAccessAdminReports(r *http.Request) bool {
-	if h.isAdminContext(r) {
-		return true
-	}
-	userID := middleware.GetUserID(r.Context())
-	u, err := h.devSvc.GetUserByID(r.Context(), userID)
-	if err != nil || u == nil || u.Email == nil {
-		return false
-	}
-	return service.IsSuperAdmin(*u.Email)
+	return h.isAdminContext(r)
 }
 
 func (h *ReportHandler) CreateReport(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,7 @@ export default function UsersPage() {
   const [offset, setOffset] = useState(0);
   const limit = 50;
   const loadId = useRef(0);
+  const selectId = useRef(0);
 
   const load = async () => {
     const id = ++loadId.current;
@@ -40,10 +41,13 @@ export default function UsersPage() {
 
   const handleSelect = async (u: AdminUser) => {
     if (selected?.id === u.id) { setSelected(null); return; }
+    const reqId = ++selectId.current;
     try {
       const detail = await adminApi.getUser(u.id);
+      if (reqId !== selectId.current) return;
       setSelected(detail);
     } catch {
+      if (reqId !== selectId.current) return;
       setSelected({ ...u, hub_count: 0, message_count: 0 });
     }
   };
@@ -127,10 +131,10 @@ export default function UsersPage() {
 
       {total > limit && (
         <div className="flex items-center justify-center gap-4 mt-6">
-          <button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - limit))}
+          <button disabled={offset === 0} onClick={() => setOffset((prev) => Math.max(0, prev - limit))}
             className="px-4 py-2 text-sm rounded-lg bg-[#2b2d31] border border-[#3f4147]/30 text-white disabled:opacity-50 hover:bg-[#35373c] transition-colors">Previous</button>
           <span className="text-sm text-[#949ba4]">{offset + 1}–{Math.min(offset + limit, total)} of {total}</span>
-          <button disabled={offset + limit >= total} onClick={() => setOffset(offset + limit)}
+          <button disabled={offset + limit >= total} onClick={() => setOffset((prev) => prev + limit)}
             className="px-4 py-2 text-sm rounded-lg bg-[#2b2d31] border border-[#3f4147]/30 text-white disabled:opacity-50 hover:bg-[#35373c] transition-colors">Next</button>
         </div>
       )}
