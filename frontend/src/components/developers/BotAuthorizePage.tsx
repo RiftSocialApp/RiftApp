@@ -44,11 +44,11 @@ export default function BotAuthorizePage() {
   }, [clientId]);
 
   const handleAuthorize = async () => {
-    if (!selectedHub || !app?.bot_user_id) return;
+    if (!selectedHub || !app) return;
     setAuthorizing(true);
     setError('');
     try {
-      await api.joinHub(selectedHub);
+      await api.addBotToHub(clientId, selectedHub);
       setSuccess(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to add bot');

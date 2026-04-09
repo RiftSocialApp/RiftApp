@@ -73,7 +73,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 
 	var devH *DeveloperHandler
 	if deps.DeveloperService != nil {
-		devH = NewDeveloperHandler(deps.DeveloperService)
+		devH = NewDeveloperHandler(deps.DeveloperService, deps.HubRepo)
 	}
 
 	r.Get("/ws", wsH.Handle)
@@ -243,6 +243,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			r.Get("/api/developers/applications/{appID}/rich-presence/assets", devH.ListRichPresenceAssets)
 			r.Delete("/api/developers/applications/{appID}/rich-presence/assets/{assetID}", devH.DeleteRichPresenceAsset)
 			r.Post("/api/developers/import-discord", devH.ImportDiscordBot)
+			r.Post("/api/developers/applications/{appID}/add-to-hub", devH.AddBotToHub)
 		}
 	})
 

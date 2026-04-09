@@ -411,6 +411,11 @@ class ApiClient {
       method: 'POST', body: JSON.stringify({ bot_token: botToken, name }),
     });
   }
+  addBotToHub(appId: string, hubId: string) {
+    return this.requestRaw<{ status: string }>(`/developers/applications/${appId}/add-to-hub`, {
+      method: 'POST', body: JSON.stringify({ hub_id: hubId }),
+    });
+  }
 
   async uploadFile(file: File): Promise<Attachment> {
     const doUpload = async (): Promise<Response> => {

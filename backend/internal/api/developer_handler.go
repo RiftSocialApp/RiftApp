@@ -9,15 +9,17 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
 	"github.com/riftapp-cloud/riftapp/internal/models"
+	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
 )
 
 type DeveloperHandler struct {
-	svc *service.DeveloperService
+	svc     *service.DeveloperService
+	hubRepo *repository.HubRepo
 }
 
-func NewDeveloperHandler(svc *service.DeveloperService) *DeveloperHandler {
-	return &DeveloperHandler{svc: svc}
+func NewDeveloperHandler(svc *service.DeveloperService, hubRepo *repository.HubRepo) *DeveloperHandler {
+	return &DeveloperHandler{svc: svc, hubRepo: hubRepo}
 }
 
 func (h *DeveloperHandler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -480,6 +482,62 @@ func (h *DeveloperHandler) DeleteRichPresenceAsset(w http.ResponseWriter, r *htt
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ─── Add Bot to Hub ────────────────────────────────────────────────────────
+
+func (h *DeveloperHandler) AddBotToHub(w http.ResponseWriter, r *http.Request) {
+	appID := chi.URLParam(r, "appID")
+	app, err := h.svc.GetApplication(r.Context(), appID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "application not found")
+		return
+	}
+	if app.BotUserID == nil {
+		writeError(w, http.StatusBadRequest, "application has no bot")
+		return
+	}
+	if !app.BotPublic {
+		userID := middleware.GetUserID(r.Context())
+		if app.OwnerID != userID {
+			writeError(w, http.StatusForbidden, "this bot is not public")
+			return
+		}
+	}
+
+	var body struct {
+		HubID string `json:"hub_id"`
+	}
+	if err := readJSON(r, &body); err != nil || body.HubID == "" {
+		writeError(w, http.StatusBadRequest, "hub_id is required")
+		return
+	}
+
+	userID := middleware.GetUserID(r.Context())
+	ownerID, err := h.hubRepo.GetOwnerID(r.Context(), body.HubID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "hub not found")
+		return
+	}
+	if ownerID != userID {
+		role := h.hubRepo.GetMemberRole(r.Context(), body.HubID, userID)
+		if role != "owner" && role != "admin" {
+			writeError(w, http.StatusForbidden, "you must be a hub owner or admin to add bots")
+			return
+		}
+	}
+
+	if h.hubRepo.IsMember(r.Context(), body.HubID, *app.BotUserID) {
+		writeError(w, http.StatusConflict, "bot is already a member of this hub")
+		return
+	}
+
+	if err := h.hubRepo.AddMember(r.Context(), body.HubID, *app.BotUserID, "member"); err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to add bot: "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // ─── Import Discord Bot (full profile via GET /applications/@me) ────────────
