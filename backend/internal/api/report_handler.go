@@ -31,7 +31,7 @@ func (h *ReportHandler) getActorID(r *http.Request) string {
 	return middleware.GetUserID(r.Context())
 }
 
-func (h *ReportHandler) isSuperAdmin(r *http.Request) bool {
+func (h *ReportHandler) canAccessAdminReports(r *http.Request) bool {
 	if h.isAdminContext(r) {
 		return true
 	}
@@ -59,7 +59,7 @@ func (h *ReportHandler) CreateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
-	if !h.isSuperAdmin(r) {
+	if !h.canAccessAdminReports(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -80,7 +80,7 @@ func (h *ReportHandler) ListReports(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) GetReport(w http.ResponseWriter, r *http.Request) {
-	if !h.isSuperAdmin(r) {
+	if !h.canAccessAdminReports(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -94,7 +94,7 @@ func (h *ReportHandler) GetReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) UpdateReport(w http.ResponseWriter, r *http.Request) {
-	if !h.isSuperAdmin(r) {
+	if !h.canAccessAdminReports(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -116,7 +116,7 @@ func (h *ReportHandler) UpdateReport(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) TakeAction(w http.ResponseWriter, r *http.Request) {
-	if !h.isSuperAdmin(r) {
+	if !h.canAccessAdminReports(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}
@@ -135,7 +135,7 @@ func (h *ReportHandler) TakeAction(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ReportHandler) Stats(w http.ResponseWriter, r *http.Request) {
-	if !h.isSuperAdmin(r) {
+	if !h.canAccessAdminReports(r) {
 		writeError(w, http.StatusForbidden, "forbidden")
 		return
 	}

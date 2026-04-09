@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { adminApi, type AdminUser } from '../../api/adminClient';
 
 export default function UsersPage() {
@@ -11,18 +11,22 @@ export default function UsersPage() {
   const [selected, setSelected] = useState<(AdminUser & { hub_count?: number; message_count?: number }) | null>(null);
   const [offset, setOffset] = useState(0);
   const limit = 50;
+  const loadId = useRef(0);
 
   const load = async () => {
+    const id = ++loadId.current;
     setLoading(true);
     setError('');
     try {
       const res = await adminApi.listUsers({ search: committedSearch || undefined, limit, offset });
+      if (id !== loadId.current) return;
       setUsers(res.users);
       setTotal(res.total);
     } catch (err) {
+      if (id !== loadId.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load users');
     } finally {
-      setLoading(false);
+      if (id === loadId.current) setLoading(false);
     }
   };
 
@@ -48,7 +52,7 @@ export default function UsersPage() {
     try {
       await adminApi.banUser(id);
       load();
-      if (selected?.id === id) setSelected((s) => s ? { ...s, banned_at: new Date().toISOString() } : s);
+      setSelected((prev) => prev && prev.id === id ? { ...prev, banned_at: new Date().toISOString() } : prev);
     } catch (err) { setError(err instanceof Error ? err.message : 'Ban failed'); }
   };
 
@@ -56,7 +60,7 @@ export default function UsersPage() {
     try {
       await adminApi.unbanUser(id);
       load();
-      if (selected?.id === id) setSelected((s) => s ? { ...s, banned_at: undefined } : s);
+      setSelected((prev) => prev && prev.id === id ? { ...prev, banned_at: undefined } : prev);
     } catch (err) { setError(err instanceof Error ? err.message : 'Unban failed'); }
   };
 
@@ -108,7 +112,7 @@ export default function UsersPage() {
                     <div><span className="text-[#949ba4]">Messages:</span> <span className="text-white">{selected.message_count ?? '—'}</span></div>
                   </div>
                   <div className="flex gap-2">
-                    {u.banned_at ? (
+                    {selected.banned_at ? (
                       <button onClick={() => handleUnban(u.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#57f287]/20 text-[#57f287] hover:bg-[#57f287]/30 transition-colors">Unban</button>
                     ) : (
                       <button onClick={() => handleBan(u.id)} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-[#ed4245]/20 text-[#ed4245] hover:bg-[#ed4245]/30 transition-colors">Ban User</button>
