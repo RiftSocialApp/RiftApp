@@ -375,7 +375,6 @@ const MessageItem = memo(function MessageItem({
   const replyAuthor = message.reply_to?.author;
   const replyAuthorLabel = useMemo(() => getReplyAuthorLabel(message.reply_to), [message.reply_to]);
   const replyPreview = useMemo(() => getReplyPreviewMeta(message.reply_to), [message.reply_to]);
-  const replyAuthorColor = useMemo(() => nameColor(replyAuthorLabel), [replyAuthorLabel]);
   const replyAuthorBg = useMemo(() => avatarBg(replyAuthorLabel), [replyAuthorLabel]);
   const repliesToSelf = useMemo(() => {
     if (!currentUserId || !message.reply_to) return false;
@@ -394,14 +393,17 @@ const MessageItem = memo(function MessageItem({
     jumpToMessageId(replyTargetId);
   }, [replyTargetId]);
 
+  const replyPreviewToneClass =
+    replyPreview.tone === 'default'
+      ? 'text-riftapp-text-dim/85 group-hover/reply:text-riftapp-text-dim'
+      : replyPreview.tone === 'attachment'
+        ? 'text-riftapp-text-dim/70 group-hover/reply:text-riftapp-text-dim/85'
+        : 'text-riftapp-text-dim/60 group-hover/reply:text-riftapp-text-dim/75';
+
   const replyPreviewBody = (
     <>
       <span
-        aria-hidden
-        className="mt-[8px] h-[9px] w-6 shrink-0 rounded-tl-[6px] border-l-2 border-t-2 border-[#5b6068]"
-      />
-      <span
-        className={`mt-[1px] flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full ${
+        className={`flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full ${
           replyAuthor ? replyAuthorBg : 'bg-riftapp-content-elevated text-riftapp-text-dim/75'
         }`}
       >
@@ -413,21 +415,11 @@ const MessageItem = memo(function MessageItem({
           </span>
         )}
       </span>
-      <span
-        className="mt-px flex min-w-0 items-center gap-1 overflow-hidden text-[12px] leading-4"
-      >
-        <span className={`max-w-[42%] shrink-0 truncate font-medium ${replyAuthorColor} transition-colors group-hover/reply:brightness-110`}>
+      <span className="min-w-0 flex items-center gap-1 overflow-hidden text-[12px] leading-4">
+        <span className="rift-reply-mention shrink-0 truncate">
           @{replyAuthorLabel}
         </span>
-        <span
-          className={`min-w-0 truncate transition-colors ${
-            replyPreview.tone === 'default'
-              ? 'text-riftapp-text-dim/85 group-hover/reply:text-riftapp-text-dim'
-              : replyPreview.tone === 'attachment'
-                ? 'text-riftapp-text-dim/70 group-hover/reply:text-riftapp-text-dim/85'
-                : 'text-riftapp-text-dim/60 group-hover/reply:text-riftapp-text-dim/75'
-          }`}
-        >
+        <span className={`min-w-0 truncate transition-colors ${replyPreviewToneClass}`}>
           {replyPreview.text}
         </span>
       </span>
@@ -436,14 +428,14 @@ const MessageItem = memo(function MessageItem({
 
   const replyPreviewBlock = hasReplyPreview ? (
     interactionsDisabled || !replyTargetId ? (
-      <div className="mb-0.5 flex max-w-[580px] min-w-0 items-start gap-1.5 pr-2 text-left opacity-85">
+      <div className="rift-reply-preview mb-0.5 max-w-[580px] pr-2 text-left">
         {replyPreviewBody}
       </div>
     ) : (
       <button
         type="button"
         onClick={handleReplyPreviewClick}
-        className="group/reply mb-0.5 flex max-w-[580px] min-w-0 items-start gap-1.5 pr-2 text-left"
+        className="rift-reply-preview group/reply mb-0.5 max-w-[580px] pr-2 text-left"
       >
         {replyPreviewBody}
       </button>
@@ -696,12 +688,13 @@ const MessageItem = memo(function MessageItem({
       )}
 
       {showHeader ? (
-        <div className="flex gap-3">
+        <div className="rift-message-layout">
+          {replyPreviewBlock ? <div className="col-start-2 row-start-1 min-w-0">{replyPreviewBlock}</div> : null}
           {/* Avatar */}
           <div
             onClick={interactionsDisabled ? undefined : handleProfileClick}
             onContextMenu={interactionsDisabled ? undefined : handleUserContextMenu}
-            className={`h-9 w-9 rounded-full flex-shrink-0 mt-0.5 overflow-hidden ${interactionsDisabled ? '' : 'cursor-pointer hover:opacity-80 transition-opacity'}`}
+            className={`h-10 w-10 overflow-hidden rounded-full ${replyPreviewBlock ? 'row-start-2 mt-0.5' : 'row-start-1 mt-0.5'} ${interactionsDisabled ? '' : 'cursor-pointer transition-opacity hover:opacity-80'}`}
           >
             {author?.avatar_url ? (
               <img src={publicAssetUrl(author.avatar_url)} alt={authorName} className="w-full h-full object-cover" />
@@ -711,8 +704,7 @@ const MessageItem = memo(function MessageItem({
               </div>
             )}
           </div>
-          <div className="flex-1 min-w-0">
-            {replyPreviewBlock}
+          <div className={`col-start-2 min-w-0 ${replyPreviewBlock ? 'row-start-2' : 'row-start-1'}`}>
             <div className="flex items-baseline gap-2 mb-0.5">
               <span onClick={interactionsDisabled ? undefined : handleProfileClick} onContextMenu={interactionsDisabled ? undefined : handleUserContextMenu} className={`font-semibold text-[15px] ${interactionsDisabled ? '' : 'cursor-pointer hover:underline'} ${isOwn ? 'text-riftapp-accent-hover' : color}`}>
                 {authorName}
@@ -729,7 +721,7 @@ const MessageItem = memo(function MessageItem({
           </div>
         </div>
       ) : (
-        <div className="pl-12">
+        <div className="rift-message-followup">
           {replyPreviewBlock}
           {contentBlock}
         </div>
