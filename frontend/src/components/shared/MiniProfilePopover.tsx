@@ -6,8 +6,10 @@ import { useFriendStore } from '../../stores/friendStore';
 import { useDMStore } from '../../stores/dmStore';
 import { api } from '../../api/client';
 import StatusDot, { statusLabel } from './StatusDot';
-import type { RelationshipType } from '../../types';
+import type { RelationshipType, User } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { normalizeUser } from '../../utils/entityAssets';
+import { formatUserCreatedAt, hasUsableCreatedAt } from '../../utils/profileDates';
 
 const CARD_WIDTH = 300;
 const CARD_GAP = 8;
@@ -30,13 +32,45 @@ export default function MiniProfilePopover() {
   const close = useProfilePopoverStore((state) => state.close);
   const openModal = useProfilePopoverStore((state) => state.openModal);
   const liveStatus = usePresenceStore((state) => (user ? state.presence[user.id] : undefined));
+  const mergeUser = usePresenceStore((state) => state.mergeUser);
   const currentUser = useAuthStore((state) => state.user);
+  const setCurrentUser = useAuthStore((state) => state.setUser);
 
   const cardRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
   const [relationship, setRelationship] = useState<RelationshipType>('none');
   const [relLoading, setRelLoading] = useState(false);
+  const [profileUser, setProfileUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!user) {
+      setProfileUser(null);
+      return;
+    }
+
+    const initialUser = currentUser?.id === user.id ? currentUser : user;
+    setProfileUser(initialUser);
+
+    if (hasUsableCreatedAt(initialUser)) return;
+
+    let cancelled = false;
+    api.getUser(user.id)
+      .then((response) => {
+        if (cancelled) return;
+        const normalized = normalizeUser(response);
+        setProfileUser((prev) => (prev ? { ...prev, ...normalized } : normalized));
+        mergeUser(normalized);
+        if (currentUser?.id === normalized.id) {
+          setCurrentUser(normalized);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, currentUser, mergeUser, setCurrentUser]);
 
   const computePosition = useCallback(() => {
     if (!anchorRect || !cardRef.current) return;
@@ -94,9 +128,11 @@ export default function MiniProfilePopover() {
 
   if (!user) return null;
 
-  const isSelf = currentUser?.id === user.id;
-  const status = liveStatus ?? user.status;
-  const accent = nameColor(user.display_name || user.username);
+  const displayUser = profileUser ?? user;
+
+  const isSelf = currentUser?.id === displayUser.id;
+  const status = liveStatus ?? displayUser.status;
+  const accent = nameColor(displayUser.display_name || displayUser.username);
 
   const handleAddFriend = async () => {
     setRelLoading(true);
@@ -178,16 +214,16 @@ export default function MiniProfilePopover() {
               className="w-[72px] h-[72px] rounded-full border-[4px] border-riftapp-content-elevated flex items-center justify-center overflow-hidden"
               style={{ backgroundColor: accent }}
             >
-              {user.avatar_url ? (
-                <img src={publicAssetUrl(user.avatar_url)} alt="" className="w-full h-full object-cover" />
+              {displayUser.avatar_url ? (
+                <img src={publicAssetUrl(displayUser.avatar_url)} alt="" className="w-full h-full object-cover" />
               ) : (
                 <span className="text-xl font-bold text-white">
-                  {(user.display_name || user.username).slice(0, 2).toUpperCase()}
+                  {(displayUser.display_name || displayUser.username).slice(0, 2).toUpperCase()}
                 </span>
               )}
             </div>
             <div className="absolute bottom-[2px] right-[2px] border-[3px] border-riftapp-content-elevated rounded-full">
-              <StatusDot userId={user.id} fallbackStatus={user.status} size="lg" />
+              <StatusDot userId={displayUser.id} fallbackStatus={displayUser.status} size="lg" />
             </div>
           </div>
         </div>
@@ -195,12 +231,12 @@ export default function MiniProfilePopover() {
         <div className="pt-10 px-4 pb-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <p className="text-lg font-bold leading-tight truncate">{user.display_name || user.username}</p>
-              <p className="text-sm text-riftapp-text-dim truncate">@{user.username}</p>
+              <p className="text-lg font-bold leading-tight truncate">{displayUser.display_name || displayUser.username}</p>
+              <p className="text-sm text-riftapp-text-dim truncate">@{displayUser.username}</p>
             </div>
             <button
               type="button"
-              onClick={() => openModal(user)}
+              onClick={() => openModal(displayUser)}
               className="shrink-0 rounded-lg border border-riftapp-border/40 px-2.5 py-1.5 text-[12px] font-semibold text-riftapp-text-muted hover:text-riftapp-text hover:bg-riftapp-panel/60 transition-colors"
             >
               Full Profile
@@ -213,16 +249,16 @@ export default function MiniProfilePopover() {
               <p className="text-sm">{statusLabel(status)}</p>
             </div>
 
-            {user.bio && (
+            {displayUser.bio && (
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-riftapp-text-dim mb-0.5">About Me</p>
-                <p className="text-sm text-riftapp-text-muted leading-relaxed">{user.bio}</p>
+                <p className="text-sm text-riftapp-text-muted leading-relaxed">{displayUser.bio}</p>
               </div>
             )}
 
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-wider text-riftapp-text-dim mb-0.5">Member Since</p>
-              <p className="text-sm">{new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              <p className="text-sm">{formatUserCreatedAt(displayUser)}</p>
             </div>
           </div>
 

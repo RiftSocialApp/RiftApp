@@ -14,6 +14,8 @@ import type { HubRole, RelationshipType, User } from '../../types';
 import ModalCloseButton from './ModalCloseButton';
 import StatusDot, { statusLabel } from './StatusDot';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { normalizeUser } from '../../utils/entityAssets';
+import { formatUserCreatedAt } from '../../utils/profileDates';
 
 function nameColor(name: string): string {
   const colors = [
@@ -43,9 +45,11 @@ export default function FullProfileModal() {
   const modalUser = useProfilePopoverStore((state) => state.modalUser);
   const closeModal = useProfilePopoverStore((state) => state.closeModal);
   const currentUser = useAuthStore((state) => state.user);
+  const setCurrentUser = useAuthStore((state) => state.setUser);
   const developerMode = useAppSettingsStore((state) => state.developerMode);
   const openSettings = useAppSettingsStore((state) => state.openSettings);
   const liveStatus = usePresenceStore((state) => (modalUser ? state.presence[modalUser.id] : undefined));
+  const mergeUser = usePresenceStore((state) => state.mergeUser);
   const activeHubId = useHubStore((state) => state.activeHubId);
   const hubMembers = usePresenceStore((state) => state.hubMembers);
   const openDM = useDMStore((state) => state.openDM);
@@ -58,11 +62,18 @@ export default function FullProfileModal() {
 
   useEffect(() => {
     if (!modalUser) return;
-    setProfileUser(modalUser);
+    setProfileUser(currentUser?.id === modalUser.id ? currentUser : modalUser);
     setRelationship('none');
     setRoles([]);
 
-    api.getUser(modalUser.id).then((user) => setProfileUser(user)).catch(() => {});
+    api.getUser(modalUser.id).then((user) => {
+      const normalized = normalizeUser(user);
+      setProfileUser(normalized);
+      mergeUser(normalized);
+      if (currentUser?.id === normalized.id) {
+        setCurrentUser(normalized);
+      }
+    }).catch(() => {});
 
     if (currentUser && modalUser.id !== currentUser.id) {
       api.getRelationship(modalUser.id).then((response) => setRelationship(response.relationship)).catch(() => {});
@@ -71,7 +82,7 @@ export default function FullProfileModal() {
     if (activeHubId) {
       api.getRoles(activeHubId).then((nextRoles) => setRoles(nextRoles)).catch(() => {});
     }
-  }, [modalUser, currentUser, activeHubId]);
+  }, [modalUser, currentUser, activeHubId, mergeUser, setCurrentUser]);
 
   useEffect(() => {
     if (!modalUser) return;
@@ -277,7 +288,7 @@ export default function FullProfileModal() {
             <section className="rounded-xl border border-riftapp-border/40 bg-riftapp-panel/40 p-4 space-y-3">
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-riftapp-text-dim mb-1">Member Since</h3>
-                <p className="text-sm text-riftapp-text">{new Date(user.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                <p className="text-sm text-riftapp-text">{formatUserCreatedAt(user)}</p>
               </div>
               <div>
                 <h3 className="text-[11px] font-bold uppercase tracking-wider text-riftapp-text-dim mb-1">Username</h3>
