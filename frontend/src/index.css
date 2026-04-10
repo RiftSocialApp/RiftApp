@@ -250,6 +250,7 @@
   .rift-message-layout {
     --rift-message-avatar-size: 40px;
     --rift-message-leading-gap: 12px;
+    --rift-reply-connector-stroke: 2px;
     display: grid;
     grid-template-columns: var(--rift-message-avatar-size) minmax(0, 1fr);
     column-gap: var(--rift-message-leading-gap);
@@ -258,11 +259,13 @@
   .rift-message-followup {
     --rift-message-avatar-size: 40px;
     --rift-message-leading-gap: 12px;
+    --rift-reply-connector-stroke: 2px;
     padding-left: calc(var(--rift-message-avatar-size) + var(--rift-message-leading-gap));
   }
 
   .rift-reply-preview {
     position: relative;
+    z-index: 1;
     display: flex;
     min-width: 0;
     min-height: 16px;
@@ -274,12 +277,12 @@
   .rift-reply-preview::before {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--rift-message-leading-gap, 12px) - 2px));
+    left: calc(-1 * (var(--rift-message-avatar-size, 40px) / 2));
     top: 7px;
-    width: calc(var(--rift-message-leading-gap, 12px) - 1px);
+    width: calc((var(--rift-message-avatar-size, 40px) / 2) + var(--rift-message-leading-gap, 12px));
     height: 20px;
-    border-left: 2px solid #4e5058;
-    border-top: 2px solid #4e5058;
+    border-left: var(--rift-reply-connector-stroke, 2px) solid #4e5058;
+    border-top: var(--rift-reply-connector-stroke, 2px) solid #4e5058;
     border-top-left-radius: 6px;
     pointer-events: none;
   }
