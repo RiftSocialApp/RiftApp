@@ -116,6 +116,7 @@ export interface Message {
   edited_at?: string;
   created_at: string;
   reply_to_message_id?: string;
+  forwarded_message_id?: string;
   webhook_name?: string;
   webhook_avatar_url?: string;
   pinned: boolean;

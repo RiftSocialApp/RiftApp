@@ -57,9 +57,10 @@ func (s *MessageService) SetModerationService(mod *moderation.Service) {
 }
 
 type CreateMessageInput struct {
-	Content          string   `json:"content"`
-	AttachmentIDs    []string `json:"attachment_ids"`
-	ReplyToMessageID *string  `json:"reply_to_message_id"`
+	Content            string   `json:"content"`
+	AttachmentIDs      []string `json:"attachment_ids"`
+	ReplyToMessageID   *string  `json:"reply_to_message_id"`
+	ForwardedMessageID *string  `json:"-"`
 }
 
 type SearchMessagesInput struct {
@@ -82,8 +83,9 @@ type SearchMessagesInput struct {
 }
 
 type ForwardMessageInput struct {
-	Content       string
-	AttachmentIDs []string
+	Content            string
+	AttachmentIDs      []string
+	ForwardedMessageID *string
 }
 
 func (s *MessageService) List(ctx context.Context, userID, streamID string, before *string, limit int) ([]models.Message, error) {
@@ -134,12 +136,13 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 	}
 
 	msg := &models.Message{
-		ID:               uuid.New().String(),
-		StreamID:         &streamID,
-		AuthorID:         userID,
-		Content:          input.Content,
-		ReplyToMessageID: replyToMessageID,
-		CreatedAt:        time.Now(),
+		ID:                 uuid.New().String(),
+		StreamID:           &streamID,
+		AuthorID:           userID,
+		Content:            input.Content,
+		ReplyToMessageID:   replyToMessageID,
+		ForwardedMessageID: normalizeOptionalMessageID(input.ForwardedMessageID),
+		CreatedAt:          time.Now(),
 	}
 
 	if err := s.msgRepo.Create(ctx, msg); err != nil {
@@ -350,9 +353,15 @@ func (s *MessageService) PrepareForward(ctx context.Context, msgID, userID strin
 		return ForwardMessageInput{}, apperror.Internal("failed to clone message attachments", err)
 	}
 
+	forwardedMessageID := msg.ID
+	if msg.ForwardedMessageID != nil && *msg.ForwardedMessageID != "" {
+		forwardedMessageID = *msg.ForwardedMessageID
+	}
+
 	return ForwardMessageInput{
-		Content:       msg.Content,
-		AttachmentIDs: attachmentIDs,
+		Content:            msg.Content,
+		AttachmentIDs:      attachmentIDs,
+		ForwardedMessageID: &forwardedMessageID,
 	}, nil
 }
 

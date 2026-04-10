@@ -134,9 +134,10 @@ func (s *DMService) ListMessages(ctx context.Context, convID, userID string, bef
 }
 
 type SendDMInput struct {
-	Content          string   `json:"content"`
-	AttachmentIDs    []string `json:"attachment_ids"`
-	ReplyToMessageID *string  `json:"reply_to_message_id"`
+	Content            string   `json:"content"`
+	AttachmentIDs      []string `json:"attachment_ids"`
+	ReplyToMessageID   *string  `json:"reply_to_message_id"`
+	ForwardedMessageID *string  `json:"-"`
 }
 
 func (s *DMService) SendMessage(ctx context.Context, convID, userID string, input SendDMInput) (*models.Message, error) {
@@ -169,12 +170,13 @@ func (s *DMService) SendMessage(ctx context.Context, convID, userID string, inpu
 	}
 
 	msg := &models.Message{
-		ID:               uuid.New().String(),
-		ConversationID:   &convID,
-		AuthorID:         userID,
-		Content:          input.Content,
-		ReplyToMessageID: replyToMessageID,
-		CreatedAt:        time.Now(),
+		ID:                 uuid.New().String(),
+		ConversationID:     &convID,
+		AuthorID:           userID,
+		Content:            input.Content,
+		ReplyToMessageID:   replyToMessageID,
+		ForwardedMessageID: normalizeOptionalMessageID(input.ForwardedMessageID),
+		CreatedAt:          time.Now(),
 	}
 
 	if err := s.msgRepo.Create(ctx, msg); err != nil {

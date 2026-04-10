@@ -18,7 +18,7 @@ type MessageRepo struct {
 }
 
 const detailedMessageSelect = `m.id, m.stream_id, m.conversation_id, m.author_id, m.content, m.edited_at, m.created_at,
-		m.reply_to_message_id, m.webhook_name, m.webhook_avatar_url,
+		m.reply_to_message_id, m.forwarded_message_id, m.webhook_name, m.webhook_avatar_url,
 		m.pinned_at, m.pinned_by_id,
 		author.id, author.username, author.display_name, author.avatar_url, author.is_bot,
 		pinner.id, pinner.username, pinner.display_name, pinner.avatar_url`
@@ -72,6 +72,7 @@ func scanDetailedMessage(scanner messageScanner) (models.Message, error) {
 		&msg.EditedAt,
 		&msg.CreatedAt,
 		&msg.ReplyToMessageID,
+		&msg.ForwardedMessageID,
 		&msg.WebhookName,
 		&msg.WebhookAvatarURL,
 		&msg.PinnedAt,
@@ -118,9 +119,9 @@ func scanDetailedMessage(scanner messageScanner) (models.Message, error) {
 
 func (r *MessageRepo) Create(ctx context.Context, msg *models.Message) error {
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO messages (id, stream_id, conversation_id, author_id, content, reply_to_message_id, webhook_name, webhook_avatar_url, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-		msg.ID, msg.StreamID, msg.ConversationID, msg.AuthorID, msg.Content, msg.ReplyToMessageID, msg.WebhookName, msg.WebhookAvatarURL, msg.CreatedAt)
+		`INSERT INTO messages (id, stream_id, conversation_id, author_id, content, reply_to_message_id, forwarded_message_id, webhook_name, webhook_avatar_url, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		msg.ID, msg.StreamID, msg.ConversationID, msg.AuthorID, msg.Content, msg.ReplyToMessageID, msg.ForwardedMessageID, msg.WebhookName, msg.WebhookAvatarURL, msg.CreatedAt)
 	return err
 }
 
@@ -214,7 +215,7 @@ func (r *MessageRepo) GetByID(ctx context.Context, msgID string) (*models.Messag
 	var msg models.Message
 	err := r.db.QueryRow(ctx,
 		`SELECT id, stream_id, conversation_id, author_id, content, edited_at, created_at,
-		        reply_to_message_id, webhook_name, webhook_avatar_url, pinned_at, pinned_by_id
+		        reply_to_message_id, forwarded_message_id, webhook_name, webhook_avatar_url, pinned_at, pinned_by_id
 		 FROM messages WHERE id = $1`, msgID,
 	).Scan(
 		&msg.ID,
@@ -225,6 +226,7 @@ func (r *MessageRepo) GetByID(ctx context.Context, msgID string) (*models.Messag
 		&msg.EditedAt,
 		&msg.CreatedAt,
 		&msg.ReplyToMessageID,
+		&msg.ForwardedMessageID,
 		&msg.WebhookName,
 		&msg.WebhookAvatarURL,
 		&msg.PinnedAt,

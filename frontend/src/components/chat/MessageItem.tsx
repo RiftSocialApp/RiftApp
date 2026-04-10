@@ -48,6 +48,15 @@ function formatTime(dateStr: string): string {
   return `${formatShortDate(date)} ${time}`;
 }
 
+function ForwardedIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M9 7 5 11l4 4" />
+      <path d="M5 11h7a5 5 0 0 1 5 5v1" />
+    </svg>
+  );
+}
+
 // Generate a stable pastel accent color from string
 function nameColor(name: string): string {
   const colors = [
@@ -443,6 +452,8 @@ const MessageItem = memo(function MessageItem({
     )
   ) : null;
 
+  const isForwardedMessage = Boolean(message.forwarded_message_id);
+
   const handleProfileClick = useCallback((e: React.MouseEvent) => {
     if (interactionsDisabled) return;
     if (author) {
@@ -626,6 +637,18 @@ const MessageItem = memo(function MessageItem({
       </div>
     );
 
+  const renderedMessageBody = isForwardedMessage ? (
+    <div className="mt-0.5 space-y-1">
+      <div className="flex items-center gap-1.5 text-[13px] italic text-riftapp-text-dim/80">
+        <ForwardedIcon className="h-3.5 w-3.5 shrink-0" />
+        <span>Forwarded</span>
+      </div>
+      <div className="border-l-2 border-white/10 pl-3">
+        {contentBlock}
+      </div>
+    </div>
+  ) : contentBlock;
+
   return (
     <div
       id={isPreview ? undefined : `message-${message.id}`}
@@ -718,13 +741,13 @@ const MessageItem = memo(function MessageItem({
                 <span className="ml-1 shrink-0 whitespace-nowrap text-[10px] text-riftapp-text-dim/60 select-none" title={`Edited ${renderTimestamp(message.edited_at)}`}>(edited)</span>
               )}
             </div>
-            {contentBlock}
+            {renderedMessageBody}
           </div>
         </div>
       ) : (
         <div className="rift-message-followup">
           {replyPreviewBlock}
-          {contentBlock}
+          {renderedMessageBody}
         </div>
       )}
 

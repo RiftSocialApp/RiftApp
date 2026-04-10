@@ -143,8 +143,9 @@ func (h *MessageHandler) Forward(w http.ResponseWriter, r *http.Request) {
 
 	if streamID != nil {
 		msg, err := h.svc.Create(r.Context(), userID, *streamID, service.CreateMessageInput{
-			Content:       forwardInput.Content,
-			AttachmentIDs: forwardInput.AttachmentIDs,
+			Content:            forwardInput.Content,
+			AttachmentIDs:      forwardInput.AttachmentIDs,
+			ForwardedMessageID: forwardInput.ForwardedMessageID,
 		})
 		if err != nil {
 			writeAppError(w, err)
@@ -160,8 +161,9 @@ func (h *MessageHandler) Forward(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg, err := h.dmSvc.SendMessage(r.Context(), *conversationID, userID, service.SendDMInput{
-		Content:       forwardInput.Content,
-		AttachmentIDs: forwardInput.AttachmentIDs,
+		Content:            forwardInput.Content,
+		AttachmentIDs:      forwardInput.AttachmentIDs,
+		ForwardedMessageID: forwardInput.ForwardedMessageID,
 	})
 	if err != nil {
 		writeAppError(w, err)

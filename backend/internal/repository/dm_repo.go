@@ -64,7 +64,7 @@ func (r *DMRepo) FetchLastMessages(ctx context.Context, convoIDs []string) (map[
 
 	rows, err := r.db.Query(ctx,
 		`SELECT DISTINCT ON (m.conversation_id)
-		        m.id, m.conversation_id, m.author_id, m.content, m.created_at,
+		        m.id, m.conversation_id, m.author_id, m.content, m.created_at, m.forwarded_message_id,
 		        u.id, u.username, u.display_name, u.avatar_url
 		 FROM messages m
 		 JOIN users u ON m.author_id = u.id
@@ -80,7 +80,7 @@ func (r *DMRepo) FetchLastMessages(ctx context.Context, convoIDs []string) (map[
 		var convID string
 		var author models.User
 		if err := rows.Scan(
-			&msg.ID, &convID, &msg.AuthorID, &msg.Content, &msg.CreatedAt,
+			&msg.ID, &convID, &msg.AuthorID, &msg.Content, &msg.CreatedAt, &msg.ForwardedMessageID,
 			&author.ID, &author.Username, &author.DisplayName, &author.AvatarURL,
 		); err != nil {
 			return nil, err
