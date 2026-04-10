@@ -51,8 +51,8 @@ function formatTime(dateStr: string): string {
 function ForwardedIcon(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <path d="M9 7 5 11l4 4" />
-      <path d="M5 11h7a5 5 0 0 1 5 5v1" />
+      <path d="m15 7 4 4-4 4" />
+      <path d="M19 11h-7a5 5 0 0 0-5 5v1" />
     </svg>
   );
 }
