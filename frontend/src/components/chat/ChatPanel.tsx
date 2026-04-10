@@ -23,7 +23,9 @@ import MessageItem from './MessageItem';
 import PinSystemMessage from './PinSystemMessage';
 import TypingIndicator from './TypingIndicator';
 import UpdateActionButton from '../shared/UpdateActionButton';
+import AddFriendsToDMModal from '../modals/AddFriendsToDMModal';
 import type {
+  Conversation,
   Message,
   MessageSearchFilters,
   Notification,
@@ -44,6 +46,12 @@ import {
   subscribeToChatSearchRequests,
   type ChatSearchFocusFilter,
 } from '../../utils/chatSearchBridge';
+import {
+  getConversationAvatarUsers,
+  getConversationOtherMembers,
+  getConversationTitle,
+  isGroupConversation,
+} from '../../utils/conversations';
 import { jumpToMessageId } from '../../utils/messageJump';
 
 type HeaderPanel = 'notifications' | 'pins' | 'search' | 'inbox' | null;
@@ -367,6 +375,35 @@ function UserAvatar({
   return (
     <div className={`${sizeClass} rounded-full bg-riftapp-accent/15 text-riftapp-accent flex items-center justify-center shrink-0`}>
       <span className={`${textClass} font-semibold uppercase`}>{getUserInitial(user)}</span>
+    </div>
+  );
+}
+
+function ConversationAvatar({
+  conversation,
+  viewerUserId,
+  sizeClass = 'w-9 h-9',
+  textClass = 'text-sm',
+}: {
+  conversation?: Conversation;
+  viewerUserId?: string | null;
+  sizeClass?: string;
+  textClass?: string;
+}) {
+  if (!isGroupConversation(conversation, viewerUserId)) {
+    const member = getConversationOtherMembers(conversation, viewerUserId)[0] ?? conversation?.recipient;
+    return <UserAvatar user={member} sizeClass={sizeClass} textClass={textClass} />;
+  }
+
+  const avatarUsers = getConversationAvatarUsers(conversation, viewerUserId, 2);
+  return (
+    <div className={`${sizeClass} relative shrink-0`}>
+      <div className="absolute left-0 top-0">
+        <UserAvatar user={avatarUsers[0]} sizeClass="h-[17px] w-[17px]" textClass="text-[8px]" />
+      </div>
+      <div className="absolute bottom-0 right-0">
+        <UserAvatar user={avatarUsers[1]} sizeClass="h-[17px] w-[17px]" textClass="text-[8px]" />
+      </div>
     </div>
   );
 }
@@ -747,8 +784,8 @@ export default function ChatPanel({
   );
 
   const activeConversationLabel = useMemo(
-    () => (activeConversation?.recipient ? getUserLabel(activeConversation.recipient) : 'Direct Message'),
-    [activeConversation],
+    () => getConversationTitle(activeConversation, user?.id),
+    [activeConversation, user?.id],
   );
 
   const streamMap = useMemo(
@@ -772,14 +809,14 @@ export default function ChatPanel({
   }, [hubMembers]);
 
   const dmSearchAuthorOptions = useMemo(() => {
-    const options: User[] = [];
+    const optionsByID = new Map<string, User>();
     if (user) {
-      options.push(user);
+      optionsByID.set(user.id, user);
     }
-    if (activeConversation?.recipient && activeConversation.recipient.id !== user?.id) {
-      options.push(activeConversation.recipient);
+    for (const member of getConversationOtherMembers(activeConversation, user?.id)) {
+      optionsByID.set(member.id, member);
     }
-    return options;
+    return [...optionsByID.values()].sort((left, right) => getUserLabel(left).localeCompare(getUserLabel(right)));
   }, [activeConversation, user]);
 
   const displayMessages = isDMMode ? dmMessages : messages;
@@ -1454,6 +1491,7 @@ export default function ChatPanel({
   const searchSidebarTitle = searchLoading ? 'Searching…' : searchPerformed ? `${searchResults.length} Results` : 'Search';
   const searchInputClass = 'w-full rounded-md border border-[#2b2d31] bg-[#1a1b1e] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors placeholder:text-[#72767d] focus:border-[#4f545c]';
   const searchSelectClass = 'w-full rounded-md border border-[#2b2d31] bg-[#1a1b1e] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-[#4f545c]';
+  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
 
   return (
     <div className={`flex-1 min-h-0 flex flex-col bg-riftapp-content min-w-0 relative ${searchSidebarOpen ? 'pr-[320px]' : ''}`}>
@@ -1466,7 +1504,7 @@ export default function ChatPanel({
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {isDMMode ? (
               <>
-                <UserAvatar user={activeConversation?.recipient} sizeClass="w-7 h-7" textClass="text-[11px]" />
+                <ConversationAvatar conversation={activeConversation} viewerUserId={user?.id} sizeClass="w-7 h-7" textClass="text-[11px]" />
                 <div className="min-w-0">
                   <h3 className="truncate text-[15px] font-semibold text-[#f2f3f5]">
 					  {activeConversationLabel}
@@ -1533,6 +1571,14 @@ export default function ChatPanel({
 
           {!showWelcome ? (
             <div className="flex items-center gap-2">
+        {isDMMode && activeConversation ? (
+          <HeaderIconButton
+            label="Add friends to DM"
+            onClick={() => setShowAddFriendsModal(true)}
+          >
+            <IconUsers className="h-4 w-4" />
+          </HeaderIconButton>
+        ) : null}
 			  {isDMMode ? (
 				  <HeaderIconButton
 					  label="Search messages"
@@ -2241,9 +2287,9 @@ export default function ChatPanel({
               </div>
               {isDMMode ? (
                 <>
-                  <h3 className="text-xl font-bold mb-1">{activeConversation?.recipient?.display_name}</h3>
+                  <h3 className="text-xl font-bold mb-1">{activeConversationLabel}</h3>
                   <p className="text-riftapp-text-dim text-sm max-w-sm">
-                    This is the beginning of your conversation with <span className="font-semibold text-riftapp-text">{activeConversation?.recipient?.display_name}</span>.
+                    This is the beginning of your conversation with <span className="font-semibold text-riftapp-text">{activeConversationLabel}</span>.
                   </p>
                 </>
               ) : (
@@ -2341,7 +2387,7 @@ export default function ChatPanel({
       {!showWelcome ? (
         <div>
           <MessageInput
-            streamName={isDMMode ? (activeConversation?.recipient?.display_name || '') : (activeStream?.name || '')}
+            streamName={isDMMode ? activeConversationLabel : (activeStream?.name || '')}
             onTyping={isDMMode ? undefined : onTyping}
             onTypingStop={isDMMode ? undefined : onTypingStop}
             isDMMode={isDMMode}
@@ -2350,6 +2396,13 @@ export default function ChatPanel({
           />
         </div>
       ) : null}
+
+	  {showAddFriendsModal && activeConversation ? (
+		  <AddFriendsToDMModal
+			  conversation={activeConversation}
+			  onClose={() => setShowAddFriendsModal(false)}
+		  />
+	  ) : null}
     </div>
   );
 }

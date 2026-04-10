@@ -21,6 +21,7 @@ interface DMState {
 
   loadConversations: () => Promise<void>;
   openDM: (recipientId: string) => Promise<void>;
+  openGroupDM: (memberIds: string[]) => Promise<Conversation>;
   setActiveConversation: (convId: string) => Promise<void>;
   clearActive: () => void;
   loadDMMessages: (convId: string, opts?: { silent?: boolean }) => Promise<void>;
@@ -71,10 +72,32 @@ export const useDMStore = create<DMState>((set, get) => ({
     set((s) => {
       const exists = s.conversations.some((c) => c.id === conv.id);
       return {
-        conversations: exists ? s.conversations : [conv, ...s.conversations],
+        conversations: exists
+          ? s.conversations.map((conversation) => (conversation.id === conv.id ? { ...conversation, ...conv } : conversation))
+          : [conv, ...s.conversations],
       };
     });
     await get().setActiveConversation(conv.id);
+  },
+
+  openGroupDM: async (memberIds) => {
+    const conv = normalizeConversation(await api.createOrOpenGroupDM(memberIds));
+    set((s) => {
+      const exists = s.conversations.some((c) => c.id === conv.id);
+      const conversations = exists
+        ? s.conversations.map((conversation) => {
+            if (conversation.id !== conv.id) return conversation;
+            return {
+              ...conversation,
+              ...conv,
+              unread_count: conversation.unread_count ?? conv.unread_count ?? 0,
+            };
+          })
+        : [{ ...conv, unread_count: 0 }, ...s.conversations];
+      return { conversations, dmTotalUnread: sumDmUnreads(conversations) };
+    });
+    await get().setActiveConversation(conv.id);
+    return conv;
   },
 
   setActiveConversation: async (convId) => {
@@ -245,8 +268,17 @@ export const useDMStore = create<DMState>((set, get) => ({
   addConversation: (conv) => {
     const nextConversation = normalizeConversation(conv);
     set((s) => {
-      if (s.conversations.some((c) => c.id === nextConversation.id)) return s;
-      const conversations = [{ ...nextConversation, unread_count: 0 }, ...s.conversations];
+      const existing = s.conversations.find((conversation) => conversation.id === nextConversation.id);
+      const conversations = existing
+        ? s.conversations.map((conversation) => {
+            if (conversation.id !== nextConversation.id) return conversation;
+            return {
+              ...conversation,
+              ...nextConversation,
+              unread_count: conversation.unread_count ?? nextConversation.unread_count ?? 0,
+            };
+          })
+        : [{ ...nextConversation, unread_count: 0 }, ...s.conversations];
       return { conversations, dmTotalUnread: sumDmUnreads(conversations) };
     });
   },
@@ -315,6 +347,7 @@ export const useDMStore = create<DMState>((set, get) => ({
         recipient: conversation.recipient.id === nextUser.id
           ? { ...conversation.recipient, ...nextUser }
           : conversation.recipient,
+        members: conversation.members?.map((member) => (member.id === nextUser.id ? { ...member, ...nextUser } : member)),
         last_message: conversation.last_message ? patchMessage(conversation.last_message) : conversation.last_message,
       })),
       dmMessages: s.dmMessages.map(patchMessage),

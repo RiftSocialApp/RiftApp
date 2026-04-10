@@ -240,6 +240,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 
 		r.Get("/api/dms", dmH.List)
 		r.Post("/api/dms", dmH.CreateOrOpen)
+		r.Post("/api/dms/groups", dmH.CreateOrOpenGroup)
 		r.Get("/api/dms/read-states", dmH.DMReadStates)
 		r.Get("/api/dms/{conversationID}/messages", dmH.Messages)
 		r.Post("/api/dms/{conversationID}/messages", dmH.SendMessage)

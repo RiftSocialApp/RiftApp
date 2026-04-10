@@ -252,6 +252,12 @@ class ApiClient {
 
   getDMs() { return this.request<Conversation[]>('/dms'); }
   createOrOpenDM(recipientId: string) { return this.request<Conversation>('/dms', { method: 'POST', body: JSON.stringify({ recipient_id: recipientId }) }); }
+  createOrOpenGroupDM(memberIds: string[]) {
+    return this.request<Conversation>('/dms/groups', {
+      method: 'POST',
+      body: JSON.stringify({ member_ids: memberIds }),
+    });
+  }
   getPinnedDMMessages(conversationId: string, limit?: number) {
     const params = new URLSearchParams();
     if (limit != null) params.set('limit', String(limit));
