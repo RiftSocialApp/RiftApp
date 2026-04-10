@@ -39,7 +39,7 @@ function formatTime(dateStr: string): string {
   const isToday = isSameCalendarDay(date, now);
 
   const time = formatShortTime(date);
-  if (isToday) return `Today at ${time}`;
+  if (isToday) return time;
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
