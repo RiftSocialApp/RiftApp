@@ -9,6 +9,7 @@ import {
   reloadOnceForFrontendUpdate,
   shouldAutoReloadForFrontendAssetFailure,
 } from './utils/frontendUpdate';
+import { initializeDateTimePreferences } from './utils/dateTime';
 
 const DEPLOY_CHECK_INTERVAL_MS = 3 * 60 * 1000;
 const DEPLOY_SCRIPT_RE = /<script[^>]+type=["']module["'][^>]+src=["']([^"']*\/assets\/[^"']+\.js[^"']*)["']/i;
@@ -142,11 +143,16 @@ function installChunkMismatchRecovery() {
   });
 }
 
-installChunkMismatchRecovery();
-installDeployRefreshMonitor();
+async function bootstrap() {
+  installChunkMismatchRecovery();
+  installDeployRefreshMonitor();
+  await initializeDateTimePreferences();
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
+}
+
+void bootstrap();

@@ -17,6 +17,7 @@ import ForwardMessageModal from '../modals/ForwardMessageModal';
 import ModalCloseButton from '../shared/ModalCloseButton';
 import BotBadge from '../shared/BotBadge';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import { formatShortDate, formatShortTime, isSameCalendarDay } from '../../utils/dateTime';
 import { hasPermission, PermManageMessages } from '../../utils/permissions';
 import { getReplyAuthorLabel, getReplyPreviewMeta } from '../../utils/replyPreview';
 import { jumpToMessageId } from '../../utils/messageJump';
@@ -35,16 +36,16 @@ function formatBytes(bytes: number): string {
 function formatTime(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
-  const isToday = date.toDateString() === now.toDateString();
+  const isToday = isSameCalendarDay(date, now);
 
-  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const time = formatShortTime(date);
   if (isToday) return `Today at ${time}`;
 
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return `Yesterday at ${time}`;
+  if (isSameCalendarDay(date, yesterday)) return `Yesterday at ${time}`;
 
-  return `${date.toLocaleDateString()} ${time}`;
+  return `${formatShortDate(date)} ${time}`;
 }
 
 // Generate a stable pastel accent color from string

@@ -32,6 +32,12 @@ import type {
 } from '../../types';
 import type { ChatTimelineItem } from '../../utils/chatTimeline';
 import { buildChatTimeline } from '../../utils/chatTimeline';
+import {
+  formatLongDateWithWeekday,
+  formatShortDateTime,
+  formatShortTime,
+  isSameCalendarDay,
+} from '../../utils/dateTime';
 import { normalizeMessages } from '../../utils/entityAssets';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import {
@@ -72,46 +78,27 @@ const STREAM_NOTIFICATION_TOGGLES: ReadonlyArray<readonly [StreamNotificationTog
 function formatDateSeparator(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
-  if (date.toDateString() === now.toDateString()) return 'Today';
+  if (isSameCalendarDay(date, now)) return 'Today';
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return date.toLocaleDateString(undefined, {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  if (isSameCalendarDay(date, yesterday)) return 'Yesterday';
+  return formatLongDateWithWeekday(date);
 }
 
 function formatCompactTimestamp(dateStr: string): string {
-  return new Date(dateStr).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatShortDateTime(dateStr, 'medium');
 }
 
 function formatPinnedMessageTimestamp(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
-  const isSameDay = date.toDateString() === now.toDateString();
+  const isSameDay = isSameCalendarDay(date, now);
 
   if (isSameDay) {
-    return date.toLocaleTimeString(undefined, {
-      hour: 'numeric',
-      minute: '2-digit',
-    });
+    return formatShortTime(date);
   }
 
-  return date.toLocaleString(undefined, {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return formatShortDateTime(date);
 }
 
 function formatRelativeTimestamp(dateStr: string): string {
@@ -170,14 +157,7 @@ function buildSearchFilters(query?: string): MessageSearchFilters {
 }
 
 function formatSearchResultTimestamp(dateStr: string): string {
-  return new Date(dateStr).toLocaleString(undefined, {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
+  return formatShortDateTime(dateStr);
 }
 
 function searchResultAuthorColor(name: string): string {
