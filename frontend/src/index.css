@@ -277,7 +277,7 @@
   .rift-reply-preview::before {
     content: '';
     position: absolute;
-    left: calc(-1 * (var(--rift-message-avatar-size, 40px) / 2));
+    left: calc(-1 * ((var(--rift-message-avatar-size, 40px) / 2) + var(--rift-message-leading-gap, 12px)));
     top: 7px;
     width: calc((var(--rift-message-avatar-size, 40px) / 2) + var(--rift-message-leading-gap, 12px));
     height: 20px;
