@@ -729,6 +729,7 @@ export default function ChatPanel({
   const activeConversationId = useDMStore((s) => s.activeConversationId);
   const dmMessages = useDMStore((s) => s.dmMessages);
   const dmMessagesLoading = useDMStore((s) => s.dmMessagesLoading);
+  const dmPinMutationVersion = useDMStore((s) => s.dmPinMutationVersion);
   const conversations = useDMStore((s) => s.conversations);
   const sendDMMessage = useDMStore((s) => s.sendDMMessage);
   const ackDM = useDMStore((s) => s.ackDM);
@@ -743,6 +744,11 @@ export default function ChatPanel({
   const activeConversation = useMemo(
     () => conversations.find((c) => c.id === activeConversationId),
     [conversations, activeConversationId]
+  );
+
+  const activeConversationLabel = useMemo(
+    () => (activeConversation?.recipient ? getUserLabel(activeConversation.recipient) : 'Direct Message'),
+    [activeConversation],
   );
 
   const streamMap = useMemo(
@@ -764,6 +770,17 @@ export default function ChatPanel({
     const members = Object.values(hubMembers);
     return [...members].sort((a, b) => getUserLabel(a).localeCompare(getUserLabel(b)));
   }, [hubMembers]);
+
+  const dmSearchAuthorOptions = useMemo(() => {
+    const options: User[] = [];
+    if (user) {
+      options.push(user);
+    }
+    if (activeConversation?.recipient && activeConversation.recipient.id !== user?.id) {
+      options.push(activeConversation.recipient);
+    }
+    return options;
+  }, [activeConversation, user]);
 
   const displayMessages = isDMMode ? dmMessages : messages;
   const isLoading = isDMMode ? dmMessagesLoading : messagesLoading;
@@ -809,7 +826,8 @@ export default function ChatPanel({
   }, [notifications, inboxTab]);
 
   const activeSearchFilterCount = useMemo(() => countSearchFilters(searchFilters), [searchFilters]);
-  const searchSidebarOpen = activePanel === 'search' && !isDMMode && Boolean(activeHubId) && Boolean(activeStreamId);
+  const searchSidebarOpen = activePanel === 'search'
+    && (isDMMode ? Boolean(activeConversationId) : Boolean(activeHubId) && Boolean(activeStreamId));
   const searchQuery = searchFilters.query ?? '';
 
   const sortedSearchResults = useMemo(() => {
@@ -823,6 +841,10 @@ export default function ChatPanel({
   }, [searchResults, searchSortOrder]);
 
   const searchResultSections = useMemo(() => {
+    if (isDMMode) {
+      return [];
+    }
+
     const sections: Array<{ key: string; streamName: string; categoryName?: string; messages: Message[] }> = [];
 
     for (const message of sortedSearchResults) {
@@ -846,7 +868,7 @@ export default function ChatPanel({
     }
 
     return sections;
-  }, [sortedSearchResults, streamMap, categoryMap]);
+  }, [categoryMap, isDMMode, sortedSearchResults, streamMap]);
 
   // Compute unread divider position for stream messages
   const firstUnreadIndex = useMemo(() => {
@@ -1095,7 +1117,22 @@ export default function ChatPanel({
   }, []);
 
   const refreshPinnedMessages = useCallback(async () => {
-    if (!activeStreamId || isDMMode) return;
+    if (isDMMode) {
+      if (!activeConversationId) return;
+      setPinnedLoading(true);
+      setPinnedError(null);
+      try {
+        const items = normalizeMessages(await api.getPinnedDMMessages(activeConversationId));
+        setPinnedMessages(items);
+      } catch (error) {
+        setPinnedError(error instanceof Error ? error.message : 'Could not load pinned messages');
+      } finally {
+        setPinnedLoading(false);
+      }
+      return;
+    }
+
+    if (!activeStreamId) return;
     setPinnedLoading(true);
     setPinnedError(null);
     try {
@@ -1106,10 +1143,20 @@ export default function ChatPanel({
     } finally {
       setPinnedLoading(false);
     }
-  }, [activeStreamId, isDMMode]);
+  }, [activeConversationId, activeStreamId, isDMMode]);
 
   const openPinnedMessageFromTimeline = useCallback(
     async (messageId: string) => {
+      if (isDMMode) {
+        if (!activeConversationId) return;
+        if (focusMessage(messageId)) return;
+        await useDMStore.getState().ensureMessageLoaded(activeConversationId, messageId);
+        requestAnimationFrame(() => {
+          focusMessage(messageId);
+        });
+        return;
+      }
+
       if (!activeStreamId) return;
       if (focusMessage(messageId)) return;
       await useMessageStore.getState().ensureMessageLoaded(activeStreamId, messageId);
@@ -1117,7 +1164,7 @@ export default function ChatPanel({
         focusMessage(messageId);
       });
     },
-    [activeStreamId, focusMessage],
+    [activeConversationId, activeStreamId, focusMessage, isDMMode],
   );
 
   const openPinnedMessagesPanel = useCallback(() => {
@@ -1168,8 +1215,30 @@ export default function ChatPanel({
     setSearchPerformed(false);
   }, []);
 
+  useEffect(() => {
+    if (!isDMMode) return;
+
+    setSearchFilters((current) => {
+      if (!current.stream_id && !current.author_type && !current.mentions) {
+        return current;
+      }
+
+      return {
+        ...current,
+        stream_id: undefined,
+        author_type: undefined,
+        mentions: undefined,
+      };
+    });
+  }, [isDMMode, activeConversationId]);
+
   const runSearch = useCallback(async (overrides?: Partial<MessageSearchFilters>) => {
-    if (!activeHubId || isDMMode) return;
+    if (isDMMode) {
+      if (!activeConversationId) return;
+    } else if (!activeHubId) {
+      return;
+    }
+
     const nextFilters = {
       ...searchFilters,
       ...overrides,
@@ -1180,14 +1249,18 @@ export default function ChatPanel({
     setSearchPerformed(true);
     setSearchFilters(nextFilters);
     try {
-      const results = normalizeMessages(await api.searchHubMessages(activeHubId, cleanSearchFilters(nextFilters)));
+      const results = normalizeMessages(
+        isDMMode && activeConversationId
+          ? await api.searchDMMessages(activeConversationId, cleanSearchFilters(nextFilters))
+          : await api.searchHubMessages(activeHubId!, cleanSearchFilters(nextFilters)),
+      );
       setSearchResults(results);
     } catch (error) {
       setSearchError(error instanceof Error ? error.message : 'Could not search messages');
     } finally {
       setSearchLoading(false);
     }
-  }, [activeHubId, isDMMode, searchFilters]);
+  }, [activeConversationId, activeHubId, isDMMode, searchFilters]);
 
   const runSearchFromSidebar = useCallback(() => {
     setSearchPopover(null);
@@ -1269,6 +1342,23 @@ export default function ChatPanel({
     [activeHubId, focusMessage],
   );
 
+  const openConversationMessage = useCallback(
+    async (message: Pick<Message, 'id' | 'conversation_id'>) => {
+      if (!message.conversation_id) return;
+      if (useDMStore.getState().activeConversationId !== message.conversation_id) {
+        await useDMStore.getState().setActiveConversation(message.conversation_id);
+      }
+      await useDMStore.getState().ensureMessageLoaded(message.conversation_id, message.id);
+      setActivePanel(null);
+      if (!focusMessage(message.id)) {
+        requestAnimationFrame(() => {
+          focusMessage(message.id);
+        });
+      }
+    },
+    [focusMessage],
+  );
+
   const openNotificationItem = useCallback(
     async (notification: Notification) => {
       if (!notification.read) {
@@ -1310,7 +1400,7 @@ export default function ChatPanel({
   useEffect(() => {
     if (activePanel !== 'pins') return;
     void refreshPinnedMessages();
-  }, [activePanel, refreshPinnedMessages, pinMutationVersion]);
+  }, [activePanel, dmPinMutationVersion, pinMutationVersion, refreshPinnedMessages]);
 
   useEffect(() => {
     if (activePanel !== 'notifications') return;
@@ -1358,7 +1448,9 @@ export default function ChatPanel({
     setActivePanel(null);
   }, [activeHubId, activeStreamId, activeConversationId]);
 
-  const canShowChannelTools = !showWelcome && !isDMMode && Boolean(activeHubId);
+  const canShowNotificationTools = !showWelcome && !isDMMode && Boolean(activeHubId);
+  const canShowPinnedTools = !showWelcome && Boolean(activeStreamId || activeConversationId);
+  const canShowMemberListToggle = !showWelcome && !isDMMode && Boolean(activeHubId);
   const searchSidebarTitle = searchLoading ? 'Searching…' : searchPerformed ? `${searchResults.length} Results` : 'Search';
   const searchInputClass = 'w-full rounded-md border border-[#2b2d31] bg-[#1a1b1e] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors placeholder:text-[#72767d] focus:border-[#4f545c]';
   const searchSelectClass = 'w-full rounded-md border border-[#2b2d31] bg-[#1a1b1e] px-3 py-2 text-sm text-[#f2f3f5] outline-none transition-colors focus:border-[#4f545c]';
@@ -1377,7 +1469,7 @@ export default function ChatPanel({
                 <UserAvatar user={activeConversation?.recipient} sizeClass="w-7 h-7" textClass="text-[11px]" />
                 <div className="min-w-0">
                   <h3 className="truncate text-[15px] font-semibold text-[#f2f3f5]">
-                    {activeConversation?.recipient?.display_name || 'Direct Message'}
+					  {activeConversationLabel}
                   </h3>
                 </div>
               </>
@@ -1391,7 +1483,7 @@ export default function ChatPanel({
             )}
           </div>
 
-          {canShowChannelTools ? (
+          {canShowNotificationTools ? (
             <>
               <div className="hidden h-5 w-px bg-white/10 lg:block" />
               <div className="hidden items-center gap-2 lg:flex">
@@ -1414,9 +1506,43 @@ export default function ChatPanel({
             </>
           ) : null}
 
+          {isDMMode ? (
+            <>
+              <div className="hidden h-5 w-px bg-white/10 lg:block" />
+              <div className="hidden items-center gap-2 lg:flex">
+                <button
+                  type="button"
+                  onClick={() => setActivePanel('search')}
+                  className="flex h-7 min-w-[220px] max-w-[260px] items-center justify-between gap-3 rounded-[4px] bg-[#202225] px-3 text-left text-[12px] text-[#949ba4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-[#25262b] hover:text-[#dcddde]"
+                  aria-label={`Search messages with ${activeConversationLabel}`}
+                >
+                  <span className="truncate">{searchQuery.trim() || `Search ${activeConversationLabel}`}</span>
+                  <IconSearch className="h-3.5 w-3.5 shrink-0 text-[#72767d]" />
+                </button>
+
+                <HeaderIconButton
+                  label="Pinned messages"
+                  active={activePanel === 'pins'}
+                  onClick={() => togglePanel('pins')}
+                >
+                  <IconPin className="h-4 w-4" />
+                </HeaderIconButton>
+              </div>
+            </>
+          ) : null}
+
           {!showWelcome ? (
             <div className="flex items-center gap-2">
-              {canShowChannelTools ? (
+			  {isDMMode ? (
+				  <HeaderIconButton
+					  label="Search messages"
+					  active={activePanel === 'search'}
+					  onClick={() => togglePanel('search')}
+				  >
+					  <IconSearch className="h-4 w-4" />
+				  </HeaderIconButton>
+			  ) : null}
+			  {canShowMemberListToggle ? (
                 <HeaderIconButton
                   label={showMemberList ? 'Hide user list' : 'Show user list'}
                   active={showMemberList}
@@ -1440,6 +1566,7 @@ export default function ChatPanel({
               <input
                 type="text"
                 value={searchQuery}
+                placeholder={isDMMode ? `Search ${activeConversationLabel}` : 'Search this server'}
                 onChange={(event) => {
                   const nextQuery = event.target.value;
                   setSearchFilters((current) => ({
@@ -1453,7 +1580,6 @@ export default function ChatPanel({
                     runSearchFromSidebar();
                   }
                 }}
-                placeholder="Search"
                 className="min-w-0 flex-1 bg-transparent text-[12px] leading-5 text-[#dcddde] outline-none placeholder:text-[#72767d]"
               />
               {searchQuery ? (
@@ -1498,27 +1624,29 @@ export default function ChatPanel({
               <div className="absolute right-4 top-[calc(100%+8px)] z-20 w-[292px] overflow-hidden rounded-xl bg-riftapp-panel shadow-modal">
                 <div className="px-4 py-3">
                   <h5 className="text-sm font-semibold text-[#f2f3f5]">Filters</h5>
-                  <p className="mt-0.5 text-xs text-[#949ba4]">Refine results across this server.</p>
+                  <p className="mt-0.5 text-xs text-[#949ba4]">{isDMMode ? `Refine results across your conversation with ${activeConversationLabel}.` : 'Refine results across this server.'}</p>
                 </div>
                 <div className="max-h-[min(68vh,640px)] space-y-3 overflow-y-auto p-4">
                   <div className="grid grid-cols-1 gap-3">
-                    <SearchField label="Channel">
-                      <select
-                        ref={(element) => {
-                          searchFieldRefs.current.stream_id = element;
-                        }}
-                        value={searchFilters.stream_id ?? ''}
-                        onChange={(event) => updateSearchFilter('stream_id', event.target.value || undefined)}
-                        className={searchSelectClass}
-                      >
-                        <option value="">All channels</option>
-                        {textStreamsInHub.map((stream) => (
-                          <option key={stream.id} value={stream.id}>
-                            #{stream.name}
-                          </option>
-                        ))}
-                      </select>
-                    </SearchField>
+                    {!isDMMode ? (
+                      <SearchField label="Channel">
+                        <select
+                          ref={(element) => {
+                            searchFieldRefs.current.stream_id = element;
+                          }}
+                          value={searchFilters.stream_id ?? ''}
+                          onChange={(event) => updateSearchFilter('stream_id', event.target.value || undefined)}
+                          className={searchSelectClass}
+                        >
+                          <option value="">All channels</option>
+                          {textStreamsInHub.map((stream) => (
+                            <option key={stream.id} value={stream.id}>
+                              #{stream.name}
+                            </option>
+                          ))}
+                        </select>
+                      </SearchField>
+                    ) : null}
 
                     <SearchField label="Author">
                       <select
@@ -1530,7 +1658,7 @@ export default function ChatPanel({
                         className={searchSelectClass}
                       >
                         <option value="">Anyone</option>
-                        {memberOptions.map((member) => (
+                        {(isDMMode ? dmSearchAuthorOptions : memberOptions).map((member) => (
                           <option key={member.id} value={member.id}>
                             {getUserLabel(member)}
                           </option>
@@ -1538,42 +1666,46 @@ export default function ChatPanel({
                       </select>
                     </SearchField>
 
-                    <SearchField label="Author Type">
-                      <select
-                        ref={(element) => {
-                          searchFieldRefs.current.author_type = element;
-                        }}
-                        value={searchFilters.author_type ?? ''}
-                        onChange={(event) => updateSearchFilter('author_type', (event.target.value || undefined) as MessageSearchFilters['author_type'])}
-                        className={searchSelectClass}
-                      >
-                        <option value="">Any</option>
-                        <option value="user">User</option>
-                        <option value="bot">Bot</option>
-                        <option value="webhook">Webhook</option>
-                      </select>
-                    </SearchField>
-
-                    <SearchField label="Mentions Username">
+                    {!isDMMode ? (
                       <>
-                        <input
-                          ref={(element) => {
-                            searchFieldRefs.current.mentions = element;
-                          }}
-                          type="text"
-                          list="search-sidebar-mention-usernames"
-                          value={searchFilters.mentions ?? ''}
-                          onChange={(event) => updateSearchFilter('mentions', event.target.value || undefined)}
-                          placeholder="username"
-                          className={searchInputClass}
-                        />
-                        <datalist id="search-sidebar-mention-usernames">
-                          {memberOptions.map((member) => (
-                            <option key={member.id} value={member.username} />
-                          ))}
-                        </datalist>
+                        <SearchField label="Author Type">
+                          <select
+                            ref={(element) => {
+                              searchFieldRefs.current.author_type = element;
+                            }}
+                            value={searchFilters.author_type ?? ''}
+                            onChange={(event) => updateSearchFilter('author_type', (event.target.value || undefined) as MessageSearchFilters['author_type'])}
+                            className={searchSelectClass}
+                          >
+                            <option value="">Any</option>
+                            <option value="user">User</option>
+                            <option value="bot">Bot</option>
+                            <option value="webhook">Webhook</option>
+                          </select>
+                        </SearchField>
+
+                        <SearchField label="Mentions Username">
+                          <>
+                            <input
+                              ref={(element) => {
+                                searchFieldRefs.current.mentions = element;
+                              }}
+                              type="text"
+                              list="search-sidebar-mention-usernames"
+                              value={searchFilters.mentions ?? ''}
+                              onChange={(event) => updateSearchFilter('mentions', event.target.value || undefined)}
+                              placeholder="username"
+                              className={searchInputClass}
+                            />
+                            <datalist id="search-sidebar-mention-usernames">
+                              {memberOptions.map((member) => (
+                                <option key={member.id} value={member.username} />
+                              ))}
+                            </datalist>
+                          </>
+                        </SearchField>
                       </>
-                    </SearchField>
+                    ) : null}
 
                     <SearchField label="Has">
                       <select
@@ -1810,6 +1942,17 @@ export default function ChatPanel({
                   </div>
                 ))}
               </div>
+            ) : isDMMode && sortedSearchResults.length > 0 ? (
+              <div className="space-y-2">
+                {sortedSearchResults.map((message) => (
+                  <SearchResultCard
+                    key={message.id}
+                    message={message}
+                    query={searchQuery}
+                    onOpen={() => void openConversationMessage(message)}
+                  />
+                ))}
+              </div>
             ) : searchPerformed ? (
               <EmptyPanelState
                 title="No messages matched"
@@ -1818,8 +1961,8 @@ export default function ChatPanel({
               />
             ) : (
               <EmptyPanelState
-                title="Search the server"
-                description="Type in the search box or open filters to narrow down results by channel, author, file, or date."
+                title={isDMMode ? 'Search this conversation' : 'Search the server'}
+                description={isDMMode ? `Type in the search box or open filters to narrow down results with ${activeConversationLabel}.` : 'Type in the search box or open filters to narrow down results by channel, author, file, or date.'}
                 icon={<IconSearch className="h-5 w-5" />}
               />
             )}
@@ -1831,7 +1974,7 @@ export default function ChatPanel({
       <div className="flex-1 overflow-hidden relative">
         {activePanel && activePanel !== 'search' ? (
           <div ref={floatingPanelRef} className="absolute right-4 top-3 z-30">
-            {activePanel === 'notifications' && canShowChannelTools ? (
+            {activePanel === 'notifications' && canShowNotificationTools ? (
               <FloatingPanel
                 title="Notification Settings"
                 subtitle={streamNotifSettings ? `${notifLevelSubtitle(streamNotifSettings.notification_level)} for #${activeStream?.name ?? 'channel'}` : `Controls for #${activeStream?.name ?? 'channel'}`}
@@ -1909,7 +2052,7 @@ export default function ChatPanel({
               </FloatingPanel>
             ) : null}
 
-            {activePanel === 'pins' && canShowChannelTools ? (
+            {activePanel === 'pins' && canShowPinnedTools ? (
               <FloatingPanel
                 title={(
                   <span className="inline-flex items-center gap-2">
@@ -1917,7 +2060,7 @@ export default function ChatPanel({
                     <span>Pinned Messages</span>
                   </span>
                 )}
-                subtitle={activeStream ? `#${activeStream.name}` : 'Current channel'}
+                subtitle={isDMMode ? activeConversationLabel : activeStream ? `#${activeStream.name}` : 'Current channel'}
                 widthClass="w-[360px]"
                 contentClassName="max-h-[min(72vh,680px)] overflow-y-auto px-2.5 py-3"
                 showHeaderDivider={false}
@@ -1953,14 +2096,14 @@ export default function ChatPanel({
                         message={message}
                         isOwn={message.author_id === user?.id}
                         hubId={activeHubId}
-                        onOpen={() => void openStreamMessage(message)}
+                        onOpen={() => void (isDMMode ? openPinnedMessageFromTimeline(message.id) : openStreamMessage(message))}
                       />
                     ))}
                   </div>
                 ) : (
                   <EmptyPanelState
                     title="No pinned messages"
-                    description="Pin a message from its context menu and it will show up here."
+                    description={isDMMode ? 'Pin a DM from its context menu and it will show up here.' : 'Pin a message from its context menu and it will show up here.'}
                     icon={<IconPin className="h-5 w-5" />}
                   />
                 )}

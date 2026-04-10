@@ -329,9 +329,9 @@ const MessageItem = memo(function MessageItem({
     (!isDM && !!message.stream_id && hasPermission(hubPermissions, PermManageMessages));
 
   const canPin =
-    !isDM &&
-    !!message.stream_id &&
-    hasPermission(hubPermissions, PermManageMessages);
+    isDM
+      ? Boolean(message.conversation_id)
+      : !!message.stream_id && hasPermission(hubPermissions, PermManageMessages);
 
   const canEdit = isOwn && Boolean((message.content || '').trim());
 

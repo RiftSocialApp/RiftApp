@@ -17,6 +17,7 @@ interface DMState {
   dmMessages: Message[];
   dmMessagesLoading: boolean;
   dmTotalUnread: number;
+  dmPinMutationVersion: number;
 
   loadConversations: () => Promise<void>;
   openDM: (recipientId: string) => Promise<void>;
@@ -26,9 +27,12 @@ interface DMState {
   ensureMessageLoaded: (convId: string, messageId: string) => Promise<boolean>;
   sendDMMessage: (content: string, attachmentIds?: string[], replyToMessageId?: string) => Promise<void>;
   addDMMessage: (message: Message) => void;
+  updateDMMessage: (message: Message) => void;
   removeDMMessage: (messageId: string) => void;
   deleteDMMessage: (messageId: string) => Promise<void>;
   editDMMessage: (messageId: string, content: string) => Promise<void>;
+  pinMessage: (messageId: string) => Promise<Message>;
+  unpinMessage: (messageId: string) => Promise<Message>;
   addConversation: (conv: Conversation) => void;
   ackDM: (convId: string) => Promise<void>;
   readStates: () => Promise<void>;
@@ -44,6 +48,7 @@ export const useDMStore = create<DMState>((set, get) => ({
   dmMessages: [],
   dmMessagesLoading: false,
   dmTotalUnread: 0,
+  dmPinMutationVersion: 0,
 
   loadConversations: async () => {
     try {
@@ -194,6 +199,19 @@ export const useDMStore = create<DMState>((set, get) => ({
     });
   },
 
+  updateDMMessage: (message) => {
+	  const nextMessage = normalizeMessage(message);
+	  set((s) => ({
+		  dmMessages: s.dmMessages.map((m) => (m.id === nextMessage.id ? nextMessage : m)),
+		  conversations: s.conversations.map((conversation) => {
+			  if (conversation.id !== nextMessage.conversation_id) return conversation;
+			  const currentLastMessage = conversation.last_message;
+			  if (currentLastMessage?.id !== nextMessage.id) return conversation;
+			  return { ...conversation, last_message: nextMessage };
+		  }),
+	  }));
+  },
+
   removeDMMessage: (messageId) => {
     set((s) => ({
       dmMessages: s.dmMessages.filter((m) => m.id !== messageId),
@@ -207,9 +225,21 @@ export const useDMStore = create<DMState>((set, get) => ({
 
   editDMMessage: async (messageId, content) => {
     const msg = normalizeMessage(await api.editMessage(messageId, content));
-    set((s) => ({
-      dmMessages: s.dmMessages.map((m) => (m.id === messageId ? msg : m)),
-    }));
+    get().updateDMMessage(msg);
+  },
+
+  pinMessage: async (messageId) => {
+	  const msg = normalizeMessage(await api.pinMessage(messageId));
+	  set((s) => ({ dmPinMutationVersion: s.dmPinMutationVersion + 1 }));
+	  get().updateDMMessage(msg);
+	  return msg;
+  },
+
+  unpinMessage: async (messageId) => {
+	  const msg = normalizeMessage(await api.unpinMessage(messageId));
+	  set((s) => ({ dmPinMutationVersion: s.dmPinMutationVersion + 1 }));
+	  get().updateDMMessage(msg);
+	  return msg;
   },
 
   addConversation: (conv) => {
@@ -254,17 +284,28 @@ export const useDMStore = create<DMState>((set, get) => ({
     const nextUser = normalizeUser(user);
     const patchMessage = (message: Message) => {
       let nextMessage = message;
+      let nextReply = message.reply_to;
+
       if (message.author?.id === nextUser.id) {
         nextMessage = { ...nextMessage, author: { ...message.author, ...nextUser } };
       }
+      if (message.pinned_by?.id === nextUser.id) {
+        nextMessage = { ...nextMessage, pinned_by: { ...message.pinned_by, ...nextUser } };
+      }
       if (message.reply_to?.author?.id === nextUser.id) {
-        nextMessage = {
-          ...nextMessage,
-          reply_to: {
-            ...message.reply_to,
-            author: { ...message.reply_to.author, ...nextUser },
-          },
+        nextReply = {
+          ...message.reply_to,
+          author: { ...message.reply_to.author, ...nextUser },
         };
+      }
+      if (message.reply_to?.pinned_by?.id === nextUser.id) {
+        nextReply = {
+          ...(nextReply ?? message.reply_to),
+          pinned_by: { ...message.reply_to.pinned_by, ...nextUser },
+        };
+      }
+      if (nextReply && nextReply !== message.reply_to) {
+        nextMessage = { ...nextMessage, reply_to: nextReply };
       }
       return nextMessage;
     };
