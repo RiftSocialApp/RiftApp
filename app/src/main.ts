@@ -366,6 +366,44 @@ function clearUpdateStatusResetTimer(): void {
   }
 }
 
+function buildCacheBustedUrl(rawUrl: string): string {
+  try {
+    const url = new URL(rawUrl);
+    url.searchParams.set("riftappDesktopRefresh", String(Date.now()));
+    return url.toString();
+  } catch {
+    return rawUrl;
+  }
+}
+
+async function reloadFrontendIgnoringCache(webContents: Electron.WebContents): Promise<boolean> {
+  const currentUrl = webContents.getURL();
+  if (!isTrustedRendererOrigin(currentUrl)) {
+    return false;
+  }
+
+  try {
+    await webContents.session.clearCache();
+  } catch (error) {
+    console.warn("[Rift] Failed to clear renderer cache before frontend reload:", error);
+  }
+
+  try {
+    await webContents.loadURL(buildCacheBustedUrl(currentUrl), {
+      extraHeaders: "pragma: no-cache\ncache-control: no-cache",
+    });
+    return true;
+  } catch (error) {
+    console.warn("[Rift] Failed to reload frontend after clearing cache:", error);
+    try {
+      webContents.reloadIgnoringCache();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
 function broadcastUpdateStatus(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("update-status", updateStatus);
@@ -670,6 +708,10 @@ function registerIpc(): void {
 
   ipcMain.on("app:restart-to-update", () => {
     restartToApplyUpdate();
+  });
+
+  ipcMain.handle("app:reload-frontend-ignoring-cache", async (event) => {
+    return reloadFrontendIgnoringCache(event.sender);
   });
 
   ipcMain.handle("desktop:list-display-sources", async (event) => {

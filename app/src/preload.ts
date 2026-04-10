@@ -46,6 +46,8 @@ const desktop = {
       message: string;
     }>,
   isUpdateReady: () => ipcRenderer.invoke("app:is-update-ready") as Promise<boolean>,
+  reloadFrontendIgnoringCache: () =>
+    ipcRenderer.invoke("app:reload-frontend-ignoring-cache") as Promise<boolean>,
   checkForUpdates: () =>
     ipcRenderer.invoke("app:check-for-updates") as Promise<{
       state: "idle" | "checking" | "downloading" | "ready" | "up-to-date" | "error";
