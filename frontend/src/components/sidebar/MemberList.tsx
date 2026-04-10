@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
@@ -74,67 +74,69 @@ function SlidersIcon(props: React.SVGProps<SVGSVGElement>) {
 type SearchShortcut = {
   key: ChatSearchFocusFilter | 'more';
   title: string;
-  description: string;
+  chipLabel: string;
+  fullWidth?: boolean;
   Icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
 };
 
 const SEARCH_SHORTCUTS: ReadonlyArray<SearchShortcut> = [
   {
     key: 'author_id',
-    title: 'From a specific user',
-    description: 'from: user',
+    title: 'Filter by author',
+    chipLabel: 'From',
     Icon: UserIcon,
   },
   {
     key: 'stream_id',
-    title: 'Sent in a specific channel',
-    description: 'in: channel',
+    title: 'Filter by channel',
+    chipLabel: 'In',
     Icon: HashIcon,
   },
   {
     key: 'has',
-    title: 'Includes a specific type of data',
-    description: 'has: link, embed or file',
+    title: 'Filter by attachments and embeds',
+    chipLabel: 'Has',
     Icon: FilterIcon,
   },
   {
     key: 'mentions',
-    title: 'Mentions a specific user',
-    description: 'mentions: user',
+    title: 'Filter by mentions',
+    chipLabel: 'Mentions',
     Icon: MentionIcon,
   },
   {
     key: 'more',
-    title: 'More filters',
-    description: 'dates, author type and more',
+    title: 'Open advanced filters',
+    chipLabel: 'More filters',
+    fullWidth: true,
     Icon: SlidersIcon,
   },
 ];
 
-function SearchShortcutRow({
+function SearchShortcutChip({
   title,
-  description,
+  chipLabel,
   Icon,
+  fullWidth,
   onClick,
 }: {
   title: string;
-  description: string;
+  chipLabel: string;
   Icon: (props: React.SVGProps<SVGSVGElement>) => React.ReactNode;
+  fullWidth?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-2.5 rounded-[6px] px-3 py-[8px] text-left transition-colors hover:bg-[#36393f]"
+      title={title}
+      className={`inline-flex h-7 min-w-0 items-center gap-1.5 rounded-[6px] border border-[#2d3138] bg-[#202225] px-2 text-left text-[11px] font-medium text-[#b5bac1] transition-colors hover:border-[#3b4048] hover:bg-[#262930] hover:text-[#f2f3f5] ${fullWidth ? 'col-span-2' : ''}`}
     >
-      <span className="mt-[2px] flex h-4 w-4 shrink-0 items-center justify-center text-[#b5bac1]">
-        <Icon className="h-4 w-4" />
+      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+        <Icon className="h-3.5 w-3.5" />
       </span>
-      <span className="min-w-0">
-        <span className="block text-[14px] font-medium leading-[18px] text-[#f2f3f5]">{title}</span>
-        <span className="mt-0.5 block text-[13px] leading-[16px] text-[#949ba4]">{description}</span>
-      </span>
+      <span className="truncate leading-none">{chipLabel}</span>
     </button>
   );
 }
@@ -187,9 +189,6 @@ export default function MemberList() {
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const presence = usePresenceStore((s) => s.presence);
   const [messageSearch, setMessageSearch] = useState('');
-  const [searchMenuOpen, setSearchMenuOpen] = useState(false);
-  const searchWrapRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const { online, offline } = useMemo(() => {
     const members = Object.values(hubMembers);
@@ -214,56 +213,32 @@ export default function MemberList() {
     return { online: onlineList, offline: offlineList };
   }, [hubMembers, presence]);
 
-  useEffect(() => {
-    if (!searchMenuOpen) return;
-
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (searchWrapRef.current?.contains(target)) {
-        return;
-      }
-      setSearchMenuOpen(false);
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
-      setSearchMenuOpen(false);
-      searchInputRef.current?.blur();
-    };
-
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [searchMenuOpen]);
-
   const runMessageSearch = useCallback(() => {
     dispatchChatSearchRequest({ query: messageSearch, run: true, clearFiltersOnRun: true });
-    setSearchMenuOpen(false);
   }, [messageSearch]);
 
   const openAdvancedSearch = useCallback((focusFilter?: ChatSearchFocusFilter) => {
     dispatchChatSearchRequest({ query: messageSearch, focusFilter });
-    setSearchMenuOpen(false);
   }, [messageSearch]);
 
   if (Object.keys(hubMembers).length === 0) return null;
 
   return (
     <div className="relative w-60 border-l border-riftapp-border/60 bg-riftapp-content flex flex-col overflow-visible flex-shrink-0">
-      <div className="relative z-20 h-12 border-b border-riftapp-border/50 bg-riftapp-content px-4">
-        <div ref={searchWrapRef} className="relative flex h-full items-center justify-end">
-          <div className={`flex h-6 w-[168px] min-w-0 items-center gap-1 rounded-[4px] px-1.5 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors ${searchMenuOpen ? 'bg-[#262930] text-[#dcddde]' : 'bg-[#24272d] hover:bg-[#262930]'}`}>
+      <div className="relative z-20 border-b border-riftapp-border/50 bg-riftapp-content px-3 py-3">
+        <div className="space-y-2.5">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#949ba4]">Message search</p>
+            <p className="mt-1 text-[12px] leading-4 text-[#72767d]">Search this server or jump straight into a filter.</p>
+          </div>
+
+          <div className="flex h-8 min-w-0 items-center gap-1 rounded-[6px] bg-[#24272d] px-2 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors hover:bg-[#262930] focus-within:bg-[#262930]">
+            <SearchIcon className="h-[13px] w-[13px] shrink-0 text-[#72767d]" />
             <input
-              ref={searchInputRef}
               type="text"
               value={messageSearch}
-              onFocus={() => setSearchMenuOpen(true)}
               onChange={(event) => {
                 setMessageSearch(event.target.value);
-                setSearchMenuOpen(true);
               }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter') {
@@ -271,7 +246,7 @@ export default function MemberList() {
                   runMessageSearch();
                 }
               }}
-              placeholder="Search"
+              placeholder="Search messages"
               className="min-w-0 flex-1 bg-transparent py-0 text-[12px] leading-5 text-[#dcddde] outline-none placeholder:text-[#72767d]"
               aria-label="Search messages"
             />
@@ -279,36 +254,30 @@ export default function MemberList() {
               type="button"
               onClick={runMessageSearch}
               className="inline-flex h-5 w-6 shrink-0 items-center justify-center rounded-[3px] bg-[#2d3138] text-[#8f949c] transition-colors hover:bg-[#363a43] hover:text-[#dcddde]"
-              aria-label="Search messages"
+              aria-label="Run message search"
             >
               <SearchIcon className="h-[13px] w-[13px]" />
             </button>
           </div>
 
-          {searchMenuOpen ? (
-            <div className="absolute right-[-4px] top-[calc(100%+7px)] z-50 w-[244px] overflow-hidden rounded-[8px] border border-[#1f2023] bg-[#2b2d31] shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-              <div className="px-3 pb-1 pt-3">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#949ba4]">Filters</p>
-              </div>
-              <div className="px-1.5 pb-2">
-                {SEARCH_SHORTCUTS.map((shortcut) => (
-                  <SearchShortcutRow
-                    key={shortcut.key}
-                    title={shortcut.title}
-                    description={shortcut.description}
-                    Icon={shortcut.Icon}
-                    onClick={() => {
-                      if (shortcut.key === 'more') {
-                        openAdvancedSearch();
-                        return;
-                      }
-                      openAdvancedSearch(shortcut.key);
-                    }}
-                  />
-                ))}
-              </div>
-            </div>
-          ) : null}
+          <div className="grid grid-cols-2 gap-1.5">
+            {SEARCH_SHORTCUTS.map((shortcut) => (
+              <SearchShortcutChip
+                key={shortcut.key}
+                title={shortcut.title}
+                chipLabel={shortcut.chipLabel}
+                Icon={shortcut.Icon}
+                fullWidth={shortcut.fullWidth}
+                onClick={() => {
+                  if (shortcut.key === 'more') {
+                    openAdvancedSearch();
+                    return;
+                  }
+                  openAdvancedSearch(shortcut.key);
+                }}
+              />
+            ))}
+          </div>
         </div>
       </div>
 
