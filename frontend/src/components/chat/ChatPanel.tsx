@@ -1433,8 +1433,8 @@ export default function ChatPanel({
       )}
 
       {searchSidebarOpen ? (
-        <div ref={floatingPanelRef} className="absolute inset-y-0 right-0 z-30 flex w-[320px] flex-col border-l border-white/6 bg-[#111214] shadow-[-18px_0_36px_rgba(0,0,0,0.28)]">
-          <div className="flex h-12 items-center border-b border-white/6 px-4">
+        <div ref={floatingPanelRef} className="absolute inset-y-0 right-0 z-30 flex w-[320px] flex-col bg-riftapp-panel shadow-modal">
+          <div className="flex h-12 items-center px-4">
             <div className="flex h-7 w-full items-center gap-2 rounded-[4px] bg-[#202225] px-2 text-[#dcddde] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <IconSearch className="h-3.5 w-3.5 shrink-0 text-[#72767d]" />
               <input
@@ -1474,7 +1474,7 @@ export default function ChatPanel({
             </div>
           </div>
 
-          <div className="relative border-b border-white/6 px-4 py-3">
+          <div className="relative px-4 py-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[15px] font-semibold text-[#f2f3f5]">{searchSidebarTitle}</span>
               <div className="flex items-center gap-2">
@@ -1495,8 +1495,8 @@ export default function ChatPanel({
             </div>
 
             {searchPopover === 'filters' ? (
-              <div className="absolute right-4 top-[calc(100%+8px)] z-20 w-[292px] overflow-hidden rounded-xl border border-[#232428] bg-[#111214] shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
-                <div className="border-b border-white/6 px-4 py-3">
+              <div className="absolute right-4 top-[calc(100%+8px)] z-20 w-[292px] overflow-hidden rounded-xl bg-riftapp-panel shadow-modal">
+                <div className="px-4 py-3">
                   <h5 className="text-sm font-semibold text-[#f2f3f5]">Filters</h5>
                   <p className="mt-0.5 text-xs text-[#949ba4]">Refine results across this server.</p>
                 </div>
@@ -1721,7 +1721,7 @@ export default function ChatPanel({
                     </label>
                   </div>
                 </div>
-                <div className="flex items-center justify-between border-t border-white/6 px-4 py-3">
+                <div className="flex items-center justify-between px-4 py-3">
                   <button
                     type="button"
                     onClick={resetSearch}
@@ -1745,7 +1745,7 @@ export default function ChatPanel({
             ) : null}
 
             {searchPopover === 'sort' ? (
-              <div className="absolute right-4 top-[calc(100%+8px)] z-20 w-[180px] overflow-hidden rounded-xl border border-[#232428] bg-[#111214] p-1.5 shadow-[0_18px_48px_rgba(0,0,0,0.45)]">
+              <div className="absolute right-4 top-[calc(100%+8px)] z-20 w-[180px] overflow-hidden rounded-xl bg-riftapp-panel p-1.5 shadow-modal">
                 {([
                   ['newest', 'Newest'],
                   ['oldest', 'Oldest'],
