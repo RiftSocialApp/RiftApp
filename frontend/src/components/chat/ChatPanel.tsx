@@ -56,6 +56,7 @@ import {
   getConversationTitle,
   isGroupConversation,
 } from '../../utils/conversations';
+import { getConversationCallStatus } from '../../utils/dmCallStatus';
 import { jumpToMessageId } from '../../utils/messageJump';
 
 type HeaderPanel = 'notifications' | 'pins' | 'search' | 'inbox' | null;
@@ -488,14 +489,18 @@ function HeaderStatusPill({
   tone,
 }: {
   label: string;
-  tone: 'success' | 'warning';
+  tone: 'success' | 'warning' | 'danger' | 'muted';
 }) {
   return (
     <span
       className={`inline-flex items-center rounded-full px-2 py-[3px] text-[10px] font-semibold uppercase tracking-[0.16em] ${
         tone === 'warning'
           ? 'bg-[#f0b232]/14 text-[#ffd27a]'
-          : 'bg-[#23a55a]/14 text-[#77e0a2]'
+          : tone === 'danger'
+            ? 'bg-[#f87171]/14 text-[#fca5a5]'
+            : tone === 'muted'
+              ? 'bg-white/[0.08] text-[#d2d5db]'
+              : 'bg-[#23a55a]/14 text-[#77e0a2]'
       }`}
     >
       {label}
@@ -830,6 +835,7 @@ export default function ChatPanel({
   const voiceIsCameraOn = useVoiceStore((s) => s.isCameraOn);
   const conversationVoiceMembers = useVoiceStore((s) => s.conversationVoiceMembers);
   const conversationCallRings = useVoiceStore((s) => s.conversationCallRings);
+  const conversationCallOutcomes = useVoiceStore((s) => s.conversationCallOutcomes);
   const joinConversationVoice = useVoiceStore((s) => s.joinConversation);
   const startConversationCallRing = useVoiceStore((s) => s.startConversationCallRing);
   const cancelConversationCallRing = useVoiceStore((s) => s.cancelConversationCallRing);
@@ -858,36 +864,22 @@ export default function ChatPanel({
   const activeConversationCallRing = activeConversationId
     ? conversationCallRings[activeConversationId] ?? null
     : null;
+  const activeConversationCallOutcome = activeConversationId
+    ? conversationCallOutcomes[activeConversationId] ?? null
+    : null;
   const isCurrentConversationCall = Boolean(
     activeConversationId
     && voiceTargetKind === 'conversation'
     && voiceConversationId === activeConversationId
     && (voiceConnected || voiceConnecting),
   );
-  const activeConversationCallStatus = useMemo(() => {
-    if (activeConversationCallRing) {
-      return {
-        tone: 'warning' as const,
-        label:
-          activeConversationCallRing.initiator_id === user?.id
-            ? activeConversationCallRing.mode === 'video'
-              ? 'Ringing Video Call'
-              : 'Ringing Voice Call'
-            : activeConversationCallRing.mode === 'video'
-              ? 'Incoming Video Call'
-              : 'Incoming Voice Call',
-      };
-    }
-
-    if (activeConversationVoiceMembers.length > 0) {
-      return {
-        tone: 'success' as const,
-        label: activeConversationVoiceMembers.length === 1 ? 'In Call' : `${activeConversationVoiceMembers.length} In Call`,
-      };
-    }
-
-    return null;
-  }, [activeConversationCallRing, activeConversationVoiceMembers.length, user?.id]);
+  const activeConversationCallStatus = useMemo(() => getConversationCallStatus({
+    conversation: activeConversation,
+    currentUserId: user?.id,
+    ring: activeConversationCallRing,
+    voiceMemberIds: activeConversationVoiceMembers,
+    outcome: activeConversationCallOutcome,
+  }), [activeConversation, activeConversationCallOutcome, activeConversationCallRing, activeConversationVoiceMembers, user?.id]);
   const dmVoiceButtonLabel = activeConversationCallRing && activeConversationCallRing.initiator_id !== user?.id
     ? 'Join voice call'
     : activeConversationVoiceMembers.length > 0 && !isCurrentConversationCall

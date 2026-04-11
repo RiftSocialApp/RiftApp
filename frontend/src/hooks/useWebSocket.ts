@@ -9,25 +9,15 @@ import { useFriendStore } from '../stores/friendStore';
 import { useHubStore } from '../stores/hubStore';
 import { useVoiceStore } from '../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../stores/voiceChannelUiStore';
-import type { Message, Notification, Conversation, Hub, User, WSEvent, DMCallRing } from '../types';
+import type { Message, Notification, Conversation, Hub, User, WSEvent, DMCallRing, DMCallRingEnd } from '../types';
 import { publicAssetUrl } from '../utils/publicAssetUrl';
 import { api } from '../api/client';
+import { playNotificationSound } from '../utils/audio/appSounds';
 
 const HEARTBEAT_INTERVAL = 30000;
 const TYPING_EXPIRE_MS = 3000;
 const RECONNECT_BASE_DELAY = 1000;
 const RECONNECT_MAX_DELAY = 30000;
-
-// Pre-instantiated once so each notification event avoids object allocation
-const notifAudio = (() => {
-  try {
-    const a = new Audio('data:audio/wav;base64,UklGRhwMAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YfgLAAB4eHh4eHh4eHh4eHh3d3d3d3d3d3d2dnZ2dnZ2dXV1dXV1dXR0dHR0dHRzc3Nzc3NzcnJycnJycXFxcXFxcHBwcHBwb29vb29vbm5ubm5ubW1tbW1tbGxsbGxsa2tra2trampqampqaWlpaWlpaGhoaGhoZ2dnZ2dnZmZmZmZmZWVlZWVlZGRkZGRkY2NjY2NjYmJiYmJiYWFhYWFhYGBgYGBgX19fX19fXl5eXl5eXV1dXV1dXFxcXFxcW1tbW1tbWlpaWlpaWVlZWVlZWFhYWFhYV1dXV1dXVlZWVlZWVVVVVVVVVFRUVFRUU1NTUFRUVVVYVV1eX2FjZGhpbnFzdnh+gIaIjZKYnaCnrrK2u8LGzNLW3ODq');
-    a.volume = 0.3;
-    return a;
-  } catch {
-    return null;
-  }
-})();
 
 let globalSend: (op: string, d?: unknown) => void = () => {};
 
@@ -183,17 +173,23 @@ export function useWebSocket() {
           case 'notification_create': {
             const notif = evt.d as Notification;
             useNotificationStore.getState().addNotification(notif);
-            // Play notification sound
-            notifAudio?.play().catch(() => {});
+            if (notif.type !== 'dm' && notif.type !== 'dm_call') {
+              playNotificationSound();
+            }
             break;
           }
           case 'dm_message_create': {
             const dmMsg = evt.d as Message;
             useDMStore.getState().addDMMessage(dmMsg);
+            if (dmMsg.conversation_id) {
+              useVoiceStore.getState().clearConversationCallOutcome(dmMsg.conversation_id);
+            }
             // Auto-ack if this conversation is currently active (user can see the message)
             const activeConvId = useDMStore.getState().activeConversationId;
             if (dmMsg.conversation_id && dmMsg.conversation_id === activeConvId) {
               useDMStore.getState().ackDM(dmMsg.conversation_id);
+            } else if (dmMsg.author_id && dmMsg.author_id !== useAuthStore.getState().user?.id) {
+              playNotificationSound();
             }
             break;
           }
@@ -215,8 +211,9 @@ export function useWebSocket() {
             break;
           }
           case 'dm_call_ring_end': {
-            const { conversation_id } = evt.d as { conversation_id: string };
-            useVoiceStore.getState().clearConversationCallRing(conversation_id);
+            const endData = evt.d as DMCallRingEnd;
+            useVoiceStore.getState().clearConversationCallRing(endData.conversation_id);
+            useVoiceStore.getState().setConversationCallOutcome(endData);
             break;
           }
           case 'reaction_add': {

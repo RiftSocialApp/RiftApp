@@ -3,6 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -15,13 +16,19 @@ func (allowAllPermissionChecker) CanConnectVoice(context.Context, string, string
 
 func newTestHub() *Hub {
 	return &Hub{
-		clients:         make(map[string]map[string]*Client),
-		streamSubs:      make(map[string]map[string]*streamSubscription),
-		voiceJoinGrants: make(map[string]map[string]time.Time),
-		register:        make(chan *Client),
-		unregister:      make(chan *Client),
-		broadcast:       make(chan *BroadcastMessage, 256),
-		db:              nil,
+		clients:                   make(map[string]map[string]*Client),
+		streamSubs:                make(map[string]map[string]*streamSubscription),
+		voiceState:                make(map[string]map[string]bool),
+		voiceDeafened:             make(map[string]map[string]bool),
+		conversationMembers:       make(map[string][]string),
+		conversationVoiceState:    make(map[string]map[string]bool),
+		conversationVoiceDeafened: make(map[string]map[string]bool),
+		conversationCallRings:     make(map[string]DMCallRingData),
+		voiceJoinGrants:           make(map[string]map[string]time.Time),
+		register:                  make(chan *Client),
+		unregister:                make(chan *Client),
+		broadcast:                 make(chan *BroadcastMessage, 256),
+		db:                        nil,
 	}
 }
 
@@ -43,6 +50,19 @@ func drainOne(c *Client, timeout time.Duration) ([]byte, bool) {
 	case <-time.After(timeout):
 		return nil, false
 	}
+}
+
+func drainEvent(t *testing.T, c *Client, timeout time.Duration) Event {
+	t.Helper()
+	data, ok := drainOne(c, timeout)
+	if !ok {
+		t.Fatal("expected websocket event")
+	}
+	var evt Event
+	if err := json.Unmarshal(data, &evt); err != nil {
+		t.Fatalf("failed to decode websocket event: %v", err)
+	}
+	return evt
 }
 
 func TestClient_Subscribe(t *testing.T) {
@@ -304,5 +324,146 @@ func TestNewEvent(t *testing.T) {
 	}
 	if evt.Op != OpMessageCreate {
 		t.Fatalf("expected %s, got %s", OpMessageCreate, evt.Op)
+	}
+}
+
+func TestHub_StartConversationCallRingIncludesTargets(t *testing.T) {
+	hub := newTestHub()
+	hub.SetConversationMembers("conv-1", []string{"user-1", "user-2", "user-3"})
+
+	state, started := hub.StartConversationCallRing("conv-1", "user-1", "video")
+	if !started {
+		t.Fatal("expected DM call ring to start")
+	}
+	if state.Ring == nil {
+		t.Fatal("expected DM call ring state")
+	}
+	if !reflect.DeepEqual(state.Ring.TargetUserIDs, []string{"user-2", "user-3"}) {
+		t.Fatalf("unexpected ring targets: %#v", state.Ring.TargetUserIDs)
+	}
+	if len(state.Ring.DeclinedUserIDs) != 0 {
+		t.Fatalf("expected no declined users, got %#v", state.Ring.DeclinedUserIDs)
+	}
+}
+
+func TestHub_DeclineConversationCallRingBroadcastsUpdatedRing(t *testing.T) {
+	hub := newTestHub()
+	go hub.Run()
+
+	initiator := newTestClient(hub, "user-1", "sess-1")
+	recipient := newTestClient(hub, "user-2", "sess-2")
+	observer := newTestClient(hub, "user-3", "sess-3")
+
+	hub.register <- initiator
+	drainOne(initiator, time.Second)
+	hub.register <- recipient
+	drainOne(recipient, time.Second)
+	hub.register <- observer
+	drainOne(observer, time.Second)
+
+	hub.SetConversationMembers("conv-1", []string{"user-1", "user-2", "user-3"})
+	_, started := hub.StartConversationCallRing("conv-1", "user-1", "audio")
+	if !started {
+		t.Fatal("expected DM call ring to start")
+	}
+	drainEvent(t, initiator, time.Second)
+	drainEvent(t, recipient, time.Second)
+	drainEvent(t, observer, time.Second)
+
+	state := hub.DeclineConversationCallRing("conv-1", "user-2")
+	if state.Ring == nil {
+		t.Fatal("expected DM call ring to remain active after one decline")
+	}
+	if !reflect.DeepEqual(state.Ring.DeclinedUserIDs, []string{"user-2"}) {
+		t.Fatalf("unexpected declined users: %#v", state.Ring.DeclinedUserIDs)
+	}
+
+	evt := drainEvent(t, initiator, time.Second)
+	if evt.Op != OpDMCallRing {
+		t.Fatalf("expected %s event, got %s", OpDMCallRing, evt.Op)
+	}
+	var ring DMCallRingData
+	if err := json.Unmarshal(evt.Data, &ring); err != nil {
+		t.Fatalf("failed to decode ring payload: %v", err)
+	}
+	if !reflect.DeepEqual(ring.DeclinedUserIDs, []string{"user-2"}) {
+		t.Fatalf("unexpected broadcast declined users: %#v", ring.DeclinedUserIDs)
+	}
+}
+
+func TestHub_DeclineConversationCallRingEndsWhenAllTargetsDecline(t *testing.T) {
+	hub := newTestHub()
+	go hub.Run()
+
+	initiator := newTestClient(hub, "user-1", "sess-1")
+	recipientOne := newTestClient(hub, "user-2", "sess-2")
+	recipientTwo := newTestClient(hub, "user-3", "sess-3")
+
+	hub.register <- initiator
+	drainOne(initiator, time.Second)
+	hub.register <- recipientOne
+	drainOne(recipientOne, time.Second)
+	hub.register <- recipientTwo
+	drainOne(recipientTwo, time.Second)
+
+	hub.SetConversationMembers("conv-1", []string{"user-1", "user-2", "user-3"})
+	_, started := hub.StartConversationCallRing("conv-1", "user-1", "audio")
+	if !started {
+		t.Fatal("expected DM call ring to start")
+	}
+	drainEvent(t, initiator, time.Second)
+	drainEvent(t, recipientOne, time.Second)
+	drainEvent(t, recipientTwo, time.Second)
+
+	hub.DeclineConversationCallRing("conv-1", "user-2")
+	drainEvent(t, initiator, time.Second)
+	drainEvent(t, recipientOne, time.Second)
+	drainEvent(t, recipientTwo, time.Second)
+
+	hub.mu.Lock()
+	hub.conversationVoiceState["conv-1"] = map[string]bool{"user-1": true}
+	hub.mu.Unlock()
+
+	state := hub.DeclineConversationCallRing("conv-1", "user-3")
+	if !reflect.DeepEqual(state.MemberIDs, []string{"user-1"}) {
+		t.Fatalf("unexpected conversation member IDs after final decline: %#v", state.MemberIDs)
+	}
+	if state.Ring != nil {
+		t.Fatalf("expected ring to be cleared after final decline, got %#v", state.Ring)
+	}
+
+	evt := drainEvent(t, initiator, time.Second)
+	if evt.Op != OpDMCallRingEnd {
+		t.Fatalf("expected %s event, got %s", OpDMCallRingEnd, evt.Op)
+	}
+	var end DMCallRingEndData
+	if err := json.Unmarshal(evt.Data, &end); err != nil {
+		t.Fatalf("failed to decode ring end payload: %v", err)
+	}
+	if end.Reason != "declined" {
+		t.Fatalf("expected declined reason, got %s", end.Reason)
+	}
+	if !reflect.DeepEqual(end.DeclinedUserIDs, []string{"user-2", "user-3"}) {
+		t.Fatalf("unexpected declined user IDs: %#v", end.DeclinedUserIDs)
+	}
+}
+
+func TestHub_BuildConversationCallRingEndDataLockedMarksMissedUsers(t *testing.T) {
+	hub := newTestHub()
+	ring := DMCallRingData{
+		ConversationID:  "conv-1",
+		InitiatorID:     "user-1",
+		Mode:            "audio",
+		StartedAt:       time.Now().Add(-time.Minute).UTC(),
+		TargetUserIDs:   []string{"user-2", "user-3"},
+		DeclinedUserIDs: []string{"user-3"},
+	}
+
+	hub.mu.Lock()
+	end := hub.buildConversationCallRingEndDataLocked(ring, "timeout", "", "", time.Now().UTC())
+	hub.mu.Unlock()
+
+	if !reflect.DeepEqual(end.MissedUserIDs, []string{"user-2"}) {
+		t.Fatalf("unexpected missed user IDs: %#v", end.MissedUserIDs)
 	}
 }

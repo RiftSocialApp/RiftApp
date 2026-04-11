@@ -203,7 +203,7 @@ export interface StreamNotificationSettings {
 export interface Notification {
   id: string;
   user_id: string;
-  type: string; // mention, invite, dm
+  type: string; // mention, invite, dm, dm_call
   title: string;
   body?: string;
   reference_id?: string;
@@ -243,12 +243,29 @@ export interface Conversation {
 }
 
 export type DMCallMode = 'audio' | 'video';
+export type DMCallEndReason = 'answered' | 'cancelled' | 'declined' | 'timeout';
 
 export interface DMCallRing {
   conversation_id: string;
   initiator_id: string;
   mode: DMCallMode;
   started_at: string;
+  target_user_ids?: string[];
+  declined_user_ids?: string[];
+}
+
+export interface DMCallRingEnd {
+  conversation_id: string;
+  reason: DMCallEndReason;
+  initiator_id?: string;
+  mode?: DMCallMode;
+  started_at?: string;
+  ended_at: string;
+  ended_by_user_id?: string;
+  answered_by_user_id?: string;
+  target_user_ids?: string[];
+  declined_user_ids?: string[];
+  missed_user_ids?: string[];
 }
 
 export interface DMConversationCallState {

@@ -22,7 +22,7 @@ import type {
   SwitchBackgroundProcessorOptions,
 } from '@livekit/track-processors';
 import type { DesktopDisplaySource } from '../types/desktop';
-import type { DMCallMode, DMCallRing, DMConversationCallState } from '../types';
+import type { DMCallMode, DMCallRing, DMCallRingEnd, DMConversationCallState } from '../types';
 import { api } from '../api/client';
 import { wsSend } from '../hooks/useWebSocket';
 import { useAuthStore } from './auth';
@@ -340,6 +340,7 @@ interface VoiceStore {
   participants: VoiceParticipant[];
   conversationVoiceMembers: Record<string, string[]>;
   conversationCallRings: Record<string, DMCallRing>;
+  conversationCallOutcomes: Record<string, DMCallRingEnd>;
   dismissedConversationCallRings: Record<string, string>;
   conversationVoiceScreenSharers: Record<string, string[]>;
   conversationVoiceDeafenedUsers: Record<string, string[]>;
@@ -382,6 +383,7 @@ interface VoiceStore {
   loadConversationCallStates: () => Promise<void>;
   startConversationCallRing: (conversationId: string, mode: DMCallMode) => Promise<void>;
   cancelConversationCallRing: (conversationId: string) => Promise<void>;
+  declineConversationCallRing: (conversationId: string) => Promise<void>;
   leave: () => void;
   toggleMute: () => void;
   toggleDeafen: () => Promise<void>;
@@ -419,6 +421,8 @@ interface VoiceStore {
   applyConversationVoiceScreenShare: (conversationId: string, userId: string, sharing: boolean) => void;
   applyConversationVoiceDeafen: (conversationId: string, userId: string, deafened: boolean) => void;
   setConversationCallRing: (ring: DMCallRing) => void;
+  setConversationCallOutcome: (outcome: DMCallRingEnd) => void;
+  clearConversationCallOutcome: (conversationId: string) => void;
   clearConversationCallRing: (conversationId: string) => void;
   dismissConversationCallRing: (conversationId: string) => void;
   clearConversationCallState: (conversationId: string) => void;
@@ -1831,6 +1835,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   participants: [],
   conversationVoiceMembers: {},
   conversationCallRings: {},
+  conversationCallOutcomes: {},
   dismissedConversationCallRings: {},
   conversationVoiceScreenSharers: {},
   conversationVoiceDeafenedUsers: {},
@@ -1869,6 +1874,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
 
   joinConversation: async (conversationId) => {
     if (get().targetKind === 'conversation' && get().conversationId === conversationId && get().connected) return;
+    get().clearConversationCallOutcome(conversationId);
     await joinVoiceTarget({ kind: 'conversation', id: conversationId });
   },
 
@@ -1905,9 +1911,13 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       const nextDismissed = { ...current.dismissedConversationCallRings };
       delete nextDismissed[conversationId];
 
+      const nextOutcomes = { ...current.conversationCallOutcomes };
+      delete nextOutcomes[conversationId];
+
       return {
         conversationVoiceMembers: nextMembers,
         conversationCallRings: nextRings,
+        conversationCallOutcomes: nextOutcomes,
         dismissedConversationCallRings: nextDismissed,
       };
     });
@@ -1920,6 +1930,25 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       /* ignore transient cancellation failures */
     }
     get().clearConversationCallRing(conversationId);
+  },
+
+  declineConversationCallRing: async (conversationId) => {
+    const startedAt = get().conversationCallRings[conversationId]?.started_at ?? null;
+    get().dismissConversationCallRing(conversationId);
+    try {
+      await api.declineDMCallRing(conversationId);
+    } catch {
+      set((state) => {
+        if (!startedAt || state.conversationCallRings[conversationId]?.started_at !== startedAt) {
+          return state;
+        }
+        const nextDismissed = { ...state.dismissedConversationCallRings };
+        delete nextDismissed[conversationId];
+        return {
+          dismissedConversationCallRings: nextDismissed,
+        };
+      });
+    }
   },
 
   leave: async () => {
@@ -2476,12 +2505,37 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       if (nextDismissed[ring.conversation_id] && nextDismissed[ring.conversation_id] !== ring.started_at) {
         delete nextDismissed[ring.conversation_id];
       }
+      const nextOutcomes = { ...state.conversationCallOutcomes };
+      delete nextOutcomes[ring.conversation_id];
       return {
         conversationCallRings: {
           ...state.conversationCallRings,
           [ring.conversation_id]: ring,
         },
+        conversationCallOutcomes: nextOutcomes,
         dismissedConversationCallRings: nextDismissed,
+      };
+    });
+  },
+
+  setConversationCallOutcome: (outcome) => {
+    set((state) => ({
+      conversationCallOutcomes: {
+        ...state.conversationCallOutcomes,
+        [outcome.conversation_id]: outcome,
+      },
+    }));
+  },
+
+  clearConversationCallOutcome: (conversationId) => {
+    set((state) => {
+      if (!state.conversationCallOutcomes[conversationId]) {
+        return state;
+      }
+      const nextOutcomes = { ...state.conversationCallOutcomes };
+      delete nextOutcomes[conversationId];
+      return {
+        conversationCallOutcomes: nextOutcomes,
       };
     });
   },
@@ -2525,6 +2579,9 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       const nextRings = { ...state.conversationCallRings };
       delete nextRings[conversationId];
 
+      const nextOutcomes = { ...state.conversationCallOutcomes };
+      delete nextOutcomes[conversationId];
+
       const nextDismissed = { ...state.dismissedConversationCallRings };
       delete nextDismissed[conversationId];
 
@@ -2537,6 +2594,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       return {
         conversationVoiceMembers: nextMembers,
         conversationCallRings: nextRings,
+        conversationCallOutcomes: nextOutcomes,
         dismissedConversationCallRings: nextDismissed,
         conversationVoiceScreenSharers: nextScreenSharers,
         conversationVoiceDeafenedUsers: nextDeafened,

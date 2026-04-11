@@ -25,6 +25,41 @@ type streamSubscription struct {
 
 const conversationCallRingTTL = 45 * time.Second
 
+func cloneStringSlice(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	return append([]string(nil), values...)
+}
+
+func normalizeUserIDs(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(values))
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		normalized = append(normalized, value)
+	}
+	if len(normalized) == 0 {
+		return nil
+	}
+	sort.Strings(normalized)
+	return normalized
+}
+
+func timePointer(value time.Time) *time.Time {
+	timestamp := value
+	return &timestamp
+}
+
 type Hub struct {
 	clients                   map[string]map[string]*Client             // userID -> sessionID -> client
 	streamSubs                map[string]map[string]*streamSubscription // streamID -> sessionKey -> subscription
@@ -814,10 +849,11 @@ func (h *Hub) handleConversationVoiceState(userID, conversationID, action string
 	switch action {
 	case "join":
 		removedStreams, removedConversations := h.removeUserFromOtherVoiceLocked(userID, "", conversationID)
-		clearAnsweredRing := false
+		var answeredRingEnd *DMCallRingEndData
 		if ring, ok := h.conversationCallRings[conversationID]; ok && ring.InitiatorID != userID {
 			delete(h.conversationCallRings, conversationID)
-			clearAnsweredRing = true
+			endData := h.buildConversationCallRingEndDataLocked(ring, "answered", "", userID, time.Now().UTC())
+			answeredRingEnd = &endData
 		}
 		if h.conversationVoiceState[conversationID] == nil {
 			h.conversationVoiceState[conversationID] = make(map[string]bool)
@@ -831,8 +867,8 @@ func (h *Hub) handleConversationVoiceState(userID, conversationID, action string
 			h.broadcastConversationVoiceState(removedConversationID, userID, "leave")
 			h.cancelConversationCallRingIfInitiator(removedConversationID, userID, "cancelled")
 		}
-		if clearAnsweredRing {
-			h.broadcastConversationCallRingEnd(conversationID, "answered")
+		if answeredRingEnd != nil {
+			h.broadcastConversationCallRingEnd(*answeredRingEnd)
 		}
 		h.broadcastConversationVoiceState(conversationID, userID, "join")
 	case "leave":
@@ -848,14 +884,15 @@ func (h *Hub) handleConversationVoiceState(userID, conversationID, action string
 				delete(h.conversationVoiceDeafened, conversationID)
 			}
 		}
-		clearCancelledRing := false
+		var cancelledRingEnd *DMCallRingEndData
 		if ring, ok := h.conversationCallRings[conversationID]; ok && ring.InitiatorID == userID {
 			delete(h.conversationCallRings, conversationID)
-			clearCancelledRing = true
+			endData := h.buildConversationCallRingEndDataLocked(ring, "cancelled", userID, "", time.Now().UTC())
+			cancelledRingEnd = &endData
 		}
 		h.mu.Unlock()
-		if clearCancelledRing {
-			h.broadcastConversationCallRingEnd(conversationID, "cancelled")
+		if cancelledRingEnd != nil {
+			h.broadcastConversationCallRingEnd(*cancelledRingEnd)
 		}
 		h.broadcastConversationVoiceState(conversationID, userID, "leave")
 	default:
@@ -883,11 +920,8 @@ func (h *Hub) broadcastConversationCallRing(ring DMCallRingData) {
 	h.broadcastToConversationMembers(ring.ConversationID, NewEvent(OpDMCallRing, ring))
 }
 
-func (h *Hub) broadcastConversationCallRingEnd(conversationID, reason string) {
-	h.broadcastToConversationMembers(conversationID, NewEvent(OpDMCallRingEnd, DMCallRingEndData{
-		ConversationID: conversationID,
-		Reason:         reason,
-	}))
+func (h *Hub) broadcastConversationCallRingEnd(data DMCallRingEndData) {
+	h.broadcastToConversationMembers(data.ConversationID, NewEvent(OpDMCallRingEnd, data))
 }
 
 func (h *Hub) getHubMemberIDsForStream(streamID string) []string {
@@ -1197,6 +1231,48 @@ func (h *Hub) buildConversationCallStateLocked(conversationID string) (DMConvers
 	return state, true
 }
 
+func (h *Hub) pendingConversationCallTargetsLocked(ring DMCallRingData) []string {
+	if len(ring.TargetUserIDs) == 0 {
+		return nil
+	}
+	declined := make(map[string]struct{}, len(ring.DeclinedUserIDs))
+	for _, userID := range ring.DeclinedUserIDs {
+		declined[userID] = struct{}{}
+	}
+	voiceMembers := h.conversationVoiceState[ring.ConversationID]
+	pending := make([]string, 0, len(ring.TargetUserIDs))
+	for _, userID := range ring.TargetUserIDs {
+		if _, wasDeclined := declined[userID]; wasDeclined {
+			continue
+		}
+		if voiceMembers != nil && voiceMembers[userID] {
+			continue
+		}
+		pending = append(pending, userID)
+	}
+	return normalizeUserIDs(pending)
+}
+
+func (h *Hub) buildConversationCallRingEndDataLocked(ring DMCallRingData, reason, endedByUserID, answeredByUserID string, endedAt time.Time) DMCallRingEndData {
+	var missedUserIDs []string
+	if reason == "timeout" {
+		missedUserIDs = h.pendingConversationCallTargetsLocked(ring)
+	}
+	return DMCallRingEndData{
+		ConversationID:   ring.ConversationID,
+		Reason:           reason,
+		InitiatorID:      ring.InitiatorID,
+		Mode:             ring.Mode,
+		StartedAt:        timePointer(ring.StartedAt),
+		EndedAt:          endedAt,
+		EndedByUserID:    endedByUserID,
+		AnsweredByUserID: answeredByUserID,
+		TargetUserIDs:    cloneStringSlice(ring.TargetUserIDs),
+		DeclinedUserIDs:  cloneStringSlice(ring.DeclinedUserIDs),
+		MissedUserIDs:    missedUserIDs,
+	}
+}
+
 func (h *Hub) GetConversationCallState(conversationID string) DMConversationCallStateData {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
@@ -1244,13 +1320,22 @@ func (h *Hub) GetConversationCallStatesForUser(ctx context.Context, userID strin
 	return states, nil
 }
 
-func (h *Hub) StartConversationCallRing(conversationID, initiatorID, mode string) DMConversationCallStateData {
+func (h *Hub) StartConversationCallRing(conversationID, initiatorID, mode string) (DMConversationCallStateData, bool) {
 	now := time.Now().UTC()
+	targetUserIDs := make([]string, 0)
+	for _, memberID := range h.getConversationMemberIDs(conversationID) {
+		if memberID == initiatorID {
+			continue
+		}
+		targetUserIDs = append(targetUserIDs, memberID)
+	}
+	targetUserIDs = normalizeUserIDs(targetUserIDs)
 	ring := DMCallRingData{
 		ConversationID: conversationID,
 		InitiatorID:    initiatorID,
 		Mode:           mode,
 		StartedAt:      now,
+		TargetUserIDs:  targetUserIDs,
 	}
 
 	h.mu.Lock()
@@ -1259,8 +1344,13 @@ func (h *Hub) StartConversationCallRing(conversationID, initiatorID, mode string
 		if !onlyInitiator {
 			state, _ := h.buildConversationCallStateLocked(conversationID)
 			h.mu.Unlock()
-			return state
+			return state, false
 		}
+	}
+	if len(ring.TargetUserIDs) == 0 {
+		state, _ := h.buildConversationCallStateLocked(conversationID)
+		h.mu.Unlock()
+		return state, false
 	}
 	h.conversationCallRings[conversationID] = ring
 	state, _ := h.buildConversationCallStateLocked(conversationID)
@@ -1268,14 +1358,68 @@ func (h *Hub) StartConversationCallRing(conversationID, initiatorID, mode string
 
 	h.broadcastConversationCallRing(ring)
 	go h.expireConversationCallRing(conversationID, now)
-	return state
+	return state, true
 }
 
 func (h *Hub) CancelConversationCallRing(conversationID, initiatorID, reason string) bool {
 	return h.cancelConversationCallRingIfInitiator(conversationID, initiatorID, reason)
 }
 
+func (h *Hub) DeclineConversationCallRing(conversationID, userID string) DMConversationCallStateData {
+	var state DMConversationCallStateData
+
+	h.mu.Lock()
+	ring, ok := h.conversationCallRings[conversationID]
+	if !ok || ring.InitiatorID == userID {
+		state, _ = h.buildConversationCallStateLocked(conversationID)
+		h.mu.Unlock()
+		return state
+	}
+
+	isTarget := false
+	for _, targetUserID := range ring.TargetUserIDs {
+		if targetUserID == userID {
+			isTarget = true
+			break
+		}
+	}
+	if !isTarget {
+		state, _ = h.buildConversationCallStateLocked(conversationID)
+		h.mu.Unlock()
+		return state
+	}
+
+	for _, declinedUserID := range ring.DeclinedUserIDs {
+		if declinedUserID == userID {
+			state, _ = h.buildConversationCallStateLocked(conversationID)
+			h.mu.Unlock()
+			return state
+		}
+	}
+
+	ring.DeclinedUserIDs = normalizeUserIDs(append(ring.DeclinedUserIDs, userID))
+	if len(h.pendingConversationCallTargetsLocked(ring)) == 0 {
+		delete(h.conversationCallRings, conversationID)
+		endData := h.buildConversationCallRingEndDataLocked(ring, "declined", userID, "", time.Now().UTC())
+		state, ok := h.buildConversationCallStateLocked(conversationID)
+		if !ok {
+			state = DMConversationCallStateData{ConversationID: conversationID}
+		}
+		h.mu.Unlock()
+		h.broadcastConversationCallRingEnd(endData)
+		return state
+	}
+
+	h.conversationCallRings[conversationID] = ring
+	state, _ = h.buildConversationCallStateLocked(conversationID)
+	h.mu.Unlock()
+
+	h.broadcastConversationCallRing(ring)
+	return state
+}
+
 func (h *Hub) cancelConversationCallRingIfInitiator(conversationID, initiatorID, reason string) bool {
+	var endEvt *DMCallRingEndData
 	h.mu.Lock()
 	ring, ok := h.conversationCallRings[conversationID]
 	if !ok || ring.InitiatorID != initiatorID {
@@ -1283,9 +1427,11 @@ func (h *Hub) cancelConversationCallRingIfInitiator(conversationID, initiatorID,
 		return false
 	}
 	delete(h.conversationCallRings, conversationID)
+	endData := h.buildConversationCallRingEndDataLocked(ring, reason, initiatorID, "", time.Now().UTC())
+	endEvt = &endData
 	h.mu.Unlock()
 
-	h.broadcastConversationCallRingEnd(conversationID, reason)
+	h.broadcastConversationCallRingEnd(*endEvt)
 	return true
 }
 
@@ -1294,6 +1440,7 @@ func (h *Hub) expireConversationCallRing(conversationID string, startedAt time.T
 	defer timer.Stop()
 	<-timer.C
 
+	var endEvt *DMCallRingEndData
 	h.mu.Lock()
 	ring, ok := h.conversationCallRings[conversationID]
 	if !ok || !ring.StartedAt.Equal(startedAt) {
@@ -1301,9 +1448,11 @@ func (h *Hub) expireConversationCallRing(conversationID string, startedAt time.T
 		return
 	}
 	delete(h.conversationCallRings, conversationID)
+	endData := h.buildConversationCallRingEndDataLocked(ring, "timeout", "", "", time.Now().UTC())
+	endEvt = &endData
 	h.mu.Unlock()
 
-	h.broadcastConversationCallRingEnd(conversationID, "timeout")
+	h.broadcastConversationCallRingEnd(*endEvt)
 }
 
 // GetVoiceStates returns all voice channel members for streams in a given hub

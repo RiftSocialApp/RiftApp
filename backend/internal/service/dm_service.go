@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -55,7 +56,11 @@ func (s *DMService) StartConversationCallRing(ctx context.Context, userID, convI
 		return ws.DMConversationCallStateData{}, apperror.Forbidden("not a member of this conversation")
 	}
 
-	return s.hub.StartConversationCallRing(convID, userID, normalizedMode), nil
+	state, started := s.hub.StartConversationCallRing(convID, userID, normalizedMode)
+	if started && s.notifSvc != nil && state.Ring != nil && len(state.Ring.TargetUserIDs) > 0 {
+		s.pushConversationCallStart(convID, userID, *state.Ring)
+	}
+	return state, nil
 }
 
 func (s *DMService) CancelConversationCallRing(ctx context.Context, userID, convID string) error {
@@ -75,6 +80,23 @@ func (s *DMService) CancelConversationCallRing(ctx context.Context, userID, conv
 	return nil
 }
 
+func (s *DMService) DeclineConversationCallRing(ctx context.Context, userID, convID string) error {
+	if s.hub == nil {
+		return apperror.Internal("DM call state unavailable", fmt.Errorf("websocket hub unavailable"))
+	}
+
+	isMember, err := s.dmRepo.IsMember(ctx, convID, userID)
+	if err != nil {
+		return apperror.Internal("internal error", err)
+	}
+	if !isMember {
+		return apperror.Forbidden("not a member of this conversation")
+	}
+
+	s.hub.DeclineConversationCallRing(convID, userID)
+	return nil
+}
+
 func (s *DMService) ListConversationCallStates(ctx context.Context, userID string) ([]ws.DMConversationCallStateData, error) {
 	if s.hub == nil {
 		return []ws.DMConversationCallStateData{}, nil
@@ -88,6 +110,74 @@ func (s *DMService) ListConversationCallStates(ctx context.Context, userID strin
 		states = []ws.DMConversationCallStateData{}
 	}
 	return states, nil
+}
+
+func displayUserLabel(user *models.User) string {
+	if user == nil {
+		return "Someone"
+	}
+	if displayName := strings.TrimSpace(user.DisplayName); displayName != "" {
+		return displayName
+	}
+	if username := strings.TrimSpace(user.Username); username != "" {
+		return username
+	}
+	return "Someone"
+}
+
+func callModeLabel(mode string) string {
+	if strings.EqualFold(mode, "video") {
+		return "Video call"
+	}
+	return "Voice call"
+}
+
+func callPushBody(conversation *models.Conversation, mode string) string {
+	modeLabel := callModeLabel(mode)
+	if conversation == nil || !conversation.IsGroup {
+		return modeLabel
+	}
+	if conversation.Name != nil {
+		if name := strings.TrimSpace(*conversation.Name); name != "" {
+			return name + " • " + modeLabel
+		}
+	}
+	return "Group DM • " + modeLabel
+}
+
+func (s *DMService) pushConversationCallStart(convID, userID string, ring ws.DMCallRingData) {
+	go func() {
+		lookupCtx, cancelLookup := context.WithTimeout(context.Background(), 5*time.Second)
+
+		caller, err := s.dmRepo.GetUserInfo(lookupCtx, userID)
+		if err != nil {
+			caller = nil
+		}
+		conversation, err := s.dmRepo.GetConversation(lookupCtx, convID)
+		if err != nil {
+			conversation = nil
+		}
+		cancelLookup()
+
+		title := displayUserLabel(caller) + " is calling"
+		body := callPushBody(conversation, ring.Mode)
+		pushCtx, cancelPush := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancelPush()
+
+		if err := s.notifSvc.PushUsers(pushCtx, ring.TargetUserIDs, PushPayload{
+			Title: title,
+			Body:  body,
+			Data: map[string]string{
+				"type":            "dm_call",
+				"conversation_id": convID,
+				"initiator_id":    userID,
+				"mode":            ring.Mode,
+			},
+			CollapseKey: "dm_call_" + convID,
+		}); err != nil {
+			log.Printf("push: enqueue dm call notifications failed for conversation %s: %v", convID, err)
+		}
+	}()
 }
 
 func (s *DMService) ListConversations(ctx context.Context, userID string) ([]repository.ConvResponse, error) {
@@ -645,7 +735,9 @@ func (s *DMService) SendMessage(ctx context.Context, convID, userID string, inpu
 			notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			go func() {
 				defer cancel()
-				s.notifSvc.Create(notifCtx, rid, "dm", title, &bodyStr, &msg.ID, nil, nil, &userID)
+				s.notifSvc.CreateWithPushData(notifCtx, rid, "dm", title, &bodyStr, &msg.ID, nil, nil, &userID, map[string]string{
+					"conversation_id": convID,
+				})
 			}()
 		}
 	}

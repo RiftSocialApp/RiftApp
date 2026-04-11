@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuthStore } from '../../stores/auth';
 import { useDMStore } from '../../stores/dmStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { getConversationIconUrl, getConversationTitle, getUserLabel } from '../../utils/conversations';
+import { startIncomingCallSound, stopIncomingCallSound } from '../../utils/audio/appSounds';
 
 function PhoneIcon() {
   return (
@@ -28,8 +29,9 @@ export default function IncomingDMCallPrompt() {
   const conversations = useDMStore((state) => state.conversations);
   const setActiveConversation = useDMStore((state) => state.setActiveConversation);
   const conversationCallRings = useVoiceStore((state) => state.conversationCallRings);
+  const conversationVoiceMembers = useVoiceStore((state) => state.conversationVoiceMembers);
   const dismissedConversationCallRings = useVoiceStore((state) => state.dismissedConversationCallRings);
-  const dismissConversationCallRing = useVoiceStore((state) => state.dismissConversationCallRing);
+  const declineConversationCallRing = useVoiceStore((state) => state.declineConversationCallRing);
   const joinConversation = useVoiceStore((state) => state.joinConversation);
   const toggleCamera = useVoiceStore((state) => state.toggleCamera);
   const voiceConnected = useVoiceStore((state) => state.connected);
@@ -38,12 +40,13 @@ export default function IncomingDMCallPrompt() {
   const voiceConversationId = useVoiceStore((state) => state.conversationId);
   const openVoiceView = useVoiceChannelUiStore((state) => state.openVoiceView);
 
-  const [answeringMode, setAnsweringMode] = useState<'audio' | 'video' | null>(null);
+  const [pendingAction, setPendingAction] = useState<'audio' | 'video' | 'decline' | null>(null);
 
   const activeRing = useMemo(() => {
     const currentUserId = user?.id;
     return Object.values(conversationCallRings)
       .filter((ring) => ring.initiator_id !== currentUserId)
+      .filter((ring) => !currentUserId || !(ring.declined_user_ids ?? []).includes(currentUserId))
       .filter((ring) => dismissedConversationCallRings[ring.conversation_id] !== ring.started_at)
       .sort((left, right) => Date.parse(right.started_at) - Date.parse(left.started_at))[0] ?? null;
   }, [conversationCallRings, dismissedConversationCallRings, user?.id]);
@@ -53,11 +56,23 @@ export default function IncomingDMCallPrompt() {
     [activeRing?.conversation_id, conversations],
   );
 
-  if (!activeRing) {
-    return null;
-  }
+  const isPromptVisible = Boolean(
+    activeRing
+    && !(voiceTargetKind === 'conversation' && voiceConversationId === activeRing.conversation_id && (voiceConnected || voiceConnecting)),
+  );
 
-  if (voiceTargetKind === 'conversation' && voiceConversationId === activeRing.conversation_id && (voiceConnected || voiceConnecting)) {
+  useEffect(() => {
+    if (isPromptVisible) {
+      startIncomingCallSound();
+      return () => {
+        stopIncomingCallSound();
+      };
+    }
+    stopIncomingCallSound();
+    return undefined;
+  }, [isPromptVisible, activeRing?.conversation_id, activeRing?.started_at]);
+
+  if (!activeRing || !isPromptVisible) {
     return null;
   }
 
@@ -65,9 +80,21 @@ export default function IncomingDMCallPrompt() {
   const conversationTitle = getConversationTitle(conversation, currentUserId);
   const conversationIconUrl = getConversationIconUrl(conversation);
   const initiator = conversation?.members?.find((member) => member.id === activeRing.initiator_id) ?? null;
+  const voiceMembers = conversationVoiceMembers[activeRing.conversation_id] ?? [];
+  const voiceMemberSet = new Set(voiceMembers);
+  const declinedUserSet = new Set(activeRing.declined_user_ids ?? []);
+  const targetUserIds = (activeRing.target_user_ids ?? []).filter((memberId) => memberId !== currentUserId);
+  const joinedUserIds = targetUserIds.filter((memberId) => voiceMemberSet.has(memberId));
+  const pendingUserIds = targetUserIds.filter((memberId) => !voiceMemberSet.has(memberId) && !declinedUserSet.has(memberId));
+  const declinedUserIds = targetUserIds.filter((memberId) => declinedUserSet.has(memberId));
+  const groupDetailItems = [
+    joinedUserIds.length > 0 ? `${joinedUserIds.length} in call` : null,
+    pendingUserIds.length > 0 ? `${pendingUserIds.length} still ringing` : null,
+    declinedUserIds.length > 0 ? `${declinedUserIds.length} declined` : null,
+  ].filter((value): value is string => Boolean(value));
 
   const handleAnswer = async (mode: 'audio' | 'video') => {
-    setAnsweringMode(mode);
+    setPendingAction(mode);
     try {
       await setActiveConversation(activeRing.conversation_id);
       openVoiceView(activeRing.conversation_id, 'conversation');
@@ -76,12 +103,17 @@ export default function IncomingDMCallPrompt() {
         await toggleCamera();
       }
     } finally {
-      setAnsweringMode(null);
+      setPendingAction(null);
     }
   };
 
-  const handleDismiss = () => {
-    dismissConversationCallRing(activeRing.conversation_id);
+  const handleDecline = async () => {
+    setPendingAction('decline');
+    try {
+      await declineConversationCallRing(activeRing.conversation_id);
+    } finally {
+      setPendingAction(null);
+    }
   };
 
   return (
@@ -103,33 +135,43 @@ export default function IncomingDMCallPrompt() {
             <p className="mt-1 text-sm text-[#b5bac1]">
               {initiator ? `${getUserLabel(initiator)} is calling you.` : 'Someone is calling you.'}
             </p>
+            {groupDetailItems.length > 0 ? (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#d2d5db]">
+                {groupDetailItems.map((item) => (
+                  <span key={item} className="rounded-full bg-white/[0.06] px-2 py-1">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </div>
         <div className="flex items-center gap-2 px-4 py-3">
           <button
             type="button"
-            onClick={handleDismiss}
+            onClick={() => { void handleDecline(); }}
+            disabled={pendingAction !== null}
             className="flex-1 rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-medium text-[#d2d5db] transition-colors hover:bg-white/[0.1] hover:text-white"
           >
-            Dismiss
+            {pendingAction === 'decline' ? 'Declining...' : 'Decline'}
           </button>
           <button
             type="button"
             onClick={() => { void handleAnswer('audio'); }}
-            disabled={answeringMode !== null}
+            disabled={pendingAction !== null}
             className="inline-flex items-center gap-2 rounded-xl bg-[#248046] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d9d58] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <PhoneIcon />
-            {answeringMode === 'audio' ? 'Joining...' : 'Join'}
+            {pendingAction === 'audio' ? 'Joining...' : 'Join'}
           </button>
           <button
             type="button"
             onClick={() => { void handleAnswer('video'); }}
-            disabled={answeringMode !== null}
+            disabled={pendingAction !== null}
             className="inline-flex items-center gap-2 rounded-xl bg-[#5865f2] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6d79f6] disabled:cursor-not-allowed disabled:opacity-60"
           >
             <VideoIcon />
-            {answeringMode === 'video' ? 'Joining...' : 'Join With Video'}
+            {pendingAction === 'video' ? 'Joining...' : 'Join With Video'}
           </button>
         </div>
       </div>

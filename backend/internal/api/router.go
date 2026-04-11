@@ -255,6 +255,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Delete("/api/dms/{conversationID}/members/{userID}", dmH.RemoveMember)
 		r.Post("/api/dms/{conversationID}/leave", dmH.LeaveConversation)
 		r.With(middleware.RateLimit(dmRingRL)).Post("/api/dms/{conversationID}/call/ring", dmH.StartCallRing)
+		r.With(middleware.RateLimit(dmRingRL)).Post("/api/dms/{conversationID}/call/ring/decline", dmH.DeclineCallRing)
 		r.With(middleware.RateLimit(dmRingRL)).Post("/api/dms/{conversationID}/call/ring/cancel", dmH.CancelCallRing)
 		r.Get("/api/dms/{conversationID}/messages", dmH.Messages)
 		r.Post("/api/dms/{conversationID}/messages", dmH.SendMessage)
