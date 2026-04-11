@@ -119,24 +119,6 @@ function formatDesktopUpdateSummary(status: DesktopUpdateStatus) {
   return 'Desktop updates check in the background when the packaged app is running.';
 }
 
-function desktopUpdateActionLabel(status: DesktopUpdateStatus) {
-  if (status.state === 'ready') {
-    return 'Restart to Update';
-  }
-
-  if (status.state === 'checking') {
-    return 'Checking...';
-  }
-
-  if (status.state === 'downloading') {
-    return status.progress !== null
-      ? `Downloading... ${Math.round(status.progress)}%`
-      : 'Downloading...';
-  }
-
-  return 'Check for Updates';
-}
-
 function SettingsModal() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -236,7 +218,6 @@ function SettingsModal() {
   const frontendCommitLabel = formatFrontendCommitSha(frontendCommitSha);
   const frontendBuildLabel = formatFrontendBuildTimestamp(frontendBuildId);
   const desktopUpdateSummary = formatDesktopUpdateSummary(desktopUpdateStatus);
-  const desktopUpdateButtonText = desktopUpdateActionLabel(desktopUpdateStatus);
   const desktopUpdateBusy = desktopUpdateStatus.state === 'checking' || desktopUpdateStatus.state === 'downloading';
 
   if (!user) return null;
@@ -342,19 +323,23 @@ function SettingsModal() {
                         {desktopUpdateStatus.message ? (
                           <p className="mt-1 text-riftapp-text-muted">{desktopUpdateStatus.message}</p>
                         ) : null}
-                        <div className="mt-2 flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={handleDesktopUpdateAction}
-                            disabled={desktopUpdateBusy}
-                            className={`inline-flex h-7 items-center rounded-md px-2.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${desktopUpdateStatus.state === 'ready' ? 'bg-[#248046] text-white hover:bg-[#2d9d58]' : 'border border-riftapp-border/60 bg-riftapp-content-elevated text-riftapp-text hover:bg-riftapp-content'}`}
-                          >
-                            {desktopUpdateButtonText}
-                          </button>
-                          {desktopUpdateStatus.version && desktopUpdateStatus.state !== 'up-to-date' ? (
-                            <span className="text-riftapp-text-dim">{`Target ${desktopUpdateStatus.version}`}</span>
-                          ) : null}
-                        </div>
+                        {desktopUpdateStatus.state === 'ready' ? (
+                          <div className="mt-2 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleDesktopUpdateAction}
+                              disabled={desktopUpdateBusy}
+                              className="inline-flex h-7 items-center rounded-md bg-[#248046] px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#2d9d58] disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Restart to Update
+                            </button>
+                            {desktopUpdateStatus.version ? (
+                              <span className="text-riftapp-text-dim">{`Target ${desktopUpdateStatus.version}`}</span>
+                            ) : null}
+                          </div>
+                        ) : desktopUpdateStatus.version && desktopUpdateStatus.state !== 'up-to-date' ? (
+                          <div className="mt-2 text-riftapp-text-dim">{`Target ${desktopUpdateStatus.version}`}</div>
+                        ) : null}
                       </div>
                     ) : null}
                     {frontendUpdateReady ? (
@@ -2554,6 +2539,17 @@ function VoiceVideoSettingsTab() {
 function AdvancedSettingsTab() {
   const developerMode = useAppSettingsStore((s) => s.developerMode);
   const setDeveloperMode = useAppSettingsStore((s) => s.setDeveloperMode);
+  const frontendUpdateReady = useFrontendUpdateStore((s) => s.updateReady);
+  const applyFrontendUpdate = useFrontendUpdateStore((s) => s.applyUpdate);
+
+  const handleDebugRefresh = useCallback(() => {
+    if (frontendUpdateReady) {
+      applyFrontendUpdate();
+      return;
+    }
+
+    window.location.reload();
+  }, [applyFrontendUpdate, frontendUpdateReady]);
 
   return (
     <div className="space-y-6">
@@ -2585,6 +2581,25 @@ function AdvancedSettingsTab() {
                 }`}
               />
             </span>
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <h3 className="text-xs font-bold uppercase tracking-wide text-riftapp-text-dim mb-4">Debugging</h3>
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-riftapp-text">Manual Refresh</p>
+            <p className="max-w-lg text-[13px] leading-snug text-riftapp-text-muted">
+              Temporary debugging control for forcing a frontend refresh. This is hidden from the normal app UI on purpose.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleDebugRefresh}
+            className="inline-flex h-9 items-center rounded-md border border-riftapp-border/60 bg-riftapp-content-elevated px-3 text-[13px] font-semibold text-riftapp-text transition-colors hover:bg-riftapp-content"
+          >
+            {frontendUpdateReady ? 'Apply Frontend Update' : 'Refresh App'}
           </button>
         </div>
       </div>
