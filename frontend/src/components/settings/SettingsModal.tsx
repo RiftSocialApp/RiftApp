@@ -116,7 +116,7 @@ function formatDesktopUpdateSummary(status: DesktopUpdateStatus) {
     return 'Desktop update check failed';
   }
 
-  return 'Desktop updates check in the background when the packaged app is running.';
+  return null;
 }
 
 function SettingsModal() {
@@ -317,9 +317,11 @@ function SettingsModal() {
                     {desktopOsLabel && <p>{desktopOsLabel}</p>}
                     {isDesktopApp ? (
                       <div className="mt-2 rounded-lg border border-riftapp-border/40 bg-riftapp-bg/35 px-2.5 py-2">
+                      {desktopUpdateSummary ? (
                         <p className={`font-semibold ${desktopUpdateStatus.state === 'error' ? 'text-riftapp-danger' : desktopUpdateStatus.state === 'ready' ? 'text-[#3ba55d]' : 'text-riftapp-text'}`}>
                           {desktopUpdateSummary}
                         </p>
+                      ) : null}
                         {desktopUpdateStatus.message ? (
                           <p className="mt-1 text-riftapp-text-muted">{desktopUpdateStatus.message}</p>
                         ) : null}
