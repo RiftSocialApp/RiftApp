@@ -172,18 +172,8 @@ function RingingAvatar({ member }: { member: ConversationCallStageMember }) {
   return (
     <div className="flex flex-col items-center gap-3 text-center transition-all duration-300">
       <div className="relative flex h-28 w-28 items-center justify-center sm:h-32 sm:w-32">
-        {member.isRinging ? (
-          <>
-            <span className="rift-dm-call-pulse absolute inset-0 rounded-full border border-white/80" />
-            <span className="rift-dm-call-pulse-delay absolute inset-[-10px] rounded-full border border-white/45" />
-          </>
-        ) : null}
         <div
-          className={`relative flex h-full w-full items-center justify-center overflow-hidden rounded-full ${
-            member.isRinging
-              ? 'border border-white/90 shadow-[0_0_0_4px_rgba(255,255,255,0.06)]'
-              : 'ring-4 ring-black/25'
-          }`}
+          className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-full"
           style={{ backgroundColor: getAvatarColor(member.id) }}
         >
           {avatarUrl ? (
@@ -193,12 +183,7 @@ function RingingAvatar({ member }: { member: ConversationCallStageMember }) {
           )}
         </div>
       </div>
-      <div className="space-y-1">
-        <p className="max-w-[180px] truncate text-base font-semibold text-white">{label}</p>
-        <p className="text-xs font-medium uppercase tracking-[0.16em] text-[#8e9297]">
-          {member.isRinging ? 'Ringing' : member.isInVoice ? 'In call' : 'Waiting'}
-        </p>
-      </div>
+      <p className="max-w-[180px] truncate text-base font-semibold text-white">{label}</p>
     </div>
   );
 }
@@ -221,8 +206,8 @@ function RingingStage({
   participants: ConversationCallStageMember[];
 }) {
   return (
-    <div className="flex min-h-[260px] flex-col items-center justify-center gap-6 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(0,0,0,0)_55%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] px-6 py-8 transition-all duration-300">
-      <div className="flex flex-wrap items-center justify-center gap-8">
+    <div className="flex min-h-[260px] w-full max-w-[420px] flex-col items-center justify-center gap-6 rounded-2xl border border-white/10 bg-[radial-gradient(circle_at_top,rgba(255,255,255,0.08),rgba(0,0,0,0)_55%),linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] px-6 py-8 transition-all duration-300">
+      <div className="flex flex-wrap items-center justify-center gap-10">
         {participants.map((member) => (
           <RingingAvatar key={member.id} member={member} />
         ))}
@@ -277,7 +262,7 @@ export default function ConversationCallMediaStage({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-3 transition-all duration-300">
+    <div className="flex min-w-0 w-full flex-1 flex-col gap-3 transition-all duration-300">
       {showEndedBanner && status ? <StageStatusBanner status={status} /> : null}
       {screenShareParticipants.length > 0 ? (
         <div className="grid gap-3" style={gridStyleForCount(screenShareParticipants.length)}>

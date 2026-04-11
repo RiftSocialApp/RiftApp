@@ -647,10 +647,10 @@ function ConversationCallStage({
 
   return (
     <div className="border-b border-riftapp-border/50 bg-[#111214] px-4 py-3">
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
+      <div className="flex flex-col items-center gap-3">
         <ConversationCallMediaStage participants={stageParticipants} status={callStatus} />
 
-        <div className="flex flex-wrap items-center gap-2 xl:flex-shrink-0">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           {isCurrentConversationCall ? (
             <>
               <HeaderIconButton
