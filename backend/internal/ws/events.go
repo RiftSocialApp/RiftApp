@@ -140,15 +140,26 @@ type DMConversationDeleteData struct {
 }
 
 type DMCallRingData struct {
-	ConversationID string    `json:"conversation_id"`
-	InitiatorID    string    `json:"initiator_id"`
-	Mode           string    `json:"mode"`
-	StartedAt      time.Time `json:"started_at"`
+	ConversationID  string    `json:"conversation_id"`
+	InitiatorID     string    `json:"initiator_id"`
+	Mode            string    `json:"mode"`
+	StartedAt       time.Time `json:"started_at"`
+	TargetUserIDs   []string  `json:"target_user_ids,omitempty"`
+	DeclinedUserIDs []string  `json:"declined_user_ids,omitempty"`
 }
 
 type DMCallRingEndData struct {
-	ConversationID string `json:"conversation_id"`
-	Reason         string `json:"reason"`
+	ConversationID   string     `json:"conversation_id"`
+	Reason           string     `json:"reason"`
+	InitiatorID      string     `json:"initiator_id,omitempty"`
+	Mode             string     `json:"mode,omitempty"`
+	StartedAt        *time.Time `json:"started_at,omitempty"`
+	EndedAt          time.Time  `json:"ended_at"`
+	EndedByUserID    string     `json:"ended_by_user_id,omitempty"`
+	AnsweredByUserID string     `json:"answered_by_user_id,omitempty"`
+	TargetUserIDs    []string   `json:"target_user_ids,omitempty"`
+	DeclinedUserIDs  []string   `json:"declined_user_ids,omitempty"`
+	MissedUserIDs    []string   `json:"missed_user_ids,omitempty"`
 }
 
 type DMConversationCallStateData struct {

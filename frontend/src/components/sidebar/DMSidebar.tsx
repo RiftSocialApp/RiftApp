@@ -14,6 +14,7 @@ import {
   getConversationTitle,
   isGroupConversation,
 } from '../../utils/conversations';
+import { getConversationCallStatus } from '../../utils/dmCallStatus';
 import StatusDot from '../shared/StatusDot';
 import BotBadge from '../shared/BotBadge';
 
@@ -105,6 +106,7 @@ export default function DMSidebar() {
   const presence = usePresenceStore((s) => s.presence);
   const conversationVoiceMembers = useVoiceStore((s) => s.conversationVoiceMembers);
   const conversationCallRings = useVoiceStore((s) => s.conversationCallRings);
+  const conversationCallOutcomes = useVoiceStore((s) => s.conversationCallOutcomes);
   const pendingCount = useFriendStore((s) => s.pendingCount);
   const loadPendingCount = useFriendStore((s) => s.loadPendingCount);
 
@@ -295,20 +297,27 @@ export default function DMSidebar() {
               const isGroupDm = isGroupConversation(conv, currentUserId);
               const activeVoiceMembers = conversationVoiceMembers[conv.id] ?? [];
               const activeRing = conversationCallRings[conv.id];
-              const callStatusLabel = activeRing
-                ? activeRing.initiator_id === currentUserId
-                  ? activeRing.mode === 'video'
-                    ? 'Ringing video call'
-                    : 'Ringing voice call'
-                  : activeRing.mode === 'video'
-                    ? 'Incoming video call'
-                    : 'Incoming voice call'
-                : activeVoiceMembers.length > 0
-                  ? activeVoiceMembers.length === 1
-                    ? 'In call'
-                    : `${activeVoiceMembers.length} in call`
-                  : null;
-              const callStatusClass = activeRing ? 'text-[#f0b232]' : 'text-[#23a55a]';
+              const callStatus = getConversationCallStatus({
+                conversation: conv,
+                currentUserId,
+                ring: activeRing,
+                voiceMemberIds: activeVoiceMembers,
+                outcome: conversationCallOutcomes[conv.id] ?? null,
+              });
+              const callStatusClass = callStatus?.tone === 'warning'
+                ? 'text-[#f0b232]'
+                : callStatus?.tone === 'success'
+                  ? 'text-[#23a55a]'
+                  : callStatus?.tone === 'danger'
+                    ? 'text-[#f87171]'
+                    : 'text-[#b5bac1]';
+              const statusDotClass = callStatus?.tone === 'warning'
+                ? 'animate-pulse bg-[#f0b232]'
+                : callStatus?.tone === 'success'
+                  ? 'bg-[#23a55a]'
+                  : callStatus?.tone === 'danger'
+                    ? 'bg-[#f87171]'
+                    : 'bg-[#72767d]';
 
               return (
                 <button
@@ -336,9 +345,9 @@ export default function DMSidebar() {
                         </span>
                       ) : null}
                     </div>
-                    {callStatusLabel ? (
+                    {callStatus ? (
                       <div className={`truncate text-[11px] font-medium ${callStatusClass}`}>
-                        {callStatusLabel}
+                        {callStatus.label}
                       </div>
                     ) : conv.last_message ? (
                       <div className="text-xs text-riftapp-text-dim truncate">
@@ -349,8 +358,8 @@ export default function DMSidebar() {
 
                   {/* Time + unread badge */}
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {callStatusLabel ? (
-                      <span className={`h-2.5 w-2.5 rounded-full ${activeRing ? 'animate-pulse bg-[#f0b232]' : 'bg-[#23a55a]'}`} />
+                    {callStatus ? (
+                      <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass}`} />
                     ) : null}
                     {conv.last_message && (
                       <span className="text-[10px] text-riftapp-text-dim">

@@ -51,6 +51,10 @@ func (s *NotificationService) MarkAllRead(ctx context.Context, userID string) er
 }
 
 func (s *NotificationService) Create(ctx context.Context, userID, ntype, title string, body, referenceID, hubID, streamID, actorID *string) {
+	s.CreateWithPushData(ctx, userID, ntype, title, body, referenceID, hubID, streamID, actorID, nil)
+}
+
+func (s *NotificationService) CreateWithPushData(ctx context.Context, userID, ntype, title string, body, referenceID, hubID, streamID, actorID *string, pushData map[string]string) {
 	if actorID != nil && *actorID == userID {
 		return
 	}
@@ -108,6 +112,13 @@ func (s *NotificationService) Create(ctx context.Context, userID, ntype, title s
 	s.hub.SendToUser(userID, evt)
 
 	if s.pushSvc != nil {
+		pushDataCopy := make(map[string]string, len(pushData))
+		for key, value := range pushData {
+			if key == "" || value == "" {
+				continue
+			}
+			pushDataCopy[key] = value
+		}
 		go func() {
 			pushCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -126,6 +137,12 @@ func (s *NotificationService) Create(ctx context.Context, userID, ntype, title s
 			if referenceID != nil {
 				data["reference_id"] = *referenceID
 			}
+			for key, value := range pushDataCopy {
+				if key == "" || value == "" {
+					continue
+				}
+				data[key] = value
+			}
 			if err := s.pushSvc.SendToUser(pushCtx, userID, PushPayload{
 				Title:       title,
 				Body:        pushBody,
@@ -135,5 +152,19 @@ func (s *NotificationService) Create(ctx context.Context, userID, ntype, title s
 				log.Printf("push: send to user %s failed: %v", userID, err)
 			}
 		}()
+	}
+}
+
+func (s *NotificationService) PushUsers(ctx context.Context, userIDs []string, p PushPayload) {
+	if s.pushSvc == nil || len(userIDs) == 0 {
+		return
+	}
+	for _, userID := range userIDs {
+		if userID == "" {
+			continue
+		}
+		if err := s.pushSvc.SendToUser(ctx, userID, p); err != nil {
+			log.Printf("push: send to user %s failed: %v", userID, err)
+		}
 	}
 }

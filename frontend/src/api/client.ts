@@ -318,6 +318,9 @@ class ApiClient {
   cancelDMCallRing(conversationId: string) {
     return this.request<void>(`/dms/${conversationId}/call/ring/cancel`, { method: 'POST' });
   }
+  declineDMCallRing(conversationId: string) {
+    return this.request<void>(`/dms/${conversationId}/call/ring/decline`, { method: 'POST' });
+  }
 
   searchUser(username: string) { return this.request<User>(`/users/search?q=${encodeURIComponent(username)}`); }
 

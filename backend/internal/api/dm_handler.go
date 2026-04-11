@@ -227,3 +227,13 @@ func (h *DMHandler) CancelCallRing(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *DMHandler) DeclineCallRing(w http.ResponseWriter, r *http.Request) {
+	conversationID := chi.URLParam(r, "conversationID")
+	userID := middleware.GetUserID(r.Context())
+	if err := h.svc.DeclineConversationCallRing(r.Context(), userID, conversationID); err != nil {
+		writeAppError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
