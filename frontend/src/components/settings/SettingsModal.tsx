@@ -18,7 +18,6 @@ import { useAppSettingsStore, type SettingsOverlayTab } from '../../stores/appSe
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
 import { formatShortDate, formatShortDateTime } from '../../utils/dateTime';
-import { getDesktop, idleDesktopUpdateStatus } from '../../utils/desktop';
 import {
   AUTO_THRESHOLD_MIN,
   AUTO_THRESHOLD_MAX,
@@ -28,7 +27,7 @@ import {
   MicNoiseGateProcessor,
   normalizeMicMeterLevel,
 } from '../../utils/audio/micNoiseGate';
-import type { DesktopBuildInfo, DesktopUpdateStatus } from '../../types/desktop';
+import type { DesktopBuildInfo } from '../../types/desktop';
 import ModalCloseButton from '@/components/shared/ModalCloseButton';
 import { CameraIcon } from '../voice/VoiceIcons';
 
@@ -89,36 +88,6 @@ function formatDesktopOsLabel(info: DesktopBuildInfo) {
   return archLabel ? `${platformLabel} (${archLabel})` : platformLabel;
 }
 
-function formatDesktopUpdateSummary(status: DesktopUpdateStatus) {
-  if (status.state === 'checking') {
-    return 'Checking for desktop updates...';
-  }
-
-  if (status.state === 'downloading') {
-    return status.progress !== null
-      ? `Downloading desktop update... ${Math.round(status.progress)}%`
-      : 'Downloading desktop update...';
-  }
-
-  if (status.state === 'ready') {
-    return status.version
-      ? `Desktop update ready • v${status.version}`
-      : 'Desktop update ready';
-  }
-
-  if (status.state === 'up-to-date') {
-    return status.version
-      ? `Desktop app is up to date • v${status.version}`
-      : 'Desktop app is up to date';
-  }
-
-  if (status.state === 'error') {
-    return 'Desktop update check failed';
-  }
-
-  return null;
-}
-
 function SettingsModal() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
@@ -128,13 +97,9 @@ function SettingsModal() {
   const setSettingsTab = useAppSettingsStore((s) => s.setSettingsTab);
   const frontendCommitSha = useFrontendUpdateStore((s) => s.currentCommitSha);
   const frontendBuildId = useFrontendUpdateStore((s) => s.currentBuildId);
-  const frontendUpdateReady = useFrontendUpdateStore((s) => s.updateReady);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [desktopBuildInfo, setDesktopBuildInfo] = useState<DesktopBuildInfo>(emptyDesktopBuildInfo);
   const [appVersionLabel, setAppVersionLabel] = useState('Web App');
-  const desktop = useMemo(() => getDesktop(), []);
-  const isDesktopApp = Boolean(desktop);
-  const [desktopUpdateStatus, setDesktopUpdateStatus] = useState<DesktopUpdateStatus>(idleDesktopUpdateStatus);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -169,56 +134,9 @@ function SettingsModal() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!desktop) return;
-
-    let cancelled = false;
-    void desktop.getUpdateStatus().then((status) => {
-      if (!cancelled) {
-        setDesktopUpdateStatus(status);
-      }
-    });
-
-    const disposeStatus = desktop.onUpdateStatus((status) => {
-      setDesktopUpdateStatus(status);
-    });
-    const disposeReady = desktop.onUpdateReady(() => {
-      setDesktopUpdateStatus((current) => ({
-        ...current,
-        state: 'ready',
-        message: current.message || 'Restart to install the downloaded desktop update.',
-      }));
-    });
-
-    return () => {
-      cancelled = true;
-      disposeStatus();
-      disposeReady();
-    };
-  }, [desktop]);
-
-  const handleDesktopUpdateAction = useCallback(() => {
-    if (!desktop) return;
-
-    if (desktopUpdateStatus.state === 'ready') {
-      desktop.restartToUpdate();
-      return;
-    }
-
-    if (desktopUpdateStatus.state === 'checking' || desktopUpdateStatus.state === 'downloading') {
-      return;
-    }
-
-    void desktop.checkForUpdates().then((status) => {
-      setDesktopUpdateStatus(status);
-    });
-  }, [desktop, desktopUpdateStatus.state]);
-
   const desktopOsLabel = formatDesktopOsLabel(desktopBuildInfo);
   const frontendCommitLabel = formatFrontendCommitSha(frontendCommitSha);
   const frontendBuildLabel = formatFrontendBuildTimestamp(frontendBuildId);
-  const desktopUpdateSummary = formatDesktopUpdateSummary(desktopUpdateStatus);
-  const desktopUpdateBusy = desktopUpdateStatus.state === 'checking' || desktopUpdateStatus.state === 'downloading';
 
   if (!user) return null;
 
@@ -315,42 +233,6 @@ function SettingsModal() {
                     {frontendBuildLabel && <p>{`Build: ${frontendBuildLabel}`}</p>}
                     {desktopBuildInfo.electronVersion ? <p>Electron {desktopBuildInfo.electronVersion}</p> : null}
                     {desktopOsLabel && <p>{desktopOsLabel}</p>}
-                    {isDesktopApp ? (
-                      <div className="mt-2 rounded-lg border border-riftapp-border/40 bg-riftapp-bg/35 px-2.5 py-2">
-                      {desktopUpdateSummary ? (
-                        <p className={`font-semibold ${desktopUpdateStatus.state === 'error' ? 'text-riftapp-danger' : desktopUpdateStatus.state === 'ready' ? 'text-[#3ba55d]' : 'text-riftapp-text'}`}>
-                          {desktopUpdateSummary}
-                        </p>
-                      ) : null}
-                        {desktopUpdateStatus.message ? (
-                          <p className="mt-1 text-riftapp-text-muted">{desktopUpdateStatus.message}</p>
-                        ) : null}
-                        {desktopUpdateStatus.state === 'ready' ? (
-                          <div className="mt-2 flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={handleDesktopUpdateAction}
-                              disabled={desktopUpdateBusy}
-                              className="inline-flex h-7 items-center rounded-md bg-[#248046] px-2.5 text-[11px] font-semibold text-white transition-colors hover:bg-[#2d9d58] disabled:cursor-not-allowed disabled:opacity-60"
-                            >
-                              Restart to Update
-                            </button>
-                            {desktopUpdateStatus.version ? (
-                              <span className="text-riftapp-text-dim">{`Target ${desktopUpdateStatus.version}`}</span>
-                            ) : null}
-                          </div>
-                        ) : desktopUpdateStatus.version && desktopUpdateStatus.state !== 'up-to-date' ? (
-                          <div className="mt-2 text-riftapp-text-dim">{`Target ${desktopUpdateStatus.version}`}</div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                    {frontendUpdateReady ? (
-                      <p className="font-semibold text-[#3ba55d]">
-                        {isDesktopApp
-                          ? 'Frontend update ready. Use the green refresh button to apply it.'
-                          : 'Frontend update ready. Refresh the page to apply it.'}
-                      </p>
-                    ) : null}
                   </div>
                 </div>
               </div>
