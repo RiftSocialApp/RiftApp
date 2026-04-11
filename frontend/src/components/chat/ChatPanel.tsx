@@ -449,6 +449,7 @@ function HeaderIconButton({
   onClick,
   badge,
   tone = 'default',
+  className,
   children,
 }: {
   label: string;
@@ -457,6 +458,7 @@ function HeaderIconButton({
   onClick: () => void;
   badge?: number | string;
   tone?: 'default' | 'success';
+  className?: string;
   children: ReactNode;
 }) {
   const success = tone === 'success';
@@ -472,7 +474,7 @@ function HeaderIconButton({
           : active
             ? 'border-riftapp-border-light bg-riftapp-content-elevated text-[#f2f3f5]'
             : 'border-transparent bg-transparent text-[#aeb4bf] hover:bg-riftapp-content-elevated hover:text-[#f2f3f5]'
-      }`}
+      } ${className ?? ''}`.trim()}
     >
       <span className="inline-flex items-center justify-center">{children}</span>
       {badge != null && badge !== 0 && badge !== '' && (
@@ -1695,31 +1697,6 @@ export default function ChatPanel({
             </>
           ) : null}
 
-          {isDMMode ? (
-            <>
-              <div className="hidden h-5 w-px bg-white/10 lg:block" />
-              <div className="hidden items-center gap-2 lg:flex">
-                <button
-                  type="button"
-                  onClick={() => setActivePanel('search')}
-                  className="flex h-7 min-w-[220px] max-w-[260px] items-center justify-between gap-3 rounded-[4px] bg-[#202225] px-3 text-left text-[12px] text-[#949ba4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-[#25262b] hover:text-[#dcddde]"
-                  aria-label={`Search messages with ${activeConversationLabel}`}
-                >
-                  <span className="truncate">{searchQuery.trim() || `Search ${activeConversationLabel}`}</span>
-                  <IconSearch className="h-3.5 w-3.5 shrink-0 text-[#72767d]" />
-                </button>
-
-                <HeaderIconButton
-                  label="Pinned messages"
-                  active={activePanel === 'pins'}
-                  onClick={() => togglePanel('pins')}
-                >
-                  <IconPin className="h-4 w-4" />
-                </HeaderIconButton>
-              </div>
-            </>
-          ) : null}
-
           {!showWelcome ? (
             <div className="flex items-center gap-2">
         {isDMMode && activeConversation ? (
@@ -1738,6 +1715,13 @@ export default function ChatPanel({
             >
               <IconVideo className="h-4 w-4" />
             </HeaderIconButton>
+            <HeaderIconButton
+              label="Pinned messages"
+              active={activePanel === 'pins'}
+              onClick={() => togglePanel('pins')}
+            >
+              <IconPin className="h-4 w-4" />
+            </HeaderIconButton>
             {activeConversationIsGroup ? (
               <HeaderIconButton
                 label="Group settings"
@@ -1753,17 +1737,27 @@ export default function ChatPanel({
                 <IconUsers className="h-4 w-4" />
               </HeaderIconButton>
             )}
+            <button
+              type="button"
+              onClick={() => setActivePanel('search')}
+              className="hidden h-7 min-w-[220px] max-w-[260px] items-center justify-between gap-3 rounded-[4px] bg-[#202225] px-3 text-left text-[12px] text-[#949ba4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-[#25262b] hover:text-[#dcddde] lg:flex"
+              aria-label={`Search messages with ${activeConversationLabel}`}
+            >
+              <span className="truncate">{searchQuery.trim() || `Search ${activeConversationLabel}`}</span>
+              <IconSearch className="h-3.5 w-3.5 shrink-0 text-[#72767d]" />
+            </button>
           </>
         ) : null}
-			  {isDMMode ? (
-				  <HeaderIconButton
-					  label="Search messages"
-					  active={activePanel === 'search'}
-					  onClick={() => togglePanel('search')}
-				  >
-					  <IconSearch className="h-4 w-4" />
-				  </HeaderIconButton>
-			  ) : null}
+        {isDMMode ? (
+          <HeaderIconButton
+            label="Search messages"
+            active={activePanel === 'search'}
+            onClick={() => togglePanel('search')}
+            className="lg:hidden"
+          >
+            <IconSearch className="h-4 w-4" />
+          </HeaderIconButton>
+        ) : null}
 			  {canShowMemberListToggle ? (
                 <HeaderIconButton
                   label={showMemberList ? 'Hide user list' : 'Show user list'}
