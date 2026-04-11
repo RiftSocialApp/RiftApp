@@ -57,8 +57,13 @@ func (s *DMService) StartConversationCallRing(ctx context.Context, userID, convI
 	}
 
 	state, started := s.hub.StartConversationCallRing(convID, userID, normalizedMode)
-	if started && s.notifSvc != nil && state.Ring != nil && len(state.Ring.TargetUserIDs) > 0 {
-		s.pushConversationCallStart(convID, userID, *state.Ring)
+	if started {
+		if err := s.createConversationCallStartedMessage(ctx, convID, userID, normalizedMode); err != nil {
+			log.Printf("dm: failed to create call-start system message for conversation %s: %v", convID, err)
+		}
+		if s.notifSvc != nil && state.Ring != nil && len(state.Ring.TargetUserIDs) > 0 {
+			s.pushConversationCallStart(convID, userID, *state.Ring)
+		}
 	}
 	return state, nil
 }
@@ -143,6 +148,52 @@ func callPushBody(conversation *models.Conversation, mode string) string {
 		}
 	}
 	return "Group DM • " + modeLabel
+}
+
+func conversationCallStartedSystemType(mode string) string {
+	if strings.EqualFold(mode, "video") {
+		return models.MessageSystemTypeConversationVideoCallStarted
+	}
+	return models.MessageSystemTypeConversationCallStarted
+}
+
+func conversationCallStartedMessageContent(systemType string) string {
+	if systemType == models.MessageSystemTypeConversationVideoCallStarted {
+		return "Started a video call"
+	}
+	return "Started a call"
+}
+
+func (s *DMService) createConversationCallStartedMessage(ctx context.Context, convID, userID, mode string) error {
+	systemType := conversationCallStartedSystemType(mode)
+	msg := &models.Message{
+		ID:             uuid.New().String(),
+		ConversationID: &convID,
+		AuthorID:       userID,
+		SystemType:     &systemType,
+		Content:        conversationCallStartedMessageContent(systemType),
+		CreatedAt:      time.Now(),
+	}
+
+	if err := s.msgRepo.Create(ctx, msg); err != nil {
+		return err
+	}
+
+	_ = s.dmRepo.UpdateConversationTimestamp(ctx, convID, msg.CreatedAt)
+
+	msg, err := s.loadDetailedMessage(ctx, msg.ID)
+	if err != nil {
+		return err
+	}
+
+	evt := ws.NewEvent(ws.OpDMMessageCreate, msg)
+	s.hub.SendToUser(userID, evt)
+	others, _ := s.dmRepo.GetOtherMembers(ctx, convID, userID)
+	for _, uid := range others {
+		s.hub.SendToUser(uid, evt)
+	}
+
+	return nil
 }
 
 func (s *DMService) pushConversationCallStart(convID, userID string, ring ws.DMCallRingData) {

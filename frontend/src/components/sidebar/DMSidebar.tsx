@@ -16,6 +16,7 @@ import {
   isGroupConversation,
 } from '../../utils/conversations';
 import { getConversationCallStatus } from '../../utils/dmCallStatus';
+import { getConversationCallSystemMessagePreview } from '../../utils/messageSystem';
 import StatusDot from '../shared/StatusDot';
 import BotBadge from '../shared/BotBadge';
 
@@ -300,6 +301,9 @@ export default function DMSidebar() {
             const groupMemberCountLabel = `${allMembers.length} Member${allMembers.length === 1 ? '' : 's'}`;
               const activeVoiceMembers = conversationVoiceMembers[conv.id] ?? [];
               const activeRing = conversationCallRings[conv.id];
+              const lastMessagePreview = conv.last_message
+                ? getConversationCallSystemMessagePreview(conv.last_message.system_type) ?? conv.last_message.content
+                : null;
               const callStatus = getConversationCallStatus({
                 conversation: conv,
                 currentUserId,
@@ -351,9 +355,9 @@ export default function DMSidebar() {
                       <div className="text-xs text-riftapp-text-dim truncate">
                       {groupMemberCountLabel}
                       </div>
-                    ) : conv.last_message ? (
+                    ) : lastMessagePreview ? (
                       <div className="text-xs text-riftapp-text-dim truncate">
-                        {conv.last_message.content}
+                        {lastMessagePreview}
                       </div>
                     ) : null}
                   </div>

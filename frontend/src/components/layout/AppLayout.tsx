@@ -89,6 +89,7 @@ export default function AppLayout() {
   const activeVoiceChannelId = useVoiceChannelUiStore((s) => s.activeChannelId);
   const activeVoiceChannelKind = useVoiceChannelUiStore((s) => s.activeChannelKind);
   const resetVoiceView = useVoiceChannelUiStore((s) => s.resetVoiceView);
+  const showFullVoiceView = voiceUiOpen && activeVoiceChannelKind === 'stream';
 
   useEffect(() => {
     if (!voiceConnecting && !voiceTargetId) {
@@ -105,10 +106,10 @@ export default function AppLayout() {
   }, [activeVoiceChannelId, activeVoiceChannelKind, resetVoiceView, streams]);
 
   useEffect(() => {
-    if (!activeHubId || activeConversationId || voiceUiOpen) {
+    if (!activeHubId || activeConversationId || showFullVoiceView) {
       setShowMemberList(true);
     }
-  }, [activeConversationId, activeHubId, voiceUiOpen]);
+  }, [activeConversationId, activeHubId, showFullVoiceView]);
 
   return (
     <div className="app-root h-full min-h-0 flex overflow-hidden bg-riftapp-content">
@@ -122,7 +123,7 @@ export default function AppLayout() {
       </div>
       {!activeHubId && !activeConversationId ? (
         <FriendsPage />
-      ) : voiceUiOpen ? (
+      ) : showFullVoiceView ? (
         <VoiceView />
       ) : (
         <ChatPanel
@@ -131,7 +132,7 @@ export default function AppLayout() {
           onSearchPanelVisibilityChange={setSearchSidebarOpen}
         />
       )}
-      {activeHubId && !activeConversationId && !voiceUiOpen && showMemberList && !searchSidebarOpen && <MemberList />}
+      {activeHubId && !activeConversationId && !showFullVoiceView && showMemberList && !searchSidebarOpen && <MemberList />}
       <MiniProfilePopover />
       <FullProfileModal />
       <SelfProfilePopover />

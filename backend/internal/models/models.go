@@ -90,6 +90,7 @@ type Message struct {
 	ConversationID     *string       `json:"conversation_id,omitempty"`
 	AuthorID           string        `json:"author_id"`
 	AuthorType         string        `json:"author_type"`
+	SystemType         *string       `json:"system_type,omitempty"`
 	Content            string        `json:"content"`
 	EditedAt           *time.Time    `json:"edited_at,omitempty"`
 	CreatedAt          time.Time     `json:"created_at"`
@@ -106,6 +107,11 @@ type Message struct {
 	Attachments        []Attachment  `json:"attachments,omitempty"`
 	Reactions          []ReactionAgg `json:"reactions,omitempty"`
 }
+
+const (
+	MessageSystemTypeConversationCallStarted      = "conversation_call_started"
+	MessageSystemTypeConversationVideoCallStarted = "conversation_video_call_started"
+)
 
 type Attachment struct {
 	ID          string `json:"id"`

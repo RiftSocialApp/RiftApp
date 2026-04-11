@@ -17,16 +17,18 @@ import { useDMStore } from '../../stores/dmStore';
 import { useAuthStore } from '../../stores/auth';
 import { useNotificationStore } from '../../stores/notificationStore';
 import { usePresenceStore } from '../../stores/presenceStore';
-import { useVoiceStore } from '../../stores/voiceStore';
+import { useVoiceStore, type VoiceParticipant } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
 import { useWsSend } from '../../hooks/useWebSocket';
 import MessageInput from './MessageInput';
 import MessageItem from './MessageItem';
 import PinSystemMessage from './PinSystemMessage';
+import ConversationCallSystemMessage from './ConversationCallSystemMessage';
 import TypingIndicator from './TypingIndicator';
 import UpdateActionButton from '../shared/UpdateActionButton';
 import AddFriendsToDMModal from '../modals/AddFriendsToDMModal';
 import GroupDMSettingsModal from '../modals/GroupDMSettingsModal';
+import { CameraIcon as VoiceCameraIcon, DisconnectIcon as VoiceDisconnectIcon, MicIcon as VoiceMicIcon } from '../voice/VoiceIcons';
 import type {
   Conversation,
   Message,
@@ -56,8 +58,12 @@ import {
   getConversationTitle,
   isGroupConversation,
 } from '../../utils/conversations';
-import { getConversationCallStatus } from '../../utils/dmCallStatus';
+import { getConversationCallStatus, type ConversationCallStatus } from '../../utils/dmCallStatus';
 import { jumpToMessageId } from '../../utils/messageJump';
+import {
+  getConversationCallSystemMessagePreview,
+  isConversationCallSystemMessage,
+} from '../../utils/messageSystem';
 
 type HeaderPanel = 'notifications' | 'pins' | 'search' | 'inbox' | null;
 type StreamNotificationToggleKey =
@@ -216,6 +222,8 @@ function getUserInitial(user?: User): string {
 }
 
 function getMessagePreview(message: Message): string {
+  const systemPreview = getConversationCallSystemMessagePreview(message.system_type);
+  if (systemPreview) return systemPreview;
   const content = message.content.trim();
   if (content) return content;
   if (message.attachments?.length) {
@@ -507,6 +515,287 @@ function HeaderStatusPill({
     >
       {label}
     </span>
+  );
+}
+
+type ConversationCallStageParticipant = {
+  id: string;
+  user?: User;
+  isInVoice: boolean;
+  isMuted: boolean;
+  isCameraOn: boolean;
+  isSpeaking: boolean;
+  isCurrentUser: boolean;
+};
+
+function ConversationCallStageParticipantChip({
+  participant,
+}: {
+  participant: ConversationCallStageParticipant;
+}) {
+  const label = participant.isCurrentUser ? 'You' : getUserLabel(participant.user);
+
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-full border px-2.5 py-1.5 ${
+        participant.isInVoice
+          ? 'border-[#23a55a]/25 bg-[#132018]'
+          : 'border-white/8 bg-white/[0.04]'
+      }`}
+    >
+      <UserAvatar user={participant.user} sizeClass="w-7 h-7" textClass="text-[10px]" />
+      <span className="max-w-[120px] truncate text-[12px] font-medium text-[#f2f3f5]">{label}</span>
+      <div className="flex items-center gap-1 text-[#949ba4]">
+        {participant.isSpeaking ? <span className="h-2 w-2 rounded-full bg-[#23a55a]" /> : null}
+        {participant.isMuted ? <VoiceMicIcon muted size={12} /> : null}
+        {participant.isCameraOn ? <IconVideo className="h-3.5 w-3.5" /> : null}
+      </div>
+    </div>
+  );
+}
+
+function ConversationCallStage({
+  conversation,
+  currentUser,
+  callStatus,
+  isCurrentConversationCall,
+  onStartOrJoinCall,
+}: {
+  conversation: Conversation;
+  currentUser?: User | null;
+  callStatus: ConversationCallStatus | null;
+  isCurrentConversationCall: boolean;
+  onStartOrJoinCall: (mode: 'audio' | 'video') => Promise<void>;
+}) {
+  const currentUserId = currentUser?.id ?? null;
+  const conversationVoiceMembers = useVoiceStore((s) => s.conversationVoiceMembers[conversation.id] ?? []);
+  const conversationCallRing = useVoiceStore((s) => s.conversationCallRings[conversation.id] ?? null);
+  const voiceParticipants = useVoiceStore((s) => s.participants);
+  const voiceTargetKind = useVoiceStore((s) => s.targetKind);
+  const voiceConversationId = useVoiceStore((s) => s.conversationId);
+  const isMuted = useVoiceStore((s) => s.isMuted);
+  const isCameraOn = useVoiceStore((s) => s.isCameraOn);
+  const toggleMute = useVoiceStore((s) => s.toggleMute);
+  const toggleCamera = useVoiceStore((s) => s.toggleCamera);
+  const leaveCall = useVoiceStore((s) => s.leave);
+  const cancelConversationCallRing = useVoiceStore((s) => s.cancelConversationCallRing);
+  const declineConversationCallRing = useVoiceStore((s) => s.declineConversationCallRing);
+  const hubMembers = usePresenceStore((s) => s.hubMembers);
+  const [pendingAction, setPendingAction] = useState<
+    'join-audio' | 'join-video' | 'decline' | 'cancel' | 'leave' | null
+  >(null);
+
+  const isViewingCurrentConversation = voiceTargetKind === 'conversation' && voiceConversationId === conversation.id;
+  const liveParticipantsById = useMemo(() => {
+    if (!isViewingCurrentConversation) {
+      return new Map<string, VoiceParticipant>();
+    }
+    return new Map(voiceParticipants.map((participant) => [participant.identity, participant]));
+  }, [isViewingCurrentConversation, voiceParticipants]);
+
+  const stageMemberIds = useMemo(() => {
+    const ids: string[] = [];
+    const seen = new Set<string>();
+
+    const add = (userId?: string | null) => {
+      if (!userId || seen.has(userId)) return;
+      seen.add(userId);
+      ids.push(userId);
+    };
+
+    conversationVoiceMembers.forEach(add);
+    if (conversationCallRing) {
+      add(conversationCallRing.initiator_id);
+      conversationCallRing.target_user_ids?.forEach(add);
+    }
+    if (isCurrentConversationCall && currentUserId) {
+      add(currentUserId);
+    }
+
+    return ids;
+  }, [conversationCallRing, conversationVoiceMembers, currentUserId, isCurrentConversationCall]);
+
+  const stageParticipants = useMemo<ConversationCallStageParticipant[]>(() => {
+    return stageMemberIds.map((memberId) => {
+      const liveParticipant = liveParticipantsById.get(memberId);
+      const conversationMember = conversation.members?.find((member) => member.id === memberId);
+
+      return {
+        id: memberId,
+        user: memberId === currentUserId
+          ? (currentUser ?? conversationMember ?? hubMembers[memberId])
+          : (conversationMember ?? hubMembers[memberId]),
+        isInVoice: conversationVoiceMembers.includes(memberId) || liveParticipant != null,
+        isMuted: liveParticipant?.isMuted ?? false,
+        isCameraOn: liveParticipant?.isCameraOn ?? false,
+        isSpeaking: liveParticipant?.isSpeaking ?? false,
+        isCurrentUser: memberId === currentUserId,
+      };
+    });
+  }, [conversation.members, conversationVoiceMembers, currentUser, currentUserId, hubMembers, liveParticipantsById, stageMemberIds]);
+
+  const isInitiator = Boolean(currentUserId && conversationCallRing?.initiator_id === currentUserId);
+  const headline = conversationCallRing
+    ? (isInitiator ? 'Calling...' : 'Incoming call')
+    : 'Call in progress';
+  const subline = callStatus?.label
+    ?? (stageParticipants.length > 0
+      ? `${stageParticipants.length} participant${stageParticipants.length === 1 ? '' : 's'}`
+      : 'Waiting for someone to join');
+  const accentClasses = callStatus?.tone === 'warning'
+    ? 'bg-[#f0b232]/14 text-[#ffd27a]'
+    : callStatus?.tone === 'danger'
+      ? 'bg-[#f87171]/14 text-[#fca5a5]'
+      : 'bg-[#23a55a]/14 text-[#77e0a2]';
+
+  const handleJoin = async (mode: 'audio' | 'video') => {
+    setPendingAction(mode === 'video' ? 'join-video' : 'join-audio');
+    try {
+      await onStartOrJoinCall(mode);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleDecline = async () => {
+    setPendingAction('decline');
+    try {
+      await declineConversationCallRing(conversation.id);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleCancel = async () => {
+    setPendingAction('cancel');
+    try {
+      await cancelConversationCallRing(conversation.id);
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const handleLeave = async () => {
+    setPendingAction('leave');
+    try {
+      await leaveCall();
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  return (
+    <div className="border-b border-riftapp-border/50 bg-[#111214] px-4 py-3">
+      <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+        <div className="flex min-w-0 items-center gap-3 xl:w-[240px] xl:flex-shrink-0">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${accentClasses}`}>
+            {conversationCallRing?.mode === 'video' || isCameraOn ? (
+              <IconVideo className="h-4 w-4" />
+            ) : (
+              <IconPhone className="h-4 w-4" />
+            )}
+          </div>
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8e9297]">
+              {conversationCallRing?.mode === 'video' ? 'Video call' : 'Call'}
+            </p>
+            <p className="mt-1 truncate text-sm font-semibold text-[#f2f3f5]">{headline}</p>
+            <p className="truncate text-xs text-[#b5bac1]">{subline}</p>
+          </div>
+        </div>
+
+        <div className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 xl:pb-0">
+          {stageParticipants.length > 0 ? (
+            stageParticipants.map((participant) => (
+              <ConversationCallStageParticipantChip key={participant.id} participant={participant} />
+            ))
+          ) : (
+            <span className="flex items-center text-xs text-[#8e9297]">Waiting for someone to join.</span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 xl:flex-shrink-0">
+          {isCurrentConversationCall ? (
+            <>
+              <HeaderIconButton
+                label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                active={!isMuted}
+                onClick={toggleMute}
+                className="h-9 w-9 px-0"
+              >
+                <VoiceMicIcon muted={isMuted} size={16} />
+              </HeaderIconButton>
+              <HeaderIconButton
+                label={isCameraOn ? 'Turn camera off' : 'Turn camera on'}
+                active={isCameraOn}
+                onClick={() => { void toggleCamera(); }}
+                className="h-9 w-9 px-0"
+              >
+                <VoiceCameraIcon enabled={isCameraOn} size={16} />
+              </HeaderIconButton>
+              <button
+                type="button"
+                onClick={() => { void handleLeave(); }}
+                disabled={pendingAction !== null}
+                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#da373c] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#ed4245] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <VoiceDisconnectIcon size={16} />
+                <span className="hidden sm:inline">{pendingAction === 'leave' ? 'Leaving...' : 'Leave'}</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {conversationCallRing ? (
+                isInitiator ? (
+                  <button
+                    type="button"
+                    onClick={() => { void handleCancel(); }}
+                    disabled={pendingAction !== null}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-white/[0.06] px-3 text-sm font-medium text-[#d2d5db] transition-colors hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <IconClose className="h-4 w-4" />
+                    {pendingAction === 'cancel' ? 'Cancelling...' : 'Cancel ring'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => { void handleDecline(); }}
+                    disabled={pendingAction !== null}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-white/[0.06] px-3 text-sm font-medium text-[#d2d5db] transition-colors hover:bg-white/[0.1] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <IconClose className="h-4 w-4" />
+                    {pendingAction === 'decline' ? 'Declining...' : 'Decline'}
+                  </button>
+                )
+              ) : null}
+
+              {(!conversationCallRing || !isInitiator || conversationVoiceMembers.length > 0) ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => { void handleJoin('audio'); }}
+                    disabled={pendingAction !== null}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-[#248046] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#2d9d58] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <IconPhone className="h-4 w-4" />
+                    {pendingAction === 'join-audio' ? 'Joining...' : 'Join'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { void handleJoin('video'); }}
+                    disabled={pendingAction !== null}
+                    className="inline-flex h-9 items-center gap-2 rounded-md bg-[#5865f2] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#6d79f6] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <IconVideo className="h-4 w-4" />
+                    {pendingAction === 'join-video' ? 'Joining...' : 'Join with video'}
+                  </button>
+                </>
+              ) : null}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -894,6 +1183,17 @@ export default function ChatPanel({
       : activeConversationVoiceMembers.length > 0 && !isCurrentConversationCall
         ? 'Join with video'
         : 'Start video call';
+  const showConversationCallStage = Boolean(
+    activeConversation
+    && (
+      isCurrentConversationCall
+      || activeConversationVoiceMembers.length > 0
+      || (
+        activeConversationCallRing
+        && !(user?.id && (activeConversationCallRing.declined_user_ids ?? []).includes(user.id))
+      )
+    ),
+  );
 
   const streamMap = useMemo(
     () => new Map(streams.map((stream) => [stream.id, stream])),
@@ -1774,6 +2074,16 @@ export default function ChatPanel({
         </div>
       )}
 
+      {!showWelcome && isDMMode && activeConversation && showConversationCallStage ? (
+        <ConversationCallStage
+          conversation={activeConversation}
+          currentUser={user}
+          callStatus={activeConversationCallStatus}
+          isCurrentConversationCall={isCurrentConversationCall}
+          onStartOrJoinCall={handleDMCall}
+        />
+      ) : null}
+
       {searchSidebarOpen ? (
         <div ref={floatingPanelRef} className="absolute inset-y-0 right-0 z-30 flex w-[320px] flex-col bg-riftapp-panel shadow-modal">
           <div className="flex h-12 items-center px-4">
@@ -2505,7 +2815,13 @@ export default function ChatPanel({
                     </div>
                   )}
                   {item.kind === 'message' ? (() => {
-                    const prevMessage = prevItem?.kind === 'message' ? prevItem.message : undefined;
+                    if (isConversationCallSystemMessage(item.message)) {
+                      return <ConversationCallSystemMessage message={item.message} />;
+                    }
+
+                    const prevMessage = prevItem?.kind === 'message' && !isConversationCallSystemMessage(prevItem.message)
+                      ? prevItem.message
+                      : undefined;
                     const showHeader =
                       !prevMessage ||
                       prevItem?.kind !== 'message' ||

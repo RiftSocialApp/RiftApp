@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 import { useAuthStore } from '../../stores/auth';
 import {
   useActiveSpeakerStore,
   type FloatingMediaPosition,
 } from '../../stores/activeSpeakerStore';
+import { useDMStore } from '../../stores/dmStore';
 import { usePresenceStore } from '../../stores/presenceStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
@@ -110,8 +112,10 @@ export default function FloatingActiveSpeakerMedia() {
   const voiceOutputMuted = useVoiceStore((state) => state.voiceOutputMuted);
   const toggleVoiceOutputMute = useVoiceStore((state) => state.toggleVoiceOutputMute);
   const openVoiceView = useVoiceChannelUiStore((state) => state.openVoiceView);
+  const openConversation = useDMStore((state) => state.setActiveConversation);
   const authUser = useAuthStore((state) => state.user);
   const hubMembers = usePresenceStore((state) => state.hubMembers);
+  const navigate = useNavigate();
 
   const [position, setPosition] = useState<FloatingMediaPosition | null>(persistedPosition);
   const [isDragging, setIsDragging] = useState(false);
@@ -196,6 +200,20 @@ export default function FloatingActiveSpeakerMedia() {
     return null;
   }
 
+  const openCurrentVoiceTarget = () => {
+    if (!voiceTargetId) {
+      return;
+    }
+
+    if (voiceTargetKind === 'conversation') {
+      void openConversation(voiceTargetId);
+      navigate(`/app/dms/${voiceTargetId}`);
+      return;
+    }
+
+    openVoiceView(voiceTargetId, voiceTargetKind ?? 'stream');
+  };
+
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.button !== 0) {
       return;
@@ -249,8 +267,8 @@ export default function FloatingActiveSpeakerMedia() {
 
     setOverlayPosition(position);
 
-    if (!dragState.moved && voiceTargetId) {
-      openVoiceView(voiceTargetId, voiceTargetKind ?? 'stream');
+    if (!dragState.moved) {
+      openCurrentVoiceTarget();
     }
   };
 
@@ -367,11 +385,7 @@ export default function FloatingActiveSpeakerMedia() {
               label={voiceTargetId ? 'Open voice view' : 'Voice view unavailable'}
               disabled={!voiceTargetId}
               ariaDisabled={!voiceTargetId}
-              onClick={() => {
-                if (voiceTargetId) {
-                  openVoiceView(voiceTargetId, voiceTargetKind ?? 'stream');
-                }
-              }}
+              onClick={openCurrentVoiceTarget}
             >
               <VoiceChannelIcon size={15} />
             </OverlayActionButton>

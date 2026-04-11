@@ -187,6 +187,9 @@ func (s *MessageService) Update(ctx context.Context, msgID, userID, content stri
 	if err != nil {
 		return nil, apperror.NotFound("message not found or unauthorized")
 	}
+	if err := rejectSystemMessageMutation(existing, "edited"); err != nil {
+		return nil, err
+	}
 	if existing.StreamID != nil {
 		if _, err := s.hubService.GetStreamHubID(ctx, *existing.StreamID, userID); err != nil {
 			return nil, err
@@ -357,6 +360,9 @@ func (s *MessageService) Delete(ctx context.Context, msgID, userID string) error
 	if err != nil {
 		return apperror.NotFound("message not found")
 	}
+	if err := rejectSystemMessageMutation(msg, "deleted"); err != nil {
+		return err
+	}
 
 	if msg.StreamID != nil {
 		perms, _, err := s.hubService.GetStreamEffectivePermissions(ctx, *msg.StreamID, userID)
@@ -388,6 +394,9 @@ func (s *MessageService) PrepareForward(ctx context.Context, msgID, userID strin
 	msg, err := s.msgRepo.GetByID(ctx, msgID)
 	if err != nil {
 		return ForwardMessageInput{}, apperror.NotFound("message not found")
+	}
+	if err := rejectSystemMessageMutation(msg, "forwarded"); err != nil {
+		return ForwardMessageInput{}, err
 	}
 
 	if msg.StreamID != nil {
@@ -430,6 +439,9 @@ func (s *MessageService) ToggleReaction(ctx context.Context, msgID, userID, emoj
 	if err != nil {
 		return false, apperror.NotFound("message not found")
 	}
+	if err := rejectSystemMessageMutation(msg, "reacted to"); err != nil {
+		return false, err
+	}
 	if msg.StreamID != nil {
 		if _, err := s.hubService.GetStreamHubID(ctx, *msg.StreamID, userID); err != nil {
 			return false, err
@@ -470,6 +482,9 @@ func (s *MessageService) RemoveReaction(ctx context.Context, msgID, userID, emoj
 	msg, err := s.msgRepo.GetByID(ctx, msgID)
 	if err != nil {
 		return apperror.NotFound("message not found")
+	}
+	if err := rejectSystemMessageMutation(msg, "reacted to"); err != nil {
+		return err
 	}
 	if msg.StreamID != nil {
 		if _, err := s.hubService.GetStreamHubID(ctx, *msg.StreamID, userID); err != nil {
@@ -597,6 +612,9 @@ func (s *MessageService) togglePin(ctx context.Context, msgID, userID string, pi
 	if err != nil {
 		return nil, apperror.NotFound("message not found")
 	}
+	if err := rejectSystemMessageMutation(msg, "pinned"); err != nil {
+		return nil, err
+	}
 	if msg.StreamID != nil {
 		if _, err := s.streamRepo.GetHubID(ctx, *msg.StreamID); err != nil {
 			return nil, apperror.NotFound("stream not found")
@@ -666,6 +684,13 @@ func normalizeOptionalMessageID(raw *string) *string {
 		return nil
 	}
 	return &trimmed
+}
+
+func rejectSystemMessageMutation(msg *models.Message, action string) error {
+	if msg == nil || msg.SystemType == nil || strings.TrimSpace(*msg.SystemType) == "" {
+		return nil
+	}
+	return apperror.BadRequest("system messages cannot be " + action)
 }
 
 func (s *MessageService) validateStreamReplyTarget(ctx context.Context, streamID string, replyToMessageID *string) error {
