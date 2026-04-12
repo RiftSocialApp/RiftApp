@@ -22,7 +22,7 @@ import {
   SoundboardIcon,
   VoiceChannelIcon,
 } from './VoiceIcons';
-import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import SpeakingAvatar from '../shared/SpeakingAvatar';
 import { canModerateVoice } from '../../utils/permissions';
 import UpdateActionButton from '../shared/UpdateActionButton';
 
@@ -739,6 +739,7 @@ function StageSlotContent({ slot, hubMembers }: { slot: LayoutSlot; hubMembers: 
   const member = hubMembers[p.identity];
   const displayName = member?.display_name || member?.username || p.identity;
   const avatarUrl = member?.avatar_url;
+  const avatarColor = getAvatarColor(p.identity);
 
   if (slot.kind === 'screen') {
     return <ScreenShareStage participant={p} hubMembers={hubMembers} fill />;
@@ -755,14 +756,16 @@ function StageSlotContent({ slot, hubMembers }: { slot: LayoutSlot; hubMembers: 
   }
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center" style={{ backgroundColor: getAvatarColor(p.identity) }}>
-      <div className="rounded-full overflow-hidden w-28 h-28 ring-4 ring-black/30">
-        {avatarUrl ? (
-          <img src={publicAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-black/30 flex items-center justify-center text-3xl font-bold text-white">{displayName.slice(0, 2).toUpperCase()}</div>
-        )}
-      </div>
+    <div className="relative w-full h-full flex items-center justify-center" style={{ backgroundColor: avatarColor }}>
+      <SpeakingAvatar
+        label={displayName}
+        avatarUrl={avatarUrl}
+        backgroundColor={avatarColor}
+        isSpeaking={p.isSpeaking}
+        sizeClassName="w-28 h-28"
+        fallbackTextClassName="text-3xl font-bold text-white"
+        silentRingClassName="ring-4 ring-black/30"
+      />
       <NameOverlay displayName={displayName} participant={p} />
     </div>
   );
@@ -846,12 +849,13 @@ function SlotTile({
   const videoRef = useAttachedVideoTrack(track, hasVideo);
 
   const speaking = participant.isSpeaking;
+  const speakingTileRing = hasVideo && speaking;
 
   return (
     <button
       type="button"
       className={`relative rounded-xl overflow-hidden transition-all duration-200 text-left w-full h-full min-h-0 group ${
-        speaking ? 'ring-[3px] ring-riftapp-voice-speaking shadow-lg shadow-riftapp-voice-speaking/15' : filmstrip ? 'ring-0' : 'ring-1 ring-white/10'
+        speakingTileRing ? 'ring-[3px] ring-riftapp-voice-speaking shadow-lg shadow-riftapp-voice-speaking/15' : filmstrip ? 'ring-0' : 'ring-1 ring-white/10'
       } ${activeFocus ? 'ring-2 ring-[#5865f2]' : ''} ${fill ? (filmstrip ? 'min-h-0' : 'min-h-[100px]') : 'aspect-video'}`}
       style={!hasVideo && !isScreen ? { backgroundColor: getAvatarColor(participant.identity) } : undefined}
       onClick={onClick}
@@ -867,19 +871,15 @@ function SlotTile({
         <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
       ) : !isScreen ? (
         <div className="w-full h-full flex items-center justify-center min-h-[inherit]">
-          <div
-            className={`rounded-full overflow-hidden ring-4 ring-black/25 ${
-              filmstrip ? 'w-14 h-14 ring-0' : fill ? 'w-[min(28vmin,160px)] h-[min(28vmin,160px)]' : 'w-20 h-20'
-            }`}
-          >
-            {avatarUrl ? (
-              <img src={publicAssetUrl(avatarUrl)} alt={displayName} className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-black/35 flex items-center justify-center">
-                <span className={`font-bold text-white ${filmstrip ? 'text-lg' : fill ? 'text-3xl' : 'text-2xl'}`}>{displayName.slice(0, 2).toUpperCase()}</span>
-              </div>
-            )}
-          </div>
+          <SpeakingAvatar
+            label={displayName}
+            avatarUrl={avatarUrl}
+            backgroundColor={getAvatarColor(participant.identity)}
+            isSpeaking={speaking}
+            sizeClassName={filmstrip ? 'w-14 h-14' : fill ? 'w-[min(28vmin,160px)] h-[min(28vmin,160px)]' : 'w-20 h-20'}
+            fallbackTextClassName={`font-bold text-white ${filmstrip ? 'text-lg' : fill ? 'text-3xl' : 'text-2xl'}`}
+            silentRingClassName={filmstrip ? 'ring-0' : 'ring-4 ring-black/25'}
+          />
         </div>
       ) : (
         <div className="w-full h-full min-h-[80px] bg-black flex items-center justify-center text-[#949ba4] text-xs">No stream</div>

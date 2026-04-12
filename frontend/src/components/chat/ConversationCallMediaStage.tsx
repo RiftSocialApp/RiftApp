@@ -6,6 +6,7 @@ import type { VoiceParticipant } from '../../stores/voiceStore';
 import type { ConversationCallStatus } from '../../utils/dmCallStatus';
 import { getUserLabel } from '../../utils/conversations';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
+import SpeakingAvatar from '../shared/SpeakingAvatar';
 import {
   CameraIcon as VoiceCameraIcon,
   MicIcon as VoiceMicIcon,
@@ -135,19 +136,13 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center p-6">
-          <div
-            className={`flex h-[min(28vw,112px)] w-[min(28vw,112px)] max-h-[112px] max-w-[112px] items-center justify-center overflow-hidden rounded-full transition-all duration-150 ${
-              member.isSpeaking
-                ? 'ring-[3px] ring-[#3ba55d] shadow-[0_0_0_4px_rgba(59,165,93,0.18)] scale-[1.02]'
-                : 'ring-4 ring-black/25'
-            }`}
-          >
-            {avatarUrl ? (
-              <img src={publicAssetUrl(avatarUrl)} alt={label} className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-3xl font-semibold text-white">{label.slice(0, 2).toUpperCase()}</span>
-            )}
-          </div>
+          <SpeakingAvatar
+            label={label}
+            avatarUrl={avatarUrl}
+            isSpeaking={member.isSpeaking}
+            sizeClassName="h-[min(28vw,112px)] w-[min(28vw,112px)] max-h-[112px] max-w-[112px]"
+            fallbackTextClassName="text-3xl font-semibold text-white"
+          />
         </div>
       )}
       <ParticipantOverlay member={member} label={label} />
