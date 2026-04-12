@@ -161,16 +161,31 @@ export default function ReportModal({
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [blocking, setBlocking] = useState(false);
 
   const previewTimestamp = useMemo(() => formatPreviewTimestamp(messageCreatedAt), [messageCreatedAt]);
   const previewText = useMemo(() => messagePreviewText(messageContent, messageHasAttachments), [messageContent, messageHasAttachments]);
   const authorLabel = messageAuthorName?.trim() || 'Unknown User';
   const avatarUrl = publicAssetUrl(messageAuthorAvatarUrl);
-  const showDetailsStep = selectedOption != null && !success;
+  const isDislikeFlow = selectedOption?.id === 'dislike';
+  const showDetailsStep = selectedOption != null && !isDislikeFlow && !success;
 
   const handleSelectOption = (option: ReportOption) => {
     setSelectedOption(option);
     setError('');
+  };
+
+  const handleBlockUser = async () => {
+    if (!reportedUserId) return;
+    setBlocking(true);
+    try {
+      await api.blockUser(reportedUserId);
+    } catch {
+      /* best-effort */
+    } finally {
+      setBlocking(false);
+      onClose();
+    }
   };
 
   const handleSubmit = async () => {
@@ -210,9 +225,9 @@ export default function ReportModal({
   return (
     <ModalOverlay isOpen onClose={onClose} backdropClose={!submitting} zIndex={320}>
       <div className="w-[min(92vw,420px)] overflow-hidden rounded-[18px] bg-[#313338] text-[#f2f3f5] shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
-        <div className="border-b border-white/6 px-5 pb-4 pt-5">
+        <div className="px-5 pb-4 pt-5">
           <div className="flex items-start gap-3">
-            {showDetailsStep ? (
+            {showDetailsStep || isDislikeFlow ? (
               <button
                 type="button"
                 onClick={() => {
@@ -231,14 +246,16 @@ export default function ReportModal({
 
             <div className="min-w-0 flex-1 pr-2">
               <h2 className="text-[20px] font-semibold leading-none tracking-[-0.02em]">
-                {success ? 'Report sent' : 'Report message'}
+                {success ? 'Report sent' : isDislikeFlow ? 'Thanks for letting us know' : 'Report message'}
               </h2>
               <p className="mt-2 text-[12.5px] leading-5 text-[#b5bac1]">
                 {success
                   ? 'Thanks. The message has been sent to moderators for review.'
-                  : showDetailsStep
-                    ? 'Give us a short explanation so moderators can review this faster.'
-                    : 'Please select the option that best describes the problem.'}
+                  : isDislikeFlow
+                    ? "We won't report this to moderators, but here are some things you can do."
+                    : showDetailsStep
+                      ? 'Give us a short explanation so moderators can review this faster.'
+                      : 'Please select the option that best describes the problem.'}
               </p>
             </div>
 
@@ -265,10 +282,37 @@ export default function ReportModal({
                 <p className="mt-1 text-[13px] leading-5 text-[#b5bac1]">You can close this window now.</p>
               </div>
             </div>
+          ) : isDislikeFlow ? (
+            <div className="flex flex-col gap-3 py-2">
+              <button
+                type="button"
+                disabled={!reportedUserId || blocking}
+                onClick={handleBlockUser}
+                className="flex w-full items-center gap-3 rounded-xl bg-[#2b2d31] px-4 py-4 text-left transition-colors hover:bg-white/[0.035] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#da373c]/15 text-[#ed4245]">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-medium text-[#f2f3f5]">Block {authorLabel}</p>
+                  <p className="mt-0.5 text-[12px] leading-4 text-[#b5bac1]">You won&apos;t see their messages or be notified by them.</p>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-1 w-full rounded-lg px-4 py-2.5 text-[13px] font-medium text-[#b5bac1] transition-colors hover:bg-white/6 hover:text-[#f2f3f5]"
+              >
+                Dismiss
+              </button>
+            </div>
           ) : (
             <>
               <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#949ba4]">Selected Message</div>
-              <div className="mt-2 rounded-xl border border-white/6 bg-[#2b2d31] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
+              <div className="mt-2 rounded-xl bg-[#2b2d31] px-3.5 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
                 <div className="flex items-start gap-3">
                   <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#5865f2] text-[15px] font-semibold text-white">
                     {avatarUrl ? (
@@ -297,16 +341,12 @@ export default function ReportModal({
 
               {!showDetailsStep ? (
                 <div className="mt-4 overflow-hidden rounded-xl bg-[#2b2d31] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]">
-                  {REPORT_OPTIONS.map((option, index) => (
+                  {REPORT_OPTIONS.map((option) => (
                     <button
                       key={option.id}
                       type="button"
                       onClick={() => handleSelectOption(option)}
-                      className={[
-                        'flex w-full items-center justify-between px-4 py-4 text-left transition-colors',
-                        index < REPORT_OPTIONS.length - 1 ? 'border-b border-white/6' : '',
-                        'hover:bg-white/[0.035]',
-                      ].join(' ')}
+                      className="flex w-full items-center justify-between px-4 py-4 text-left transition-colors hover:bg-white/[0.035]"
                     >
                       <span className="pr-4 text-[14px] font-medium text-[#f2f3f5]">{option.label}</span>
                       <span className="shrink-0 text-[#b5bac1]"><IconChevronRight /></span>
@@ -315,7 +355,7 @@ export default function ReportModal({
                 </div>
               ) : (
                 <div className="mt-4">
-                  <div className="rounded-xl border border-[#5865f2]/28 bg-[#2b2d31] px-3.5 py-3">
+                  <div className="rounded-xl bg-[#2b2d31] px-3.5 py-3">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#949ba4]">Selected reason</div>
                     <div className="mt-1 text-[14px] font-medium text-[#f2f3f5]">{selectedOption.label}</div>
                   </div>
@@ -328,7 +368,7 @@ export default function ReportModal({
                     onChange={(event) => setReason(event.target.value)}
                     placeholder={selectedOption.detailPlaceholder}
                     rows={5}
-                    className="mt-2 w-full resize-none rounded-xl border border-white/8 bg-[#1e1f22] px-3.5 py-3 text-[14px] leading-5 text-[#f2f3f5] outline-none transition-colors placeholder:text-[#878d96] focus:border-[#5865f2]"
+                    className="mt-2 w-full resize-none rounded-xl bg-[#1e1f22] px-3.5 py-3 text-[14px] leading-5 text-[#f2f3f5] outline-none transition-colors placeholder:text-[#878d96] focus:ring-1 focus:ring-[#5865f2]"
                   />
 
                   <div className="mt-2 text-[12px] leading-5 text-[#949ba4]">
@@ -336,7 +376,7 @@ export default function ReportModal({
                   </div>
 
                   {error ? (
-                    <div className="mt-3 rounded-lg border border-[#da373c]/30 bg-[#da373c]/10 px-3 py-2 text-[12px] text-[#ffb7b9]">
+                    <div className="mt-3 rounded-lg bg-[#da373c]/10 px-3 py-2 text-[12px] text-[#ffb7b9]">
                       {error}
                     </div>
                   ) : null}

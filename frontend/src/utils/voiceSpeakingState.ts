@@ -17,6 +17,10 @@ export function resolveVoiceParticipantSpeakingState({
     return true;
   }
 
+  if (isLocalParticipant) {
+    return liveKitSpeaking || explicitSpeakingSignal === true;
+  }
+
   if (!hasExplicitSpeakingSignal) {
     return liveKitSpeaking;
   }
@@ -25,5 +29,5 @@ export function resolveVoiceParticipantSpeakingState({
     return true;
   }
 
-  return !isLocalParticipant && liveKitSpeaking;
+  return liveKitSpeaking;
 }

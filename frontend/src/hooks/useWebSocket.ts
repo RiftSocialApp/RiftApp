@@ -331,6 +331,9 @@ export function useWebSocket() {
             if (conversation_id && !canApplyVoiceConversationEvent(conversation_id)) {
               break;
             }
+            if (!speaking && user_id === useAuthStore.getState().user?.id) {
+              break;
+            }
             debugVoiceSpeaking('Received speaking update', {
               userId: user_id,
               speaking,

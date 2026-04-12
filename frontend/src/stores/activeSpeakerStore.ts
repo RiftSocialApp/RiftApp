@@ -157,7 +157,7 @@ export const useActiveSpeakerStore = create<ActiveSpeakerStore>()(
 
           if (preferredKey === currentKey) {
             clearPendingSwitchTimer();
-            set({ activeSpeaker: buildActiveSpeakerMedia(preferredParticipant, now, true) });
+            set({ activeSpeaker: buildActiveSpeakerMedia(preferredParticipant, now, preferredParticipant.isSpeaking) });
             return;
           }
 
@@ -173,7 +173,7 @@ export const useActiveSpeakerStore = create<ActiveSpeakerStore>()(
             preferredPriority > currentPriority
           ) {
             clearPendingSwitchTimer();
-            set({ activeSpeaker: buildActiveSpeakerMedia(preferredParticipant, now, true) });
+            set({ activeSpeaker: buildActiveSpeakerMedia(preferredParticipant, now, preferredParticipant.isSpeaking) });
             return;
           }
 
@@ -206,7 +206,7 @@ export const useActiveSpeakerStore = create<ActiveSpeakerStore>()(
               }
 
               useActiveSpeakerStore.setState({
-                activeSpeaker: buildActiveSpeakerMedia(latestParticipant, Date.now(), true),
+                activeSpeaker: buildActiveSpeakerMedia(latestParticipant, Date.now(), latestParticipant.isSpeaking),
               });
             }, ACTIVE_SPEAKER_SWITCH_DEBOUNCE_MS);
           }

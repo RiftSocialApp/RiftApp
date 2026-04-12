@@ -73,7 +73,7 @@ type VoiceJoinTarget = {
 
 type TrackProcessorsModule = typeof import('@livekit/track-processors');
 
-const SPEAKING_BROADCAST_INTERVAL_MS = 30;
+const SPEAKING_BROADCAST_INTERVAL_MS = 100;
 const SPEAKING_HOLD_MS = 120;
 const CONNECTION_STATS_POLL_INTERVAL_MS = 1000;
 const DM_CALL_SESSION_EXPIRY_MS = 90_000;

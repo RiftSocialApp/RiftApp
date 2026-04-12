@@ -33,14 +33,14 @@ describe('voiceSpeakingState', () => {
     })).toBe(true);
   });
 
-  it('lets an explicit false suppress delayed local LiveKit speaking state', () => {
+  it('never lets explicit false override LiveKit for local participant', () => {
     expect(resolveVoiceParticipantSpeakingState({
       transientSpeaking: false,
       hasExplicitSpeakingSignal: true,
       explicitSpeakingSignal: false,
       liveKitSpeaking: true,
       isLocalParticipant: true,
-    })).toBe(false);
+    })).toBe(true);
   });
 
   it('allows remote LiveKit speaking state to recover if a false signal lags behind', () => {

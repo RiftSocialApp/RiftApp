@@ -73,11 +73,18 @@ export function selectPreferredActiveSpeaker<TTrack>(
   current: CurrentActiveSpeakerTarget | null,
 ): ActiveSpeakerSelection<TTrack> | null {
   const speakingParticipants = participants.filter((participant) => participant.isSpeaking);
-  if (speakingParticipants.length === 0) {
+
+  const mediaParticipants = participants.filter((participant) => {
+    const sel = getActiveSpeakerMediaSelection(participant);
+    return sel.trackType !== null && sel.track != null;
+  });
+
+  const pool = speakingParticipants.length > 0 ? speakingParticipants : mediaParticipants;
+  if (pool.length === 0) {
     return null;
   }
 
-  const selections = speakingParticipants
+  const selections = pool
     .map((participant) => ({
       participant,
       selection: getActiveSpeakerMediaSelection(participant),
@@ -96,12 +103,12 @@ export function selectPreferredActiveSpeaker<TTrack>(
     return best;
   }
 
-  const currentParticipant = speakingParticipants.find((participant) => participant.identity === current.userId);
-  if (!currentParticipant) {
+  const currentInPool = pool.find((participant) => participant.identity === current.userId);
+  if (!currentInPool) {
     return best;
   }
 
-  const currentSelection = getActiveSpeakerMediaSelection(currentParticipant);
+  const currentSelection = getActiveSpeakerMediaSelection(currentInPool);
   if (currentSelection.trackType === null || currentSelection.track == null) {
     return best;
   }

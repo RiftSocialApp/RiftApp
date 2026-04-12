@@ -135,7 +135,7 @@ describe('activeSpeakerStore', () => {
     });
   });
 
-  it('holds the last active speaker briefly when the room goes quiet', () => {
+  it('keeps overlay visible when participant has media even after speaking stops', () => {
     useActiveSpeakerStore.getState().syncFromParticipants([
       participant({
         identity: 'camera-user',
@@ -167,7 +167,11 @@ describe('activeSpeakerStore', () => {
     });
 
     vi.advanceTimersByTime(ACTIVE_SPEAKER_HOLD_MS + 20);
-    expect(useActiveSpeakerStore.getState().activeSpeaker).toBeNull();
+    expect(useActiveSpeakerStore.getState().activeSpeaker).toMatchObject({
+      userId: 'camera-user',
+      trackType: 'camera',
+      isSpeaking: false,
+    });
   });
 
   it('ignores audio-only speakers for the floating media overlay', () => {
