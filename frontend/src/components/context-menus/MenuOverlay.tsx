@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 function clampMenuPosition(x: number, y: number, w: number, h: number) {
@@ -26,16 +26,45 @@ export function MenuOverlay({
   const wrapRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState({ x, y });
 
+  const reposition = useCallback(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const next = clampMenuPosition(x, y, r.width, r.height);
+    setPos((current) => (current.x === next.x && current.y === next.y ? current : next));
+  }, [x, y]);
+
   useLayoutEffect(() => {
     setPos({ x, y });
   }, [x, y]);
 
   useLayoutEffect(() => {
+    reposition();
+
     const el = wrapRef.current;
     if (!el) return;
-    const r = el.getBoundingClientRect();
-    setPos(clampMenuPosition(x, y, r.width, r.height));
-  }, [x, y]);
+
+    const handleViewportChange = () => {
+      reposition();
+    };
+
+    window.addEventListener('resize', handleViewportChange);
+    window.addEventListener('scroll', handleViewportChange, true);
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      observer = new ResizeObserver(() => {
+        reposition();
+      });
+      observer.observe(el);
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleViewportChange);
+      window.removeEventListener('scroll', handleViewportChange, true);
+      observer?.disconnect();
+    };
+  }, [reposition]);
 
   useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent) => {
