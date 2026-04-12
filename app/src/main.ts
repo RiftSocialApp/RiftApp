@@ -9,7 +9,7 @@ import {
   session,
   desktopCapturer,
 } from "electron";
-import { execFileSync } from "child_process";
+import { execFileSync, spawn } from "child_process";
 import os from "os";
 import path from "path";
 import fs from "fs";
@@ -19,6 +19,10 @@ const VITE_DEV_URL = "http://localhost:5173";
 const PRODUCTION_WEB_APP_URL = "https://riftapp.io/login";
 const DEFAULT_UPDATE_FEED_URL = "https://updates.riftapp.io";
 const UPDATE_CHECK_INTERVAL_MS = 3 * 60 * 1000;
+const UPDATE_RESTART_MARKER_FILENAME = "update-restart-pending.json";
+const UPDATE_RESTART_MARKER_TTL_MS = 90_000;
+const MAIN_WINDOW_READY_TIMEOUT_MS = 15_000;
+const FRONTEND_RELOAD_SPLASH_MIN_MS = 650;
 const TRUSTED_RENDERER_ORIGINS = new Set<string>([
   new URL(VITE_DEV_URL).origin,
   new URL(PRODUCTION_WEB_APP_URL).origin,
@@ -39,6 +43,12 @@ type DesktopUpdateStatus = {
   version: string;
   progress: number | null;
   message: string;
+};
+
+type UpdateRestartMarker = {
+  createdAt: number;
+  expiresAt: number;
+  version: string | null;
 };
 
 type DesktopDisplaySource = {
@@ -101,6 +111,69 @@ function getAssetPath(...segments: string[]): string {
 
 function getPreloadPath(): string {
   return path.join(__dirname, "preload.js");
+}
+
+function getUpdateRestartMarkerPath(): string {
+  return path.join(app.getPath("userData"), UPDATE_RESTART_MARKER_FILENAME);
+}
+
+function readUpdateRestartMarker(): UpdateRestartMarker | null {
+  try {
+    const raw = fs.readFileSync(getUpdateRestartMarkerPath(), "utf8");
+    const parsed = JSON.parse(raw) as Partial<UpdateRestartMarker>;
+    if (typeof parsed.createdAt !== "number" || typeof parsed.expiresAt !== "number") {
+      return null;
+    }
+
+    return {
+      createdAt: parsed.createdAt,
+      expiresAt: parsed.expiresAt,
+      version: typeof parsed.version === "string" && parsed.version.trim().length > 0
+        ? parsed.version
+        : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function clearUpdateRestartMarker(): void {
+  try {
+    fs.rmSync(getUpdateRestartMarkerPath(), { force: true });
+  } catch {
+    /* ignore cleanup errors */
+  }
+}
+
+function hasPendingUpdateRestartMarker(): boolean {
+  const marker = readUpdateRestartMarker();
+  if (!marker) {
+    return false;
+  }
+
+  if (marker.expiresAt <= Date.now()) {
+    clearUpdateRestartMarker();
+    return false;
+  }
+
+  return true;
+}
+
+function writeUpdateRestartMarker(): UpdateRestartMarker | null {
+  const marker: UpdateRestartMarker = {
+    createdAt: Date.now(),
+    expiresAt: Date.now() + UPDATE_RESTART_MARKER_TTL_MS,
+    version: updateStatus.version || null,
+  };
+
+  try {
+    fs.mkdirSync(path.dirname(getUpdateRestartMarkerPath()), { recursive: true });
+    fs.writeFileSync(getUpdateRestartMarkerPath(), JSON.stringify(marker), "utf8");
+    return marker;
+  } catch (error) {
+    console.warn("[Rift updater] Failed to write restart marker:", error);
+    return null;
+  }
 }
 
 function getAppIcon(): Electron.NativeImage {
@@ -390,6 +463,18 @@ async function reloadFrontendIgnoringCache(webContents: Electron.WebContents): P
     return false;
   }
 
+  const targetWindow = BrowserWindow.fromWebContents(webContents);
+  const shouldShowReloadSplash = app.isPackaged && Boolean(targetWindow && !targetWindow.isDestroyed());
+
+  if (shouldShowReloadSplash) {
+    if (!splashWindow || splashWindow.isDestroyed()) {
+      createSplashWindow();
+    }
+    updateSplash("Refreshing Rift…", "SYNCING");
+    targetWindow?.hide();
+    await new Promise<void>((resolve) => setTimeout(resolve, FRONTEND_RELOAD_SPLASH_MIN_MS));
+  }
+
   try {
     await webContents.session.clearCache();
   } catch (error) {
@@ -408,6 +493,15 @@ async function reloadFrontendIgnoringCache(webContents: Electron.WebContents): P
       return true;
     } catch {
       return false;
+    }
+  } finally {
+    if (shouldShowReloadSplash) {
+      await waitForMainWindowReady(targetWindow);
+      closeSplash();
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.show();
+        targetWindow.focus();
+      }
     }
   }
 }
@@ -456,36 +550,268 @@ function getIconBase64(): string {
 function buildSplashHTML(): string {
   const b64 = getIconBase64();
   const icon = b64
-    ? `<img src="data:image/png;base64,${b64}" width="80" height="80" style="border-radius:16px"/>`
-    : `<div style="font-size:42px;font-weight:700;letter-spacing:6px;color:#6366f1">RIFT</div>`;
+    ? `<img src="data:image/png;base64,${b64}" width="58" height="58" style="display:block;filter:drop-shadow(0 8px 20px rgba(0,0,0,0.16))"/>`
+    : `<svg viewBox="0 0 64 64" width="54" height="54" aria-hidden="true"><path d="M14 22c5.5-8.5 16.5-8.5 22 0 3.5 5.5 9.5 5.5 14.5 0" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" /><path d="M14 42c5.5-8.5 16.5-8.5 22 0 3.5 5.5 9.5 5.5 14.5 0" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" /></svg>`;
 
   return `<!DOCTYPE html><html><head><style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{background:#2b2d31;color:#f2f3f5;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+html,body{width:100%;height:100%}
+body{background:#17191f;color:#f2f3f5;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
 display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;
--webkit-app-region:drag;user-select:none;overflow:hidden}
-.icon{margin-bottom:32px}
-#status{font-size:13px;color:#b5bac1;margin-bottom:14px;min-height:18px}
-.track{width:200px;height:6px;background:#1e1f22;border-radius:3px;overflow:hidden}
-.fill{height:100%;width:30%;background:linear-gradient(90deg,#6366f1,#818cf8);border-radius:3px;transition:width .4s ease}
-.fill.ind{width:40%;animation:slide 1.2s ease-in-out infinite}
+-webkit-app-region:drag;user-select:none;overflow:hidden;position:relative}
+body::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at top,rgba(88,101,242,0.22),transparent 38%),linear-gradient(180deg,#1b1d23 0%,#17191f 100%)}
+body::after{content:'';position:absolute;inset:0;opacity:.08;background-image:linear-gradient(rgba(255,255,255,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.05) 1px,transparent 1px);background-size:32px 32px;background-position:center}
+.scene{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:32px 28px}
+.orb{position:relative;display:flex;align-items:center;justify-content:center;width:120px;height:120px;border-radius:999px;background:radial-gradient(circle at 30% 30%,#6d78ff,#4b52df 58%,#363bb1);box-shadow:0 24px 80px rgba(88,101,242,.38)}
+.orb::before{content:'';position:absolute;inset:9px;border-radius:999px;border:1px solid rgba(255,255,255,.1);background:radial-gradient(circle at top,rgba(255,255,255,.16),transparent 58%)}
+.orb > *{position:relative}
+.title{margin-top:34px;font-size:32px;font-weight:600;letter-spacing:-.03em;color:white}
+#message{margin-top:14px;max-width:520px;font-size:18px;line-height:1.8;font-style:italic;color:#c3cad7}
+#status{margin-top:34px;font-size:11px;font-weight:700;letter-spacing:.3em;text-transform:uppercase;color:#7f8ea3}
+.track{margin-top:12px;width:220px;height:6px;background:#20232a;border-radius:999px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.03)}
+.fill{height:100%;width:30%;background:linear-gradient(90deg,#5865f2,#7c86ff);border-radius:999px;transition:width .4s ease}
+.fill.ind{width:38%;animation:slide 1.25s ease-in-out infinite}
 @keyframes slide{0%{transform:translateX(-100%)}100%{transform:translateX(500%)}}
 </style></head><body>
-<div class="icon">${icon}</div>
-<div id="status">Checking for updates\u2026</div>
+<div class="scene">
+<div class="orb">${icon}</div>
+<div class="title">Rift</div>
+<div id="message">Warming up the latest build and getting your session ready.</div>
+<div id="status">Checking</div>
 <div class="track"><div class="fill ind" id="bar"></div></div>
+</div>
 </body></html>`;
+}
+
+function buildDetachedUpdateSplashScript(markerPath: string, version: string | null): string {
+  const iconBase64 = getIconBase64();
+  const detailText = version ? `Desktop update v${version}` : "Desktop update";
+
+  return `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+[void][System.Reflection.Assembly]::LoadWithPartialName('System.Drawing.Drawing2D')
+[System.Windows.Forms.Application]::EnableVisualStyles()
+
+$markerPath = ${JSON.stringify(markerPath)}
+$iconBase64 = ${JSON.stringify(iconBase64)}
+$detailText = ${JSON.stringify(detailText)}
+
+$background = [System.Drawing.ColorTranslator]::FromHtml('#17191f')
+$panel = [System.Drawing.ColorTranslator]::FromHtml('#20232a')
+$muted = [System.Drawing.ColorTranslator]::FromHtml('#b5bac1')
+$soft = [System.Drawing.ColorTranslator]::FromHtml('#7f8ea3')
+$accent = [System.Drawing.ColorTranslator]::FromHtml('#5865f2')
+$accentEdge = [System.Drawing.ColorTranslator]::FromHtml('#7c86ff')
+
+$form = New-Object System.Windows.Forms.Form
+$form.Text = 'Rift'
+$form.Width = 620
+$form.Height = 420
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedSingle'
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.BackColor = $background
+$form.ForeColor = [System.Drawing.Color]::White
+$form.TopMost = $true
+$form.ShowInTaskbar = $true
+
+$shell = New-Object System.Windows.Forms.Panel
+$shell.Dock = 'Fill'
+$shell.BackColor = $background
+$form.Controls.Add($shell)
+
+$orb = New-Object System.Windows.Forms.Panel
+$orb.Width = 120
+$orb.Height = 120
+$orb.Left = [Math]::Floor(($form.ClientSize.Width - $orb.Width) / 2)
+$orb.Top = 76
+$orb.BackColor = $accent
+$path = New-Object System.Drawing.Drawing2D.GraphicsPath
+$path.AddEllipse(0, 0, $orb.Width, $orb.Height)
+$orb.Region = New-Object System.Drawing.Region($path)
+$shell.Controls.Add($orb)
+
+$picture = New-Object System.Windows.Forms.PictureBox
+$picture.Width = 58
+$picture.Height = 58
+$picture.SizeMode = 'Zoom'
+$picture.Left = [Math]::Floor(($orb.Width - $picture.Width) / 2)
+$picture.Top = [Math]::Floor(($orb.Height - $picture.Height) / 2)
+if ($iconBase64.Length -eq 0) {
+  $fallback = New-Object System.Windows.Forms.Label
+  $fallback.Width = $orb.Width
+  $fallback.Height = $orb.Height
+  $fallback.TextAlign = 'MiddleCenter'
+  $fallback.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 28)
+  $fallback.ForeColor = [System.Drawing.Color]::White
+  $fallback.Text = 'R'
+  $orb.Controls.Add($fallback)
+}
+if ($iconBase64.Length -gt 0) {
+  try {
+    $bytes = [System.Convert]::FromBase64String($iconBase64)
+    $stream = New-Object System.IO.MemoryStream(,$bytes)
+    $picture.Image = [System.Drawing.Image]::FromStream($stream)
+  } catch {}
+}
+$orb.Controls.Add($picture)
+
+$title = New-Object System.Windows.Forms.Label
+$title.AutoSize = $false
+$title.Width = $form.ClientSize.Width - 120
+$title.Height = 36
+$title.Left = 60
+$title.Top = 224
+$title.TextAlign = 'MiddleCenter'
+$title.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 18)
+$title.ForeColor = [System.Drawing.Color]::White
+$title.Text = 'Rift is relaunching'
+$shell.Controls.Add($title)
+
+$body = New-Object System.Windows.Forms.Label
+$body.AutoSize = $false
+$body.Width = $form.ClientSize.Width - 150
+$body.Height = 54
+$body.Left = 75
+$body.Top = 264
+$body.TextAlign = 'MiddleCenter'
+$body.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 11, [System.Drawing.FontStyle]::Italic)
+$body.ForeColor = $muted
+$body.Text = 'Applying the update, loading the latest build, and reconnecting your session.'
+$shell.Controls.Add($body)
+
+$detail = New-Object System.Windows.Forms.Label
+$detail.AutoSize = $false
+$detail.Width = $form.ClientSize.Width - 120
+$detail.Height = 20
+$detail.Left = 60
+$detail.Top = 314
+$detail.TextAlign = 'MiddleCenter'
+$detail.Font = New-Object System.Drawing.Font('Segoe UI', 9)
+$detail.ForeColor = $soft
+$detail.Text = $detailText
+$shell.Controls.Add($detail)
+
+$status = New-Object System.Windows.Forms.Label
+$status.AutoSize = $false
+$status.Width = 220
+$status.Height = 24
+$status.Left = [Math]::Floor(($form.ClientSize.Width - $status.Width) / 2)
+$status.Top = 344
+$status.TextAlign = 'MiddleCenter'
+$status.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 9)
+$status.ForeColor = $soft
+$status.Text = 'RESTARTING'
+$shell.Controls.Add($status)
+
+$barTrack = New-Object System.Windows.Forms.Panel
+$barTrack.Width = 220
+$barTrack.Height = 6
+$barTrack.Left = [Math]::Floor(($form.ClientSize.Width - $barTrack.Width) / 2)
+$barTrack.Top = 374
+$barTrack.BackColor = $panel
+$shell.Controls.Add($barTrack)
+
+$barFill = New-Object System.Windows.Forms.Panel
+$barFill.Width = 84
+$barFill.Height = 6
+$barFill.Left = 0
+$barFill.Top = 0
+$barFill.BackColor = $accent
+$barTrack.Controls.Add($barFill)
+
+$tick = 0
+$timer = New-Object System.Windows.Forms.Timer
+$timer.Interval = 80
+$timer.Add_Tick({
+  $script:tick = ($script:tick + 1) % 170
+  $script:barFill.Left = $script:tick - 84
+
+  if (-not (Test-Path -LiteralPath $markerPath)) {
+    $timer.Stop()
+    $form.Close()
+    return
+  }
+
+  try {
+    $json = Get-Content -LiteralPath $markerPath -Raw | ConvertFrom-Json
+    if ($null -ne $json.expiresAt -and [int64]$json.expiresAt -le [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) {
+      Remove-Item -LiteralPath $markerPath -Force -ErrorAction SilentlyContinue
+      $timer.Stop()
+      $form.Close()
+    }
+  } catch {}
+})
+
+$form.Add_Shown({ $timer.Start() })
+$form.Add_FormClosed({ $timer.Stop() })
+[System.Windows.Forms.Application]::Run($form)
+`;
+}
+
+function launchDetachedUpdateSplash(): void {
+  if (process.platform !== "win32" || !app.isPackaged) {
+    return;
+  }
+
+  const marker = writeUpdateRestartMarker();
+  if (!marker) {
+    return;
+  }
+
+  try {
+    const encodedCommand = Buffer.from(
+      buildDetachedUpdateSplashScript(getUpdateRestartMarkerPath(), marker.version),
+      "utf16le",
+    ).toString("base64");
+
+    const powershellPath = path.join(
+      process.env.SystemRoot || "C:\\Windows",
+      "System32",
+      "WindowsPowerShell",
+      "v1.0",
+      "powershell.exe",
+    );
+
+    const child = spawn(
+      powershellPath,
+      [
+        "-NoLogo",
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-STA",
+        "-WindowStyle",
+        "Hidden",
+        "-EncodedCommand",
+        encodedCommand,
+      ],
+      {
+        detached: true,
+        stdio: "ignore",
+        windowsHide: true,
+      },
+    );
+
+    child.unref();
+  } catch (error) {
+    clearUpdateRestartMarker();
+    console.warn("[Rift updater] Failed to launch detached restart splash:", error);
+  }
 }
 
 function createSplashWindow(): void {
   splashWindow = new BrowserWindow({
-    width: 300,
-    height: 350,
+    width: 620,
+    height: 420,
     frame: false,
     resizable: false,
     center: true,
     skipTaskbar: false,
-    backgroundColor: "#2b2d31",
+    backgroundColor: "#17191f",
     icon: getAppIcon(),
     show: true,
     webPreferences: { contextIsolation: true, nodeIntegration: false },
@@ -499,13 +825,50 @@ function createSplashWindow(): void {
   });
 }
 
-function updateSplash(text: string, percent?: number): void {
+function waitForMainWindowReady(win: BrowserWindow | null, timeoutMs = MAIN_WINDOW_READY_TIMEOUT_MS): Promise<void> {
+  if (!win || win.isDestroyed()) {
+    return Promise.resolve();
+  }
+
+  return new Promise((resolve) => {
+    let settled = false;
+
+    const finish = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      cleanup();
+      resolve();
+    };
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      win.removeListener("ready-to-show", finish);
+      win.removeListener("closed", finish);
+      win.webContents.removeListener("did-finish-load", finish);
+      win.webContents.removeListener("did-fail-load", finish);
+    };
+
+    const timer = setTimeout(finish, timeoutMs);
+
+    win.once("ready-to-show", finish);
+    win.once("closed", finish);
+    win.webContents.once("did-finish-load", finish);
+    win.webContents.once("did-fail-load", finish);
+  });
+}
+
+function updateSplash(message: string, statusLabel = "CONNECTING", percent?: number): void {
   if (!splashWindow || splashWindow.isDestroyed()) return;
   const js =
     percent !== undefined
-      ? `document.getElementById('status').textContent=${JSON.stringify(text)};
-         var b=document.getElementById('bar');b.classList.remove('ind');b.style.width='${Math.round(percent)}%';`
-      : `document.getElementById('status').textContent=${JSON.stringify(text)};`;
+    ? `document.getElementById('message').textContent=${JSON.stringify(message)};
+      document.getElementById('status').textContent=${JSON.stringify(statusLabel)};
+      var b=document.getElementById('bar');b.classList.remove('ind');b.style.width='${Math.round(percent)}%';`
+    : `document.getElementById('message').textContent=${JSON.stringify(message)};
+      document.getElementById('status').textContent=${JSON.stringify(statusLabel)};
+      var b=document.getElementById('bar');b.classList.add('ind');b.style.width='38%';`;
   splashWindow.webContents.executeJavaScript(js).catch(() => {});
 }
 
@@ -589,6 +952,7 @@ function createWindow(show: boolean): void {
 
 function restartToApplyUpdate(): void {
   allowMainWindowClose = true;
+  launchDetachedUpdateSplash();
   autoUpdater.quitAndInstall(false, true);
 }
 
@@ -840,18 +1204,18 @@ function splashUpdateCheck(): Promise<void> {
 
   return new Promise<void>((resolve) => {
     autoUpdater.on("checking-for-update", () =>
-      updateSplash("Checking for updates\u2026")
+      updateSplash("Warming up the latest build and checking for updates.", "CHECKING")
     );
     autoUpdater.on("update-available", () => {
-      updateSplash("Starting Rift\u2026", 100);
+      updateSplash("Everything is in sync. Starting Rift now.", "CONNECTING", 100);
       resolve();
     });
     autoUpdater.on("update-not-available", () => {
-      updateSplash("Starting Rift\u2026", 100);
+      updateSplash("Everything is in sync. Starting Rift now.", "CONNECTING", 100);
       resolve();
     });
     autoUpdater.on("error", () => {
-      updateSplash("Starting Rift\u2026", 100);
+      updateSplash("Everything is in sync. Starting Rift now.", "CONNECTING", 100);
       resolve();
     });
 
@@ -982,9 +1346,21 @@ if (!gotLock) {
     configureDisplayMediaHandling();
     registerIpc();
 
+    const pendingUpdateRestart = hasPendingUpdateRestartMarker();
+
     if (isDev) {
       createWindow(true);
       createTray();
+    } else if (pendingUpdateRestart) {
+      createWindow(false);
+      createTray();
+
+      await waitForMainWindowReady(mainWindow);
+      clearUpdateRestartMarker();
+      mainWindow?.show();
+      mainWindow?.focus();
+
+      backgroundUpdateDownload();
     } else {
       createSplashWindow();
       createWindow(false);
@@ -993,6 +1369,7 @@ if (!gotLock) {
       const minDisplayTime = new Promise<void>((r) => setTimeout(r, 3000));
       const updateCheck = splashUpdateCheck();
       await Promise.all([minDisplayTime, updateCheck]);
+      await waitForMainWindowReady(mainWindow);
 
       closeSplash();
       mainWindow?.show();
@@ -1010,6 +1387,9 @@ if (!gotLock) {
   app.on("before-quit", () => {
     allowMainWindowClose = true;
     clearPendingDisplaySourceSelection();
+    if (!updateReady) {
+      clearUpdateRestartMarker();
+    }
     taskbarAttentionRequested = false;
     clearUpdateStatusResetTimer();
     clearBackgroundUpdateTimer();

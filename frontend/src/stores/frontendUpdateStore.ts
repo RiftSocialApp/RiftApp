@@ -10,6 +10,7 @@ interface FrontendUpdateState {
   latestSignature: string | null;
   latestBackendIdentity: string | null;
   updateReady: boolean;
+  applyingUpdate: boolean;
   setCurrentSignature: (signature: string | null) => void;
   setCurrentBackendIdentity: (identity: string | null) => void;
   markUpdateReady: (signature: string) => void;
@@ -19,6 +20,9 @@ interface FrontendUpdateState {
 }
 
 const ASSET_FAILURE_SIGNATURE = '__asset_failure__';
+const FRONTEND_UPDATE_TRANSITION_MS = 650;
+
+let frontendUpdateApplyTimer: number | null = null;
 
 export const useFrontendUpdateStore = create<FrontendUpdateState>((set, get) => ({
   currentCommitSha: __RIFT_FRONTEND_COMMIT_SHA__,
@@ -28,6 +32,7 @@ export const useFrontendUpdateStore = create<FrontendUpdateState>((set, get) => 
   latestSignature: null,
   latestBackendIdentity: null,
   updateReady: false,
+  applyingUpdate: false,
 
   setCurrentSignature: (signature) => {
     set({ currentSignature: signature });
@@ -89,20 +94,30 @@ export const useFrontendUpdateStore = create<FrontendUpdateState>((set, get) => 
   },
 
   applyUpdate: () => {
-    if (!get().updateReady) {
+    if (!get().updateReady || get().applyingUpdate) {
       return;
     }
 
-    const desktop = getDesktop();
-    if (desktop) {
-      void desktop.reloadFrontendIgnoringCache().then((reloaded) => {
-        if (!reloaded) {
-          reloadOnceForFrontendUpdate();
-        }
-      });
-      return;
+    set({ applyingUpdate: true });
+
+    if (frontendUpdateApplyTimer != null) {
+      window.clearTimeout(frontendUpdateApplyTimer);
     }
 
-    reloadOnceForFrontendUpdate();
+    frontendUpdateApplyTimer = window.setTimeout(() => {
+      frontendUpdateApplyTimer = null;
+
+      const desktop = getDesktop();
+      if (desktop) {
+        void desktop.reloadFrontendIgnoringCache().then((reloaded) => {
+          if (!reloaded) {
+            reloadOnceForFrontendUpdate();
+          }
+        });
+        return;
+      }
+
+      reloadOnceForFrontendUpdate();
+    }, FRONTEND_UPDATE_TRANSITION_MS);
   },
 }));

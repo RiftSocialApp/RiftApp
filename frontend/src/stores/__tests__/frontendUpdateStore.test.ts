@@ -1,8 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFrontendUpdateStore } from '../frontendUpdateStore';
 
-const reloadFrontendIgnoringCache = vi.fn();
+const { reloadFrontendIgnoringCache, reloadOnceForFrontendUpdate } = vi.hoisted(() => ({
+  reloadFrontendIgnoringCache: vi.fn(),
+  reloadOnceForFrontendUpdate: vi.fn(),
+}));
 
 vi.mock('../../utils/desktop', () => ({
   getDesktop: () => ({
@@ -10,10 +13,16 @@ vi.mock('../../utils/desktop', () => ({
   }),
 }));
 
+vi.mock('../../utils/frontendUpdate', () => ({
+  reloadOnceForFrontendUpdate,
+}));
+
 describe('frontendUpdateStore', () => {
   beforeEach(() => {
+    vi.useFakeTimers();
     reloadFrontendIgnoringCache.mockReset();
     reloadFrontendIgnoringCache.mockResolvedValue(false);
+    reloadOnceForFrontendUpdate.mockReset();
     useFrontendUpdateStore.setState({
       currentCommitSha: __RIFT_FRONTEND_COMMIT_SHA__,
       currentBuildId: __RIFT_FRONTEND_BUILD_ID__,
@@ -22,7 +31,13 @@ describe('frontendUpdateStore', () => {
       latestSignature: null,
       latestBackendIdentity: null,
       updateReady: false,
+      applyingUpdate: false,
     });
+  });
+
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
   });
 
   it('marks an update ready when the backend identity changes', () => {
@@ -64,10 +79,15 @@ describe('frontendUpdateStore', () => {
     expect(useFrontendUpdateStore.getState().latestSignature).toBe('/assets/app-new.js|/assets/app-new.css');
   });
 
-  it('asks the desktop shell to reload the frontend ignoring cache when applying an update', () => {
+  it('shows the transition splash before asking the desktop shell to reload the frontend ignoring cache', async () => {
     useFrontendUpdateStore.setState({ updateReady: true });
 
     useFrontendUpdateStore.getState().applyUpdate();
+
+    expect(useFrontendUpdateStore.getState().applyingUpdate).toBe(true);
+    expect(reloadFrontendIgnoringCache).not.toHaveBeenCalled();
+
+    await vi.advanceTimersByTimeAsync(650);
 
     expect(reloadFrontendIgnoringCache).toHaveBeenCalledTimes(1);
   });

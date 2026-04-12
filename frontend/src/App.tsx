@@ -9,6 +9,7 @@ import { setupBackButton, setupDeepLinks, isNative } from './lib/capacitor';
 import { initPushNotifications, teardownPushNotifications } from './lib/pushNotifications';
 import { App as CapApp } from '@capacitor/app';
 import TitleBar from './components/layout/TitleBar';
+import FrontendUpdateSplash from './components/shared/FrontendUpdateSplash';
 import { isProtectedImportUpdateReadyError, safeImport } from './utils/safeImport';
 
 function protectedLazy<T extends ComponentType<any>>(loader: () => Promise<{ default: T }>) {
@@ -391,6 +392,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <NativeShellBridge />
+      <FrontendUpdateSplash />
       <div className="flex flex-col h-screen">
         <TitleBar />
         <div className="flex-1 min-h-0 overflow-y-auto">
