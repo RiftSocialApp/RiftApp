@@ -258,7 +258,7 @@ class ApiClient {
       body: JSON.stringify({ member_ids: memberIds }),
     });
   }
-  patchDMConversation(conversationId: string, body: { name?: string | null; icon_url?: string | null }) {
+  patchDMConversation(conversationId: string, body: { name?: string | null; icon_url?: string | null; owner_id?: string | null }) {
     return this.request<Conversation>(`/dms/${conversationId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),

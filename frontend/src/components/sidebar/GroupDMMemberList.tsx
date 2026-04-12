@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
 import type { Conversation, User } from '../../types';
 import { useAuthStore } from '../../stores/auth';
@@ -16,16 +16,10 @@ function GroupMemberRow({
   member,
   ownerId,
   currentUserId,
-  canRemoveMembers,
-  memberActionId,
-  onRemove,
 }: {
   member: User;
   ownerId?: string | null;
   currentUserId?: string | null;
-  canRemoveMembers: boolean;
-  memberActionId: string | null;
-  onRemove: (userId: string, label: string) => void;
 }) {
   const status = usePresenceStore((s) => s.presence[member.id]) ?? member.status;
   const isOffline = status === 0;
@@ -34,8 +28,6 @@ function GroupMemberRow({
   const label = getUserLabel(member);
   const isOwner = ownerId === member.id;
   const isCurrentUser = currentUserId === member.id;
-  const canRemove = canRemoveMembers && !isCurrentUser;
-  const isRemoving = memberActionId === member.id;
 
   const handleClick = useCallback((event: React.MouseEvent) => {
     openProfile(member, (event.currentTarget as HTMLElement).getBoundingClientRect());
@@ -76,24 +68,9 @@ function GroupMemberRow({
         </p>
       </div>
 
-      {canRemove ? (
-        <button
-          type="button"
-          onClick={(event) => {
-            event.stopPropagation();
-            onRemove(member.id, label);
-          }}
-          disabled={isRemoving}
-          className="rounded-md border border-[#5c2b2e] px-2 py-1 text-[10px] font-semibold text-[#ffb3b8] opacity-0 transition-all hover:bg-[#5c2b2e]/30 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-60"
-          title={`Remove ${label}`}
-        >
-          {isRemoving ? 'Removing…' : 'Remove'}
-        </button>
-      ) : (
-        <span className="text-[10px] text-[#777d88] opacity-0 transition-opacity group-hover:opacity-100">
-          {statusLabel(status)}
-        </span>
-      )}
+      <span className="text-[10px] text-[#777d88] opacity-0 transition-opacity group-hover:opacity-100">
+        {statusLabel(status)}
+      </span>
     </div>
   );
 }
@@ -101,12 +78,8 @@ function GroupMemberRow({
 export default function GroupDMMemberList({ conversation }: { conversation: Conversation }) {
   const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const currentConversation = useDMStore((s) => s.conversations.find((entry) => entry.id === conversation.id) ?? conversation);
-  const removeConversationMember = useDMStore((s) => s.removeConversationMember);
-  const [memberActionId, setMemberActionId] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const ownerId = currentConversation.owner_id ?? null;
-  const canRemoveMembers = Boolean(ownerId && ownerId === currentUserId);
   const members = useMemo(() => {
     const allMembers = getConversationMembers(currentConversation);
     return [...allMembers].sort((left, right) => {
@@ -125,27 +98,6 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
       return getUserLabel(left).localeCompare(getUserLabel(right));
     });
   }, [currentConversation, currentUserId, ownerId]);
-
-  const handleRemove = useCallback(async (userId: string, label: string) => {
-    if (memberActionId) {
-      return;
-    }
-
-    const confirmed = window.confirm(`Remove ${label} from this group DM?`);
-    if (!confirmed) {
-      return;
-    }
-
-    setMemberActionId(userId);
-    setError(null);
-    try {
-      await removeConversationMember(currentConversation.id, userId);
-    } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : 'Could not remove member');
-    } finally {
-      setMemberActionId(null);
-    }
-  }, [currentConversation.id, memberActionId, removeConversationMember]);
 
   if (members.length === 0) {
     return null;
@@ -167,14 +119,9 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
               member={member}
               ownerId={ownerId}
               currentUserId={currentUserId}
-              canRemoveMembers={canRemoveMembers}
-              memberActionId={memberActionId}
-              onRemove={handleRemove}
             />
           ))}
         </div>
-
-        {error ? <div className="px-2 text-xs text-[#ed4245]">{error}</div> : null}
       </div>
     </div>
   );

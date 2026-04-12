@@ -278,14 +278,15 @@ func (r *DMRepo) UpdateConversationTimestampTx(ctx context.Context, tx pgx.Tx, c
 	return err
 }
 
-func (r *DMRepo) UpdateConversationMetadata(ctx context.Context, convID string, nameSet bool, name *string, iconURLSet bool, iconURL *string, updatedAt time.Time) error {
+func (r *DMRepo) UpdateConversationMetadata(ctx context.Context, convID string, nameSet bool, name *string, iconURLSet bool, iconURL *string, ownerIDSet bool, ownerID *string, updatedAt time.Time) error {
 	commandTag, err := r.db.Exec(ctx,
 		`UPDATE conversations
 		 SET name = CASE WHEN $2 THEN $3 ELSE name END,
 		     icon_url = CASE WHEN $4 THEN $5 ELSE icon_url END,
-		     updated_at = $6
+		     owner_id = CASE WHEN $6 THEN $7 ELSE owner_id END,
+		     updated_at = $8
 		 WHERE id = $1`,
-		convID, nameSet, name, iconURLSet, iconURL, updatedAt,
+		convID, nameSet, name, iconURLSet, iconURL, ownerIDSet, ownerID, updatedAt,
 	)
 	if err != nil {
 		return err

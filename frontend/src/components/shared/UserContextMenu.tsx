@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { MenuOverlay, menuDivider } from '../context-menus/MenuOverlay';
 import { useUserContextMenuStore } from '../../stores/userContextMenuStore';
 import { useProfilePopoverStore } from '../../stores/profilePopoverStore';
 import { useAuthStore } from '../../stores/auth';
@@ -6,10 +7,15 @@ import { useDMStore } from '../../stores/dmStore';
 import { api } from '../../api/client';
 import { useFriendStore } from '../../stores/friendStore';
 import { useAppSettingsStore } from '../../stores/appSettingsStore';
-import type { RelationshipType } from '../../types';
+import { useHubStore } from '../../stores/hubStore';
+import { useVoiceStore } from '../../stores/voiceStore';
+import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
+import { getConversationMembers, isGroupConversation } from '../../utils/conversations';
+import type { Hub, RelationshipType } from '../../types';
 
-const MENU_WIDTH = 208;
-const MENU_GAP = 4;
+const menuItemClassName = 'mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[#dbdee1] transition-colors hover:bg-[#232428]';
+const menuDangerItemClassName = 'mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[#f38b8f] transition-colors hover:bg-[#5c2b2e] hover:text-white';
+const menuDisabledItemClassName = 'mx-1.5 flex w-[calc(100%-12px)] cursor-not-allowed items-center rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[#7d828d] opacity-60';
 
 export default function UserContextMenu() {
   const user = useUserContextMenuStore((s) => s.user);
@@ -19,79 +25,68 @@ export default function UserContextMenu() {
   const openProfile = useProfilePopoverStore((s) => s.openModal);
   const currentUser = useAuthStore((s) => s.user);
   const developerMode = useAppSettingsStore((s) => s.developerMode);
-
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [visible, setVisible] = useState(false);
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-  const [copied, setCopied] = useState(false);
+  const activeConversation = useDMStore((s) => s.conversations.find((entry) => entry.id === s.activeConversationId) ?? null);
+  const openDM = useDMStore((s) => s.openDM);
+  const patchConversation = useDMStore((s) => s.patchConversation);
+  const removeConversationMember = useDMStore((s) => s.removeConversationMember);
+  const hubs = useHubStore((s) => s.hubs);
+  const loadHubs = useHubStore((s) => s.loadHubs);
   const [relationship, setRelationship] = useState<RelationshipType>('none');
   const [relLoading, setRelLoading] = useState(false);
+  const [inviteSubmenuOpen, setInviteSubmenuOpen] = useState(false);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSendingHubId, setInviteSendingHubId] = useState<string | null>(null);
 
-  const computePosition = useCallback(() => {
-    if (!menuRef.current) return;
-    const menuH = menuRef.current.offsetHeight;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-
-    let left = rawX;
-    if (left + MENU_WIDTH > vw - MENU_GAP) {
-      left = rawX - MENU_WIDTH;
-    }
-    left = Math.max(MENU_GAP, Math.min(left, vw - MENU_WIDTH - MENU_GAP));
-
-    let top = rawY;
-    if (top + menuH > vh - MENU_GAP) {
-      top = vh - menuH - MENU_GAP;
-    }
-    top = Math.max(MENU_GAP, top);
-
-    setPos({ top, left });
-  }, [rawX, rawY]);
+  const isSelf = currentUser?.id === user?.id;
+  const isActiveGroupConversation = Boolean(activeConversation && isGroupConversation(activeConversation, currentUser?.id));
+  const activeConversationMembers = useMemo(() => getConversationMembers(activeConversation), [activeConversation]);
+  const targetIsActiveGroupMember = Boolean(user && activeConversationMembers.some((member) => member.id === user.id));
+  const canManageGroupMembership = Boolean(
+    user
+    && currentUser?.id
+    && activeConversation?.owner_id === currentUser.id
+    && isActiveGroupConversation
+    && targetIsActiveGroupMember
+    && user.id !== currentUser.id,
+  );
+  const canTransferOwnership = Boolean(canManageGroupMembership && activeConversation?.owner_id !== user?.id);
+  const sortedInviteHubs = useMemo(
+    () => [...hubs].sort((left, right) => left.name.localeCompare(right.name)),
+    [hubs],
+  );
 
   useEffect(() => {
     if (user) {
-      setCopied(false);
       setRelationship('none');
+      setInviteSubmenuOpen(false);
+      setInviteLoading(false);
+      setInviteSendingHubId(null);
       if (currentUser && user.id !== currentUser.id) {
         api.getRelationship(user.id).then((r) => setRelationship(r.relationship)).catch(() => {});
       }
-      requestAnimationFrame(() => {
-        computePosition();
-        requestAnimationFrame(() => setVisible(true));
-      });
-    } else {
-      setVisible(false);
     }
-  }, [user, computePosition, currentUser]);
+  }, [user, currentUser]);
 
   useEffect(() => {
-    if (!user) return;
-    const onClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        close();
-      }
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') close();
-    };
-    const onContext = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        close();
-      }
-    };
-    document.addEventListener('mousedown', onClick, true);
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('contextmenu', onContext, true);
+    if (!user || !inviteSubmenuOpen || hubs.length > 0) {
+      return;
+    }
+
+    let cancelled = false;
+    setInviteLoading(true);
+    void loadHubs()
+      .finally(() => {
+        if (!cancelled) {
+          setInviteLoading(false);
+        }
+      });
+
     return () => {
-      document.removeEventListener('mousedown', onClick, true);
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('contextmenu', onContext, true);
+      cancelled = true;
     };
-  }, [user, close]);
+  }, [hubs.length, inviteSubmenuOpen, loadHubs, user]);
 
   if (!user) return null;
-
-  const isSelf = currentUser?.id === user.id;
 
   const handleProfile = () => {
     openProfile(user);
@@ -105,13 +100,88 @@ export default function UserContextMenu() {
 
   const handleMessage = async () => {
     close();
-    await useDMStore.getState().openDM(user.id);
+    await openDM(user.id);
+  };
+
+  const handleStartCall = async () => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    close();
+    await openDM(user.id);
+
+    const conversationId = useDMStore.getState().activeConversationId;
+    if (!conversationId) {
+      return;
+    }
+
+    const voiceState = useVoiceStore.getState();
+    const isCurrentConversationCall = voiceState.targetKind === 'conversation'
+      && voiceState.conversationId === conversationId
+      && voiceState.connected;
+    if (isCurrentConversationCall) {
+      useVoiceChannelUiStore.getState().setActiveChannel(conversationId, 'conversation');
+      return;
+    }
+
+    const existingRing = voiceState.conversationCallRings[conversationId];
+    const activeMembers = voiceState.conversationVoiceMembers[conversationId] ?? [];
+    const hasOtherParticipants = activeMembers.some((memberId) => memberId !== currentUser.id);
+    let startedRing = false;
+
+    if (!hasOtherParticipants && !existingRing) {
+      await voiceState.startConversationCallRing(conversationId, 'audio');
+      startedRing = true;
+    }
+
+    useVoiceChannelUiStore.getState().setActiveChannel(conversationId, 'conversation');
+    await useVoiceStore.getState().joinConversation(conversationId);
+
+    const joinedState = useVoiceStore.getState();
+    const joinedConversationCall = joinedState.targetKind === 'conversation'
+      && joinedState.conversationId === conversationId
+      && joinedState.connected;
+    if (startedRing && !joinedConversationCall) {
+      await joinedState.cancelConversationCallRing(conversationId);
+    }
+  };
+
+  const handleRemoveFromGroup = async () => {
+    if (!activeConversation) {
+      return;
+    }
+
+    close();
+    await removeConversationMember(activeConversation.id, user.id);
+  };
+
+  const handleMakeGroupOwner = async () => {
+    if (!activeConversation) {
+      return;
+    }
+
+    close();
+    await patchConversation(activeConversation.id, { owner_id: user.id });
+  };
+
+  const handleInviteToServer = async (hub: Hub) => {
+    setInviteSendingHubId(hub.id);
+    try {
+      const invite = await api.createInvite(hub.id, { expires_in: 604800 });
+      const conversation = await api.createOrOpenDM(user.id);
+      useDMStore.getState().addConversation(conversation);
+      await api.sendDMMessage(conversation.id, `${window.location.origin}/invite/${invite.code}`);
+      void useDMStore.getState().loadConversations();
+      close();
+    } finally {
+      setInviteSendingHubId(null);
+    }
   };
 
   const handleCopyId = () => {
-    navigator.clipboard.writeText(user.id);
-    setCopied(true);
-    setTimeout(() => close(), 600);
+    void navigator.clipboard.writeText(user.id);
+    close();
   };
 
   const handleAddFriend = async () => {
@@ -164,181 +234,148 @@ export default function UserContextMenu() {
     close();
   };
 
+  const renderFriendAction = () => {
+    if (isSelf || relationship === 'blocked') {
+      return null;
+    }
+
+    if (relationship === 'friends') {
+      return (
+        <MenuRow
+          label={relLoading ? 'Removing...' : 'Remove Friend'}
+          onClick={() => { void handleRemoveFriend(); }}
+          danger
+        />
+      );
+    }
+
+    if (relationship === 'pending_incoming') {
+      return (
+        <MenuRow
+          label={relLoading ? 'Accepting...' : 'Accept Friend Request'}
+          onClick={() => { void handleAcceptFriend(); }}
+        />
+      );
+    }
+
+    if (relationship === 'pending_outgoing') {
+      return <MenuRow label="Friend Request Pending" disabled />;
+    }
+
+    return (
+      <MenuRow
+        label={relLoading ? 'Sending...' : 'Add Friend'}
+        onClick={() => { void handleAddFriend(); }}
+      />
+    );
+  };
+
   return (
-    <div
-      ref={menuRef}
-      className="fixed z-[200] transition-all duration-100 ease-out"
-      style={{
-        top: pos.top,
-        left: pos.left,
-        width: MENU_WIDTH,
-        opacity: visible ? 1 : 0,
-        transform: visible ? 'scale(1)' : 'scale(0.95)',
-        transformOrigin: 'top left',
-        pointerEvents: visible ? 'auto' : 'none',
-      }}
-    >
-      <div className="rift-context-menu-shell">
-        <MenuItem icon={<ProfileIcon />} label="Profile" onClick={handleProfile} />
+    <MenuOverlay x={rawX} y={rawY} onClose={close} zIndex={260}>
+      <div className="rift-context-menu-shell overflow-visible text-[#dbdee1]" onContextMenu={(event) => event.preventDefault()}>
+        <MenuRow label="Profile" onClick={handleProfile} />
 
-        {!isSelf && (
-          <MenuItem icon={<AtIcon />} label="Mention" onClick={handleMention} />
-        )}
+        {!isSelf ? <MenuRow label="Mention" onClick={handleMention} /> : null}
+        {!isSelf ? <MenuRow label="Message" onClick={() => { void handleMessage(); }} /> : null}
+        {!isSelf ? <MenuRow label="Start a Call" onClick={() => { void handleStartCall(); }} /> : null}
 
-        {!isSelf && (
-          <MenuItem icon={<MessageIcon />} label="Message" onClick={handleMessage} />
-        )}
+        {canManageGroupMembership || canTransferOwnership ? menuDivider() : null}
 
-        {!isSelf && <Separator />}
+        {canManageGroupMembership ? (
+          <MenuRow label="Remove from Group" onClick={() => { void handleRemoveFromGroup(); }} danger />
+        ) : null}
+        {canTransferOwnership ? (
+          <MenuRow label="Make Group Owner" onClick={() => { void handleMakeGroupOwner(); }} danger />
+        ) : null}
 
-        {!isSelf && relationship === 'none' && (
-          <MenuItem
-            icon={<AddFriendIcon />}
-            label={relLoading ? 'Sending...' : 'Add Friend'}
-            onClick={handleAddFriend}
-          />
-        )}
-        {!isSelf && relationship === 'pending_incoming' && (
-          <MenuItem
-            icon={<AcceptIcon />}
-            label={relLoading ? 'Accepting...' : 'Accept Friend Request'}
-            onClick={handleAcceptFriend}
-          />
-        )}
-        {!isSelf && relationship === 'pending_outgoing' && (
-          <MenuItem
-            icon={<AddFriendIcon />}
-            label="Request Pending"
-            onClick={() => close()}
-          />
-        )}
-        {!isSelf && relationship === 'friends' && (
-          <MenuItem
-            icon={<RemoveFriendIcon />}
-            label={relLoading ? 'Removing...' : 'Remove Friend'}
-            onClick={handleRemoveFriend}
-            danger
-          />
-        )}
+        {!isSelf ? menuDivider() : null}
 
-        {!isSelf && <Separator />}
+        {!isSelf ? (
+          <div
+            className="relative mx-0.5"
+            onMouseEnter={() => setInviteSubmenuOpen(true)}
+            onMouseLeave={() => setInviteSubmenuOpen(false)}
+          >
+            <div className={`${menuItemClassName} cursor-default justify-between ${inviteSubmenuOpen ? 'bg-[#232428]' : ''}`}>
+              <span>Invite to Server</span>
+              <span className="text-riftapp-text-dim">›</span>
+            </div>
 
-        {!isSelf && relationship !== 'blocked' && (
-          <MenuItem
-            icon={<BlockIcon />}
-            label={relLoading ? 'Blocking...' : 'Block'}
-            onClick={handleBlock}
-            danger
-          />
-        )}
-        {!isSelf && relationship === 'blocked' && (
-          <MenuItem
-            icon={<BlockIcon />}
-            label={relLoading ? 'Unblocking...' : 'Unblock'}
-            onClick={handleUnblock}
-          />
-        )}
+            {inviteSubmenuOpen ? (
+              <div className="absolute left-full top-0 z-10 pl-1" onMouseEnter={() => setInviteSubmenuOpen(true)}>
+                <div className="rift-context-submenu-shell min-w-[220px] max-h-[min(70vh,340px)] overflow-y-auto">
+                  {inviteLoading ? (
+                    <div className="mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-[13px] text-[#8f949c]">
+                      Loading servers...
+                    </div>
+                  ) : sortedInviteHubs.length === 0 ? (
+                    <div className="mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-[13px] text-[#8f949c]">
+                      No servers available
+                    </div>
+                  ) : (
+                    sortedInviteHubs.map((hub) => (
+                      <button
+                        key={hub.id}
+                        type="button"
+                        onClick={() => { void handleInviteToServer(hub); }}
+                        disabled={inviteSendingHubId != null}
+                        className={inviteSendingHubId != null ? menuDisabledItemClassName : menuItemClassName}
+                      >
+                        <span className="truncate">{inviteSendingHubId === hub.id ? 'Sending...' : hub.name}</span>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
 
-        {developerMode && (
+        {!isSelf ? renderFriendAction() : null}
+        {!isSelf && relationship !== 'blocked' ? (
+          <MenuRow label={relLoading ? 'Blocking...' : 'Block'} onClick={() => { void handleBlock(); }} danger />
+        ) : null}
+        {!isSelf && relationship === 'blocked' ? (
+          <MenuRow label={relLoading ? 'Unblocking...' : 'Unblock'} onClick={() => { void handleUnblock(); }} />
+        ) : null}
+
+        {developerMode ? (
           <>
-            <Separator />
-            <MenuItem
-              icon={<CopyIcon />}
-              label={copied ? 'Copied!' : 'Copy User ID'}
+            {menuDivider()}
+            <MenuRow
+              label="Copy User ID"
               onClick={handleCopyId}
+              trailing={<span className="rounded bg-white/10 px-1 py-px text-[10px] font-semibold uppercase tracking-[0.08em] text-[#b5bac1]">ID</span>}
             />
           </>
-        )}
+        ) : null}
       </div>
-    </div>
+    </MenuOverlay>
   );
 }
 
-function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
+function MenuRow({
+  label,
+  onClick,
+  danger,
+  disabled,
+  trailing,
+}: {
+  label: string;
+  onClick?: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  trailing?: React.ReactNode;
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-sm transition-colors ${
-        danger
-          ? 'text-riftapp-danger hover:bg-riftapp-danger hover:text-white'
-          : 'text-riftapp-text-muted hover:bg-riftapp-accent hover:text-white'
-      }`}
+      disabled={disabled}
+      className={disabled ? menuDisabledItemClassName : danger ? menuDangerItemClassName : `${menuItemClassName} justify-between gap-2`}
     >
-      <span className="w-4 h-4 flex-shrink-0 flex items-center justify-center">{icon}</span>
-      <span className="font-medium">{label}</span>
+      <span>{label}</span>
+      {trailing ? <span className="shrink-0">{trailing}</span> : null}
     </button>
-  );
-}
-
-function Separator() {
-  return <div className="rift-context-menu-divider" />;
-}
-
-function ProfileIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function AtIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="4" />
-      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-    </svg>
-  );
-}
-
-function MessageIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="9" y="9" width="13" height="13" rx="2" />
-      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-    </svg>
-  );
-}
-
-function AddFriendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-      <line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" />
-    </svg>
-  );
-}
-
-function RemoveFriendIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-      <line x1="17" y1="11" x2="23" y2="11" />
-    </svg>
-  );
-}
-
-function AcceptIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-      <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function BlockIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="12" cy="12" r="10" /><line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
-    </svg>
   );
 }

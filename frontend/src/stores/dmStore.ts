@@ -39,7 +39,7 @@ interface DMState {
   loadConversations: () => Promise<void>;
   openDM: (recipientId: string) => Promise<void>;
   openGroupDM: (memberIds: string[]) => Promise<Conversation>;
-  patchConversation: (conversationId: string, patch: { name?: string | null; icon_url?: string | null }) => Promise<Conversation>;
+  patchConversation: (conversationId: string, patch: { name?: string | null; icon_url?: string | null; owner_id?: string | null }) => Promise<Conversation>;
   addConversationMembers: (conversationId: string, memberIds: string[]) => Promise<Conversation>;
   removeConversationMember: (conversationId: string, userId: string) => Promise<void>;
   leaveConversation: (conversationId: string) => Promise<void>;

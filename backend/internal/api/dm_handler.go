@@ -79,11 +79,14 @@ func (h *DMHandler) PatchConversation(w http.ResponseWriter, r *http.Request) {
 	}
 	name, nameSet := body["name"]
 	iconURL, iconURLSet := body["icon_url"]
+	ownerID, ownerIDSet := body["owner_id"]
 	result, err := h.svc.PatchConversation(r.Context(), userID, conversationID, service.PatchConversationInput{
 		NameSet:    nameSet,
 		Name:       name,
 		IconURLSet: iconURLSet,
 		IconURL:    iconURL,
+		OwnerIDSet: ownerIDSet,
+		OwnerID:    ownerID,
 	})
 	if err != nil {
 		writeAppError(w, err)

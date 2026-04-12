@@ -230,6 +230,73 @@ func TestGroupDMCreateWithSameMembersCreatesNewConversation(t *testing.T) {
 	}
 }
 
+func TestGroupDMExplicitOwnerTransfer(t *testing.T) {
+	cleanTables(t)
+	ctx := context.Background()
+
+	authSvc := auth.NewService(testPool, "integration-test-secret")
+	owner, err := authSvc.Register(ctx, auth.RegisterInput{
+		Username: "group_transfer_owner",
+		Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("register owner failed: %v", err)
+	}
+
+	memberOne, err := authSvc.Register(ctx, auth.RegisterInput{
+		Username: "group_transfer_member_one",
+		Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("register first member failed: %v", err)
+	}
+
+	memberTwo, err := authSvc.Register(ctx, auth.RegisterInput{
+		Username: "group_transfer_member_two",
+		Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("register second member failed: %v", err)
+	}
+
+	dmRepo := repository.NewDMRepo(testPool)
+	dmSvc := service.NewDMService(
+		dmRepo,
+		repository.NewMessageRepo(testPool),
+		nil,
+		ws.NewHub(testPool),
+	)
+
+	conversation, _, err := dmSvc.CreateOrOpenGroup(ctx, owner.User.ID, []string{memberOne.User.ID, memberTwo.User.ID})
+	if err != nil {
+		t.Fatalf("create group dm failed: %v", err)
+	}
+
+	if _, err := dmSvc.PatchConversation(ctx, owner.User.ID, conversation.ID, service.PatchConversationInput{
+		OwnerIDSet: true,
+		OwnerID:    &memberOne.User.ID,
+	}); err != nil {
+		t.Fatalf("transfer group dm ownership failed: %v", err)
+	}
+
+	storedConversation, err := dmRepo.GetConversation(ctx, conversation.ID)
+	if err != nil {
+		t.Fatalf("load conversation after owner transfer failed: %v", err)
+	}
+	if storedConversation.OwnerID == nil || *storedConversation.OwnerID != memberOne.User.ID {
+		t.Fatalf("expected conversation owner %q after transfer, got %v", memberOne.User.ID, storedConversation.OwnerID)
+	}
+
+	if _, err := dmSvc.PatchConversation(ctx, owner.User.ID, conversation.ID, service.PatchConversationInput{
+		OwnerIDSet: true,
+		OwnerID:    &memberTwo.User.ID,
+	}); err == nil {
+		t.Fatal("expected previous owner transfer attempt to fail")
+	} else if apperror.HTTPCode(err) != http.StatusForbidden {
+		t.Fatalf("expected forbidden owner transfer for previous owner, got %v", err)
+	}
+}
+
 func TestGroupDMMemberLimit(t *testing.T) {
 	cleanTables(t)
 	ctx := context.Background()

@@ -416,6 +416,8 @@ type PatchConversationInput struct {
 	Name       *string
 	IconURLSet bool
 	IconURL    *string
+	OwnerIDSet bool
+	OwnerID    *string
 }
 
 func (s *DMService) createOrOpenConversation(ctx context.Context, userID string, requestedMemberIDs []string, requireGroup bool) (repository.ConvResponse, bool, error) {
@@ -528,7 +530,7 @@ func (s *DMService) PatchConversation(ctx context.Context, userID, convID string
 	if !conversation.IsGroup {
 		return repository.ConvResponse{}, apperror.BadRequest("only group DMs can be updated")
 	}
-	if !input.NameSet && !input.IconURLSet {
+	if !input.NameSet && !input.IconURLSet && !input.OwnerIDSet {
 		return repository.ConvResponse{}, apperror.BadRequest("no conversation updates provided")
 	}
 
@@ -541,8 +543,30 @@ func (s *DMService) PatchConversation(ctx context.Context, userID, convID string
 		return repository.ConvResponse{}, err
 	}
 
+	var normalizedOwnerID *string
+	if input.OwnerIDSet {
+		if conversation.OwnerID == nil || *conversation.OwnerID != userID {
+			return repository.ConvResponse{}, apperror.Forbidden("only the group owner can transfer ownership")
+		}
+		if input.OwnerID == nil {
+			return repository.ConvResponse{}, apperror.BadRequest("owner_id is required")
+		}
+		trimmedOwnerID := strings.TrimSpace(*input.OwnerID)
+		if trimmedOwnerID == "" {
+			return repository.ConvResponse{}, apperror.BadRequest("owner_id is required")
+		}
+		isTargetMember, memberErr := s.dmRepo.IsMember(ctx, convID, trimmedOwnerID)
+		if memberErr != nil {
+			return repository.ConvResponse{}, apperror.Internal("internal error", memberErr)
+		}
+		if !isTargetMember {
+			return repository.ConvResponse{}, apperror.NotFound("conversation member not found")
+		}
+		normalizedOwnerID = &trimmedOwnerID
+	}
+
 	now := time.Now()
-	if err := s.dmRepo.UpdateConversationMetadata(ctx, convID, input.NameSet, normalizedName, input.IconURLSet, normalizedIconURL, now); err != nil {
+	if err := s.dmRepo.UpdateConversationMetadata(ctx, convID, input.NameSet, normalizedName, input.IconURLSet, normalizedIconURL, input.OwnerIDSet, normalizedOwnerID, now); err != nil {
 		return repository.ConvResponse{}, apperror.Internal("failed to update conversation", err)
 	}
 
