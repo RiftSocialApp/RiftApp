@@ -89,7 +89,7 @@ export default function AppLayout() {
   const activeVoiceChannelId = useVoiceChannelUiStore((s) => s.activeChannelId);
   const activeVoiceChannelKind = useVoiceChannelUiStore((s) => s.activeChannelKind);
   const resetVoiceView = useVoiceChannelUiStore((s) => s.resetVoiceView);
-  const showFullVoiceView = voiceUiOpen && activeVoiceChannelKind === 'stream';
+  const showFullVoiceView = voiceUiOpen && activeVoiceChannelKind !== null;
 
   useEffect(() => {
     if (!voiceConnecting && !voiceTargetId) {

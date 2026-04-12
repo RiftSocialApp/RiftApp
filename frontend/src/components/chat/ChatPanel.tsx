@@ -29,7 +29,15 @@ import TypingIndicator from './TypingIndicator';
 import UpdateActionButton from '../shared/UpdateActionButton';
 import AddFriendsToDMModal from '../modals/AddFriendsToDMModal';
 import GroupDMSettingsModal from '../modals/GroupDMSettingsModal';
-import { CameraIcon as VoiceCameraIcon, DisconnectIcon as VoiceDisconnectIcon, MicIcon as VoiceMicIcon } from '../voice/VoiceIcons';
+import {
+  ActivitiesIcon,
+  CameraIcon as VoiceCameraIcon,
+  DisconnectIcon as VoiceDisconnectIcon,
+  MicIcon as VoiceMicIcon,
+  ScreenShareIcon,
+  SoundboardIcon,
+  VoiceChannelIcon,
+} from '../voice/VoiceIcons';
 import type {
   Conversation,
   Message,
@@ -519,6 +527,57 @@ function HeaderStatusPill({
   );
 }
 
+function ConversationCallControlGroup({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-[20px] border border-white/[0.08] bg-[#0b0d11]/88 p-1 shadow-[0_14px_30px_rgba(0,0,0,0.24)] backdrop-blur">
+      {children}
+    </div>
+  );
+}
+
+function ConversationCallControlButton({
+  label,
+  onClick,
+  children,
+  active,
+  danger,
+  disabled,
+  unavailable,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+  active?: boolean;
+  danger?: boolean;
+  disabled?: boolean;
+  unavailable?: boolean;
+}) {
+  const toneClasses = danger
+    ? 'bg-[#da373c] text-white hover:bg-[#ed4245]'
+    : unavailable
+      ? 'bg-[#17191d] text-[#6f7680]'
+      : active
+        ? 'bg-[#5865f2] text-white shadow-[0_8px_24px_rgba(88,101,242,0.28)] hover:bg-[#6a75f6]'
+        : 'bg-[#1f2228] text-[#d2d5db] hover:bg-[#2a2d34] hover:text-white';
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-10 w-10 items-center justify-center rounded-[14px] transition-all duration-150 ${toneClasses} disabled:cursor-not-allowed disabled:opacity-55`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ConversationCallStage({
   conversation,
   currentUser,
@@ -540,11 +599,15 @@ function ConversationCallStage({
   const voiceConversationId = useVoiceStore((s) => s.conversationId);
   const isMuted = useVoiceStore((s) => s.isMuted);
   const isCameraOn = useVoiceStore((s) => s.isCameraOn);
+  const isScreenSharing = useVoiceStore((s) => s.isScreenSharing);
+  const screenShareRequesting = useVoiceStore((s) => s.screenShareRequesting);
   const toggleMute = useVoiceStore((s) => s.toggleMute);
   const toggleCamera = useVoiceStore((s) => s.toggleCamera);
+  const toggleScreenShare = useVoiceStore((s) => s.toggleScreenShare);
   const leaveCall = useVoiceStore((s) => s.leave);
   const cancelConversationCallRing = useVoiceStore((s) => s.cancelConversationCallRing);
   const declineConversationCallRing = useVoiceStore((s) => s.declineConversationCallRing);
+  const openVoiceView = useVoiceChannelUiStore((s) => s.openVoiceView);
   const hubMembers = usePresenceStore((s) => s.hubMembers);
   const [pendingAction, setPendingAction] = useState<
     'join-audio' | 'join-video' | 'decline' | 'cancel' | 'leave' | null
@@ -608,6 +671,7 @@ function ConversationCallStage({
   }, [conversation.members, conversationVoiceMembers, currentUser, currentUserId, hubMembers, liveParticipantsById, ringingTargetIds, stageMemberIds]);
 
   const isInitiator = Boolean(currentUserId && conversationCallRing?.initiator_id === currentUserId);
+  const controlsBusy = pendingAction !== null;
 
   const handleJoin = async (mode: 'audio' | 'video') => {
     setPendingAction(mode === 'video' ? 'join-video' : 'join-audio');
@@ -650,34 +714,82 @@ function ConversationCallStage({
       <div className="flex flex-col items-center gap-3">
         <ConversationCallMediaStage participants={stageParticipants} status={callStatus} />
 
-        <div className="flex flex-wrap items-center justify-center gap-2">
+        <div className="flex w-full flex-wrap items-center justify-center gap-2.5 sm:gap-3">
           {isCurrentConversationCall ? (
             <>
-              <HeaderIconButton
-                label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
-                active={!isMuted}
-                onClick={toggleMute}
-                className="h-9 w-9 px-0"
-              >
-                <VoiceMicIcon muted={isMuted} size={16} />
-              </HeaderIconButton>
-              <HeaderIconButton
-                label={isCameraOn ? 'Turn camera off' : 'Turn camera on'}
-                active={isCameraOn}
-                onClick={() => { void toggleCamera(); }}
-                className="h-9 w-9 px-0"
-              >
-                <VoiceCameraIcon enabled={isCameraOn} size={16} />
-              </HeaderIconButton>
-              <button
-                type="button"
-                onClick={() => { void handleLeave(); }}
-                disabled={pendingAction !== null}
-                className="inline-flex h-9 items-center gap-2 rounded-md bg-[#da373c] px-3 text-sm font-semibold text-white transition-colors hover:bg-[#ed4245] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <VoiceDisconnectIcon size={16} />
-                <span className="hidden sm:inline">{pendingAction === 'leave' ? 'Leaving...' : 'Leave'}</span>
-              </button>
+              <ConversationCallControlGroup>
+                <ConversationCallControlButton
+                  label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                  onClick={toggleMute}
+                  active={false}
+                  unavailable={isMuted}
+                  disabled={controlsBusy}
+                >
+                  <VoiceMicIcon muted={isMuted} size={17} />
+                </ConversationCallControlButton>
+                <ConversationCallControlButton
+                  label={isCameraOn ? 'Turn camera off' : 'Turn camera on'}
+                  onClick={() => { void toggleCamera(); }}
+                  active={isCameraOn}
+                  unavailable={!isCameraOn}
+                  disabled={controlsBusy}
+                >
+                  <VoiceCameraIcon enabled={isCameraOn} size={17} />
+                </ConversationCallControlButton>
+              </ConversationCallControlGroup>
+
+              <ConversationCallControlGroup>
+                <ConversationCallControlButton
+                  label={isScreenSharing ? 'Stop sharing your screen' : 'Share your screen'}
+                  onClick={() => { void toggleScreenShare(); }}
+                  active={isScreenSharing}
+                  disabled={controlsBusy || screenShareRequesting}
+                >
+                  {screenShareRequesting ? (
+                    <span className="h-4 w-4 rounded-full border-2 border-current/25 border-t-current animate-spin" />
+                  ) : (
+                    <ScreenShareIcon active={isScreenSharing} size={17} />
+                  )}
+                </ConversationCallControlButton>
+                <ConversationCallControlButton
+                  label="Activities coming soon"
+                  onClick={() => {}}
+                  disabled
+                  unavailable
+                >
+                  <ActivitiesIcon size={17} />
+                </ConversationCallControlButton>
+                <ConversationCallControlButton
+                  label="Soundboard is only available in server voice channels"
+                  onClick={() => {}}
+                  disabled
+                  unavailable
+                >
+                  <SoundboardIcon size={17} />
+                </ConversationCallControlButton>
+              </ConversationCallControlGroup>
+
+              <ConversationCallControlGroup>
+                <ConversationCallControlButton
+                  label="Open voice channel view"
+                  onClick={() => openVoiceView(conversation.id, 'conversation')}
+                  disabled={controlsBusy}
+                >
+                  <VoiceChannelIcon size={17} />
+                </ConversationCallControlButton>
+                <ConversationCallControlButton
+                  label={pendingAction === 'leave' ? 'Leaving call' : 'Leave call'}
+                  onClick={() => { void handleLeave(); }}
+                  danger
+                  disabled={controlsBusy}
+                >
+                  {pendingAction === 'leave' ? (
+                    <span className="h-4 w-4 rounded-full border-2 border-current/25 border-t-current animate-spin" />
+                  ) : (
+                    <VoiceDisconnectIcon size={17} />
+                  )}
+                </ConversationCallControlButton>
+              </ConversationCallControlGroup>
             </>
           ) : (
             <>
@@ -1067,7 +1179,7 @@ export default function ChatPanel({
   const startConversationCallRing = useVoiceStore((s) => s.startConversationCallRing);
   const cancelConversationCallRing = useVoiceStore((s) => s.cancelConversationCallRing);
   const toggleVoiceCamera = useVoiceStore((s) => s.toggleCamera);
-  const openVoiceView = useVoiceChannelUiStore((s) => s.openVoiceView);
+  const setActiveVoiceChannel = useVoiceChannelUiStore((s) => s.setActiveChannel);
 
   const isDMMode = !!activeConversationId;
 
@@ -1843,7 +1955,7 @@ export default function ChatPanel({
     const currentUserId = user?.id ?? null;
 
     if (isCurrentConversationCall) {
-      openVoiceView(activeConversation.id, 'conversation');
+      setActiveVoiceChannel(activeConversation.id, 'conversation');
       if (mode === 'video' && voiceConnected) {
         await toggleVoiceCamera();
       }
@@ -1862,7 +1974,7 @@ export default function ChatPanel({
       startedRing = true;
     }
 
-    openVoiceView(activeConversation.id, 'conversation');
+    setActiveVoiceChannel(activeConversation.id, 'conversation');
     await joinConversationVoice(activeConversation.id);
     const joinedState = useVoiceStore.getState();
     const joinedConversationCall = joinedState.targetKind === 'conversation'
@@ -1875,7 +1987,7 @@ export default function ChatPanel({
     if (mode === 'video' && !useVoiceStore.getState().isCameraOn) {
       await useVoiceStore.getState().toggleCamera();
     }
-  }, [activeConversation, cancelConversationCallRing, isCurrentConversationCall, joinConversationVoice, openVoiceView, startConversationCallRing, toggleVoiceCamera, user?.id, voiceConnected]);
+  }, [activeConversation, cancelConversationCallRing, isCurrentConversationCall, joinConversationVoice, setActiveVoiceChannel, startConversationCallRing, toggleVoiceCamera, user?.id, voiceConnected]);
 
   return (
     <div className={`flex-1 min-h-0 flex flex-col bg-riftapp-content min-w-0 relative ${searchSidebarOpen ? 'pr-[320px]' : ''}`}>

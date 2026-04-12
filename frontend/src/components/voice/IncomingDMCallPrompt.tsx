@@ -38,7 +38,7 @@ export default function IncomingDMCallPrompt() {
   const voiceConnecting = useVoiceStore((state) => state.connecting);
   const voiceTargetKind = useVoiceStore((state) => state.targetKind);
   const voiceConversationId = useVoiceStore((state) => state.conversationId);
-  const openVoiceView = useVoiceChannelUiStore((state) => state.openVoiceView);
+  const setActiveVoiceChannel = useVoiceChannelUiStore((state) => state.setActiveChannel);
 
   const [pendingAction, setPendingAction] = useState<'audio' | 'video' | 'decline' | null>(null);
 
@@ -97,7 +97,7 @@ export default function IncomingDMCallPrompt() {
     setPendingAction(mode);
     try {
       await setActiveConversation(activeRing.conversation_id);
-      openVoiceView(activeRing.conversation_id, 'conversation');
+      setActiveVoiceChannel(activeRing.conversation_id, 'conversation');
       await joinConversation(activeRing.conversation_id);
       if (mode === 'video' && !useVoiceStore.getState().isCameraOn) {
         await toggleCamera();
