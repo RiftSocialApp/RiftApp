@@ -74,6 +74,7 @@ type VoiceJoinTarget = {
 type TrackProcessorsModule = typeof import('@livekit/track-processors');
 
 const SPEAKING_BROADCAST_INTERVAL_MS = 30;
+const SPEAKING_HOLD_MS = 20;
 const CONNECTION_STATS_POLL_INTERVAL_MS = 1000;
 const DM_CALL_SESSION_EXPIRY_MS = 90_000;
 const MANUAL_INPUT_SENSITIVITY_MIN = 0;
@@ -1376,7 +1377,10 @@ async function restartLocalMicrophone(room: Room) {
   }
 
   await room.localParticipant.setMicrophoneEnabled(false);
-  stopMicProcessing({ broadcast: true, identity: room.localParticipant.identity });
+  // Stop the old processor but do NOT seed an explicit false signal — the new
+  // enableLocalMicrophone call will either create a fresh processor or clear
+  // the signal via tryAttachMicGatePostPublish.
+  stopMicProcessing();
   return enableLocalMicrophone(room);
 }
 
@@ -1392,6 +1396,40 @@ function clearScreenShareNoticeTimer() {
   if (screenShareNoticeTimer != null) {
     window.clearTimeout(screenShareNoticeTimer);
     screenShareNoticeTimer = null;
+  }
+}
+
+const speakingHoldUntil = new Map<string, number>();
+let speakingHoldTimer: ReturnType<typeof setTimeout> | null = null;
+
+function applySpeakingHold(identity: string, resolved: boolean): boolean {
+  const now = Date.now();
+  if (resolved) {
+    speakingHoldUntil.set(identity, now + SPEAKING_HOLD_MS);
+    return true;
+  }
+  const holdUntil = speakingHoldUntil.get(identity);
+  if (holdUntil != null && now < holdUntil) {
+    scheduleSpeakingHoldFlush();
+    return true;
+  }
+  speakingHoldUntil.delete(identity);
+  return false;
+}
+
+function scheduleSpeakingHoldFlush() {
+  if (speakingHoldTimer != null) return;
+  speakingHoldTimer = setTimeout(() => {
+    speakingHoldTimer = null;
+    syncParticipants();
+  }, SPEAKING_HOLD_MS + 2);
+}
+
+function clearSpeakingHold() {
+  speakingHoldUntil.clear();
+  if (speakingHoldTimer != null) {
+    clearTimeout(speakingHoldTimer);
+    speakingHoldTimer = null;
   }
 }
 
@@ -1772,7 +1810,7 @@ function buildParticipants(room: Room): VoiceParticipant[] {
 
     return ({
       identity: p.identity,
-      isSpeaking: resolved,
+      isSpeaking: applySpeakingHold(p.identity, resolved),
       isMuted: !p.isMicrophoneEnabled,
       isCameraOn: p.isCameraEnabled,
       isScreenSharing: p.isScreenShareEnabled || explicitConversationScreenShare || Boolean(screenTrack),
@@ -1853,6 +1891,7 @@ function reapplyAllRemoteVoiceVolumes() {
 function resetState() {
   clearScreenShareNoticeTimer();
   clearTransientSpeaking();
+  clearSpeakingHold();
   stopConnectionStatsMonitor();
   stopMicProcessing({ broadcast: false, identity: roomRef?.localParticipant.identity });
   stopAllConversationCallEffects();
