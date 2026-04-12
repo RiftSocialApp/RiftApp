@@ -40,7 +40,7 @@ function buildLayoutSlots(
 ): LayoutSlot[] {
   const out: LayoutSlot[] = [];
   for (const p of visible) {
-    if (p.isScreenSharing && p.screenTrack && !suppressStream(p.identity)) {
+    if ((p.isScreenSharing || Boolean(p.screenTrack)) && p.screenTrack && !suppressStream(p.identity)) {
       out.push({ id: `${p.identity}__screen`, kind: 'screen', participant: p });
     }
     out.push({ id: `${p.identity}__camera`, kind: 'camera', participant: p });

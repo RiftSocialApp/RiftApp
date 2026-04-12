@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import { Track } from 'livekit-client';
 
-import type { User } from '../../types';
+import type { User, DMCallMode } from '../../types';
 import type { VoiceParticipant } from '../../stores/voiceStore';
 import type { ConversationCallStatus } from '../../utils/dmCallStatus';
 import { getUserLabel } from '../../utils/conversations';
@@ -77,6 +77,25 @@ function getMemberLabel(member: ConversationCallStageMember) {
   return member.user ? getUserLabel(member.user) : member.id;
 }
 
+function participantHasCameraVideo(member: ConversationCallStageMember) {
+  return Boolean(
+    member.liveParticipant?.videoTrack
+    && member.liveParticipant.videoTrack.kind === Track.Kind.Video
+    && member.liveParticipant.isCameraOn,
+  );
+}
+
+function participantHasScreenShareMedia(member: ConversationCallStageMember) {
+  return Boolean(
+    member.liveParticipant?.screenTrack
+    && member.liveParticipant.screenTrack.kind === Track.Kind.Video,
+  );
+}
+
+function participantIsScreenSharing(member: ConversationCallStageMember) {
+  return Boolean(member.liveParticipant?.isScreenSharing || participantHasScreenShareMedia(member));
+}
+
 function statusToneClasses(tone: ConversationCallStatus['tone'] | undefined) {
   switch (tone) {
     case 'warning':
@@ -116,11 +135,7 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
   const label = getMemberLabel(member);
   const avatarUrl = member.user?.avatar_url;
   const liveParticipant = member.liveParticipant;
-  const hasCameraVideo = Boolean(
-    liveParticipant?.videoTrack
-    && liveParticipant.videoTrack.kind === Track.Kind.Video
-    && liveParticipant.isCameraOn,
-  );
+  const hasCameraVideo = participantHasCameraVideo(member);
   const videoRef = useAttachedVideoTrack(liveParticipant?.videoTrack, hasCameraVideo);
 
   return (
@@ -145,7 +160,62 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
           />
         </div>
       )}
-      <ParticipantOverlay member={member} label={label} />
+      <ParticipantOverlay member={member} label={label} showScreenShare={!hasCameraVideo && participantIsScreenSharing(member)} />
+    </div>
+  );
+}
+
+function AudioOnlyParticipantAvatar({ member }: { member: ConversationCallStageMember }) {
+  const label = getMemberLabel(member);
+  const avatarUrl = member.user?.avatar_url;
+
+  return (
+    <div
+      role="listitem"
+      aria-label={label}
+      title={label}
+      className="relative flex shrink-0 items-center justify-center"
+    >
+      {member.isRinging ? (
+        <>
+          <span className="rift-dm-call-pulse absolute inset-0 rounded-full border border-white/80" />
+          <span className="rift-dm-call-pulse-delay absolute inset-[-8px] rounded-full border border-white/45" />
+        </>
+      ) : null}
+      <SpeakingAvatar
+        label={label}
+        avatarUrl={avatarUrl}
+        backgroundColor={getAvatarColor(member.id)}
+        isSpeaking={member.isSpeaking}
+        sizeClassName="h-20 w-20 sm:h-24 sm:w-24"
+        fallbackTextClassName="text-2xl font-semibold text-white"
+        speakingRingClassName="ring-[3px] ring-[#3ba55d] shadow-[0_0_0_6px_rgba(59,165,93,0.18)] scale-[1.02]"
+      />
+      {member.isMuted ? (
+        <span className="pointer-events-none absolute -bottom-1 -right-1 inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#111214] bg-[#1a1c21] text-[#ff7b7b] shadow-[0_10px_22px_rgba(0,0,0,0.34)]">
+          <VoiceMicIcon muted size={13} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function AudioOnlyStage({
+  participants,
+}: {
+  participants: ConversationCallStageMember[];
+}) {
+  return (
+    <div className="flex min-h-[170px] w-full items-center justify-center px-3 py-2 transition-all duration-300">
+      <div
+        role="list"
+        aria-label="Call participants"
+        className="flex w-full max-w-[720px] flex-wrap items-center justify-center gap-4 sm:gap-6"
+      >
+        {participants.map((member) => (
+          <AudioOnlyParticipantAvatar key={member.id} member={member} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -153,7 +223,7 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
 function ScreenShareTile({ member }: { member: ConversationCallStageMember }) {
   const label = getMemberLabel(member);
   const liveParticipant = member.liveParticipant;
-  const videoRef = useAttachedVideoTrack(liveParticipant?.screenTrack, Boolean(liveParticipant?.isScreenSharing));
+  const videoRef = useAttachedVideoTrack(liveParticipant?.screenTrack, participantHasScreenShareMedia(member));
 
   return (
     <div className="relative min-h-[220px] overflow-hidden rounded-2xl border border-white/10 bg-black transition-all duration-300">
@@ -194,18 +264,6 @@ function RingingAvatar({ member }: { member: ConversationCallStageMember }) {
   );
 }
 
-function PendingMemberPill({ member }: { member: ConversationCallStageMember }) {
-  const label = getMemberLabel(member);
-
-  return (
-    <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-[#d2d5db] transition-all duration-300">
-      <span className="h-2 w-2 rounded-full bg-[#f0b232]" />
-      <span className="max-w-[140px] truncate font-medium">{label}</span>
-      <span className="text-[#8e9297]">Ringing</span>
-    </div>
-  );
-}
-
 function RingingStage({
   participants,
 }: {
@@ -233,9 +291,13 @@ function StageStatusBanner({ status }: { status: ConversationCallStatus }) {
 export default function ConversationCallMediaStage({
   participants,
   status,
+  preferredMode = null,
+  videoPreviewInitiatorId = null,
 }: {
   participants: ConversationCallStageMember[];
   status?: ConversationCallStatus | null;
+  preferredMode?: DMCallMode | null;
+  videoPreviewInitiatorId?: string | null;
 }) {
   const activeParticipants = useMemo(
     () => participants.filter((member) => member.isInVoice),
@@ -249,9 +311,13 @@ export default function ConversationCallMediaStage({
     () => participants.filter((member) => member.isRinging),
     [participants],
   );
+  const audioOnlyParticipants = useMemo(
+    () => participants.filter((member) => member.isInVoice || member.isRinging),
+    [participants],
+  );
   const screenShareParticipants = useMemo(
     () => activeParticipants.filter(
-      (member) => Boolean(member.liveParticipant?.isScreenSharing && member.liveParticipant?.screenTrack),
+      (member) => participantHasScreenShareMedia(member),
     ),
     [activeParticipants],
   );
@@ -259,8 +325,35 @@ export default function ConversationCallMediaStage({
     () => activeParticipants.filter((member) => !member.isCurrentUser),
     [activeParticipants],
   );
-  const showRingingStage = ringingParticipants.length > 0 && activeRemoteParticipants.length === 0;
-  const showEndedBanner = Boolean(status && status.indicator === 'ended' && activeParticipants.length <= 1 && !showRingingStage);
+  const preferVideoTiles = preferredMode === 'video';
+  const previewTileParticipants = useMemo(() => {
+    if (!preferVideoTiles) {
+      return activeParticipants;
+    }
+
+    const filtered = participants.filter(
+      (member) => member.isCurrentUser || member.isInVoice || member.isRinging || member.id === videoPreviewInitiatorId,
+    );
+
+    return filtered.length > 0 ? filtered : activeParticipants;
+  }, [activeParticipants, participants, preferVideoTiles, videoPreviewInitiatorId]);
+  const participantsWithAnyMedia = useMemo(
+    () => activeParticipants.filter((member) => participantHasCameraVideo(member) || participantIsScreenSharing(member)),
+    [activeParticipants],
+  );
+  const showAudioOnlyStage = useMemo(
+    () => !preferVideoTiles && participantsWithAnyMedia.length === 0 && audioOnlyParticipants.length > 0,
+    [audioOnlyParticipants, participantsWithAnyMedia, preferVideoTiles],
+  );
+  const showRingingStage = ringingParticipants.length > 0 && activeRemoteParticipants.length === 0 && !preferVideoTiles;
+  const showEndedBanner = Boolean(
+    status
+    && status.indicator === 'ended'
+    && activeParticipants.length <= 1
+    && !showRingingStage
+    && ringingParticipants.length === 0
+    && pendingParticipants.length === 0,
+  );
 
   if (showRingingStage) {
     const ringingStageParticipants = participants.filter((member) => member.isCurrentUser || member.isRinging || member.isInVoice);
@@ -278,33 +371,21 @@ export default function ConversationCallMediaStage({
         </div>
       ) : null}
 
-      {activeParticipants.length > 0 ? (
-        <div className="grid gap-3" style={gridStyleForCount(activeParticipants.length)}>
-          {activeParticipants.map((member) => (
-            <ParticipantTile key={member.id} member={member} />
-          ))}
-        </div>
+      {previewTileParticipants.length > 0 ? (
+        showAudioOnlyStage ? (
+          <AudioOnlyStage participants={audioOnlyParticipants} />
+        ) : (
+          <div className="grid gap-3" style={gridStyleForCount(previewTileParticipants.length)}>
+            {previewTileParticipants.map((member) => (
+              <ParticipantTile key={member.id} member={member} />
+            ))}
+          </div>
+        )
       ) : (
         <div className="flex min-h-[170px] items-center justify-center rounded-2xl border border-dashed border-white/10 bg-black/25 px-4 text-sm text-[#8e9297]">
           Waiting for someone to join.
         </div>
       )}
-
-      {ringingParticipants.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {ringingParticipants.map((member) => (
-            <PendingMemberPill key={`${member.id}-ringing`} member={member} />
-          ))}
-        </div>
-      ) : null}
-
-      {pendingParticipants.length > 0 ? (
-        <div className="flex flex-wrap gap-2">
-          {pendingParticipants.map((member) => (
-            <PendingMemberPill key={`${member.id}-pending`} member={member} />
-          ))}
-        </div>
-      ) : null}
     </div>
   );
 }

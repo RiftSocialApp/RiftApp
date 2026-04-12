@@ -7,6 +7,15 @@ import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { getConversationIconUrl, getConversationTitle, getUserLabel } from '../../utils/conversations';
 import { startIncomingCallSound, stopIncomingCallSound } from '../../utils/audio/appSounds';
 
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
 function PhoneIcon() {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
@@ -22,6 +31,43 @@ function VideoIcon() {
       <path d="m16 10 5-3v10l-5-3" />
     </svg>
   );
+}
+
+function IncomingCallActionButton({
+  label,
+  onClick,
+  disabled,
+  tone,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled: boolean;
+  tone: 'danger' | 'success' | 'accent';
+  children: React.ReactNode;
+}) {
+  const toneClasses = tone === 'danger'
+    ? 'bg-[#da373c] text-white hover:bg-[#ed4245]'
+    : tone === 'success'
+      ? 'bg-[#248046] text-white hover:bg-[#2d9d58]'
+      : 'bg-[#5865f2] text-white hover:bg-[#6d79f6]';
+
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex h-11 w-11 items-center justify-center rounded-xl font-semibold shadow-[0_10px_22px_rgba(0,0,0,0.24)] transition-all duration-150 hover:scale-[1.03] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:scale-100 ${toneClasses}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LoadingDot() {
+  return <span className="h-4 w-4 rounded-full border-2 border-current/25 border-t-current animate-spin" />;
 }
 
 export default function IncomingDMCallPrompt() {
@@ -92,6 +138,10 @@ export default function IncomingDMCallPrompt() {
     pendingUserIds.length > 0 ? `${pendingUserIds.length} still ringing` : null,
     declinedUserIds.length > 0 ? `${declinedUserIds.length} declined` : null,
   ].filter((value): value is string => Boolean(value));
+  const callerLabel = initiator ? getUserLabel(initiator) : 'Unknown caller';
+  const heroAvatarUrl = initiator?.avatar_url ?? conversationIconUrl;
+  const heroInitials = conversationTitle.slice(0, 2).toUpperCase();
+  const statusText = groupDetailItems[0] ?? (activeRing.mode === 'video' ? 'Incoming video call' : 'Incoming call');
 
   const handleAnswer = async (mode: 'audio' | 'video') => {
     setPendingAction(mode);
@@ -117,62 +167,61 @@ export default function IncomingDMCallPrompt() {
   };
 
   return (
-    <div className="pointer-events-none fixed bottom-5 right-5 z-[120] flex w-[min(360px,calc(100vw-2rem))] justify-end">
-      <div className="pointer-events-auto w-full overflow-hidden rounded-2xl border border-[#f0b232]/25 bg-[#111214]/95 shadow-[0_22px_64px_rgba(0,0,0,0.45)] backdrop-blur-xl">
-        <div className="flex items-start gap-3 border-b border-white/6 px-4 py-4">
-          {conversationIconUrl ? (
-            <img src={publicAssetUrl(conversationIconUrl)} alt="" className="h-11 w-11 rounded-full object-cover" />
-          ) : (
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#f0b232]/16 text-sm font-semibold text-[#ffd27a]">
-              {conversationTitle.slice(0, 2).toUpperCase()}
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[120] flex w-[min(270px,calc(100vw-1rem))] justify-end sm:bottom-6 sm:right-6 sm:w-[252px]">
+      <div className="pointer-events-auto relative w-full overflow-hidden rounded-2xl border border-white/[0.08] bg-[#1e1f22]/98 shadow-[0_24px_64px_rgba(0,0,0,0.48)] backdrop-blur-xl animate-scale-in">
+        <div className="absolute inset-x-0 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(88,101,242,0.75),transparent)]" />
+        <div className="px-4 pb-4 pt-4">
+          <div className="flex flex-col items-center text-center">
+            <div className="relative flex h-[76px] w-[76px] items-center justify-center">
+              <span className="absolute inset-[-6px] rounded-full border border-[#5865f2]/35 animate-pulse" />
+              {heroAvatarUrl ? (
+                <img src={publicAssetUrl(heroAvatarUrl)} alt="" className="relative h-full w-full rounded-full object-cover ring-[3px] ring-black/25" />
+              ) : (
+                <div className="relative flex h-full w-full items-center justify-center rounded-full bg-[#5865f2]/24 text-xl font-semibold text-[#f2f3f5] ring-[3px] ring-black/25">
+                  {heroInitials}
+                </div>
+              )}
             </div>
-          )}
-          <div className="min-w-0 flex-1">
-            <div className="inline-flex items-center rounded-full bg-[#f0b232]/14 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#ffd27a]">
-              Incoming {activeRing.mode === 'video' ? 'Video' : 'Voice'} Call
-            </div>
-            <h3 className="mt-2 truncate text-[15px] font-semibold text-[#f2f3f5]">{conversationTitle}</h3>
-            <p className="mt-1 text-sm text-[#b5bac1]">
-              {initiator ? `${getUserLabel(initiator)} is calling you.` : 'Someone is calling you.'}
+
+            <h3 className="mt-3 max-w-full truncate text-[16px] font-semibold leading-tight text-[#f2f3f5]">
+              {conversationTitle}
+            </h3>
+            <p className="mt-1 max-w-full truncate text-[13px] font-medium text-[#d2d5db]">
+              {callerLabel}
             </p>
-            {groupDetailItems.length > 0 ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-medium text-[#d2d5db]">
-                {groupDetailItems.map((item) => (
-                  <span key={item} className="rounded-full bg-white/[0.06] px-2 py-1">
-                    {item}
-                  </span>
-                ))}
-              </div>
-            ) : null}
+            <p className="mt-1 text-[12px] text-[#8e9297]">
+              {statusText}
+            </p>
           </div>
-        </div>
-        <div className="flex items-center gap-2 px-4 py-3">
-          <button
-            type="button"
-            onClick={() => { void handleDecline(); }}
-            disabled={pendingAction !== null}
-            className="flex-1 rounded-xl bg-white/[0.06] px-3 py-2 text-sm font-medium text-[#d2d5db] transition-colors hover:bg-white/[0.1] hover:text-white"
-          >
-            {pendingAction === 'decline' ? 'Declining...' : 'Decline'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { void handleAnswer('audio'); }}
-            disabled={pendingAction !== null}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#248046] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#2d9d58] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <PhoneIcon />
-            {pendingAction === 'audio' ? 'Joining...' : 'Join'}
-          </button>
-          <button
-            type="button"
-            onClick={() => { void handleAnswer('video'); }}
-            disabled={pendingAction !== null}
-            className="inline-flex items-center gap-2 rounded-xl bg-[#5865f2] px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6d79f6] disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <VideoIcon />
-            {pendingAction === 'video' ? 'Joining...' : 'Join With Video'}
-          </button>
+
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <IncomingCallActionButton
+              label={pendingAction === 'video' ? 'Joining with video' : 'Join with video'}
+              onClick={() => { void handleAnswer('video'); }}
+              disabled={pendingAction !== null}
+              tone="success"
+            >
+              {pendingAction === 'video' ? <LoadingDot /> : <VideoIcon />}
+            </IncomingCallActionButton>
+
+            <IncomingCallActionButton
+              label={pendingAction === 'audio' ? 'Joining call' : 'Join call'}
+              onClick={() => { void handleAnswer('audio'); }}
+              disabled={pendingAction !== null}
+              tone="success"
+            >
+              {pendingAction === 'audio' ? <LoadingDot /> : <PhoneIcon />}
+            </IncomingCallActionButton>
+
+            <IncomingCallActionButton
+              label={pendingAction === 'decline' ? 'Declining call' : 'Decline call'}
+              onClick={() => { void handleDecline(); }}
+              disabled={pendingAction !== null}
+              tone="danger"
+            >
+              {pendingAction === 'decline' ? <LoadingDot /> : <CloseIcon />}
+            </IncomingCallActionButton>
+          </div>
         </div>
       </div>
     </div>

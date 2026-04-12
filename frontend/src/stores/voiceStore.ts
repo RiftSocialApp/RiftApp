@@ -1713,11 +1713,18 @@ function buildParticipants(room: Room): VoiceParticipant[] {
   const deafenedUsers = voiceState.targetKind === 'conversation'
     ? (voiceState.conversationId ? (voiceState.conversationVoiceDeafenedUsers[voiceState.conversationId] ?? []) : [])
     : (voiceState.streamId ? (useStreamStore.getState().voiceDeafenedUsers[voiceState.streamId] ?? []) : []);
+  const conversationScreenSharers = voiceState.targetKind === 'conversation'
+    ? (voiceState.conversationId ? (voiceState.conversationVoiceScreenSharers[voiceState.conversationId] ?? []) : [])
+    : [];
+  const explicitConversationScreenSharers = new Set(conversationScreenSharers);
   const localIdentity = room.localParticipant.identity;
   const toVP = (p: Participant): VoiceParticipant => {
     const hasExplicitSpeakingSignal = hasOwnKey(speakingSignals, p.identity);
     const explicitSpeakingSignal = hasExplicitSpeakingSignal ? speakingSignals[p.identity] : false;
     const isLocalParticipant = p.identity === localIdentity;
+    const screenTrack = getTrackForSource(p, Track.Source.ScreenShare);
+    const explicitConversationScreenShare = voiceState.targetKind === 'conversation'
+      && explicitConversationScreenSharers.has(p.identity);
 
     return ({
       identity: p.identity,
@@ -1730,9 +1737,9 @@ function buildParticipants(room: Room): VoiceParticipant[] {
       }),
       isMuted: !p.isMicrophoneEnabled,
       isCameraOn: p.isCameraEnabled,
-      isScreenSharing: p.isScreenShareEnabled,
+      isScreenSharing: p.isScreenShareEnabled || explicitConversationScreenShare || Boolean(screenTrack),
       videoTrack: getTrackForSource(p, Track.Source.Camera),
-      screenTrack: getTrackForSource(p, Track.Source.ScreenShare),
+      screenTrack,
     });
   };
   const localVP = toVP(room.localParticipant);

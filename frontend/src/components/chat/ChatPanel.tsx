@@ -624,6 +624,10 @@ function ConversationCallStage({
     () => new Set(conversationCallRing?.target_user_ids ?? []),
     [conversationCallRing],
   );
+  const declinedTargetIds = useMemo(
+    () => new Set(conversationCallRing?.declined_user_ids ?? []),
+    [conversationCallRing],
+  );
 
   const stageMemberIds = useMemo(() => {
     const ids: string[] = [];
@@ -660,6 +664,7 @@ function ConversationCallStage({
           : (conversationMember ?? hubMembers[memberId]),
         isInVoice: conversationVoiceMembers.includes(memberId) || liveParticipant != null,
         isRinging: ringingTargetIds.has(memberId)
+          && !declinedTargetIds.has(memberId)
           && !conversationVoiceMembers.includes(memberId)
           && liveParticipant == null,
         isMuted: liveParticipant?.isMuted ?? false,
@@ -668,7 +673,7 @@ function ConversationCallStage({
         isCurrentUser: memberId === currentUserId,
       };
     });
-  }, [conversation.members, conversationVoiceMembers, currentUser, currentUserId, hubMembers, liveParticipantsById, ringingTargetIds, stageMemberIds]);
+  }, [conversation.members, conversationVoiceMembers, currentUser, currentUserId, declinedTargetIds, hubMembers, liveParticipantsById, ringingTargetIds, stageMemberIds]);
 
   const isInitiator = Boolean(currentUserId && conversationCallRing?.initiator_id === currentUserId);
   const controlsBusy = pendingAction !== null;
@@ -712,7 +717,12 @@ function ConversationCallStage({
   return (
     <div className="border-b border-riftapp-border/50 bg-[#111214] px-4 py-3">
       <div className="flex flex-col items-center gap-3">
-        <ConversationCallMediaStage participants={stageParticipants} status={callStatus} />
+        <ConversationCallMediaStage
+          participants={stageParticipants}
+          status={callStatus}
+          preferredMode={conversationCallRing?.mode ?? null}
+          videoPreviewInitiatorId={conversationCallRing?.mode === 'video' ? conversationCallRing.initiator_id : null}
+        />
 
         <div className="flex w-full flex-wrap items-center justify-center gap-2.5 sm:gap-3">
           {isCurrentConversationCall ? (
