@@ -12,15 +12,6 @@ import BotBadge from '../shared/BotBadge';
 import CrownIcon from '../shared/CrownIcon';
 import StatusDot, { statusLabel } from '../shared/StatusDot';
 
-function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.3-4.3" />
-    </svg>
-  );
-}
-
 function GroupMemberRow({
   member,
   ownerId,
@@ -113,7 +104,6 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
   const removeConversationMember = useDMStore((s) => s.removeConversationMember);
   const [memberActionId, setMemberActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const ownerId = currentConversation.owner_id ?? null;
   const canRemoveMembers = Boolean(ownerId && ownerId === currentUserId);
@@ -135,17 +125,6 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
       return getUserLabel(left).localeCompare(getUserLabel(right));
     });
   }, [currentConversation, currentUserId, ownerId]);
-
-  const filteredMembers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return members;
-    }
-    return members.filter((member) => {
-      const haystack = `${getUserLabel(member)} ${member.username}`.toLowerCase();
-      return haystack.includes(normalizedQuery);
-    });
-  }, [members, searchQuery]);
 
   const handleRemove = useCallback(async (userId: string, label: string) => {
     if (memberActionId) {
@@ -174,29 +153,15 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
 
   return (
     <div className="relative w-60 flex-shrink-0 border-l border-riftapp-border/60 bg-riftapp-content flex flex-col overflow-visible">
-      <div className="relative z-20 h-12 border-b border-riftapp-border/50 bg-riftapp-content px-3">
-        <div className="flex h-full items-center">
-          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#24272d] px-2 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors hover:bg-[#262930] focus-within:bg-[#262930]">
-            <SearchIcon className="h-[13px] w-[13px] shrink-0 text-[#72767d]" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search"
-              className="min-w-0 flex-1 bg-transparent py-0 text-[12px] leading-5 text-[#dcddde] outline-none placeholder:text-[#72767d]"
-              aria-label="Search group members"
-            />
-          </div>
-        </div>
+      <div className="relative z-20 border-b border-riftapp-border/50 bg-riftapp-content px-4 py-3">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7b818e]">
+          Members — {members.length}
+        </h3>
       </div>
 
       <div className="flex-1 space-y-3 overflow-y-auto px-2 py-3">
-        <h3 className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7b818e]">
-          Members — {filteredMembers.length}{searchQuery.trim() ? ` of ${members.length}` : ''}
-        </h3>
-
         <div className="space-y-0.5">
-          {filteredMembers.map((member) => (
+          {members.map((member) => (
             <GroupMemberRow
               key={member.id}
               member={member}
@@ -207,12 +172,6 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
               onRemove={handleRemove}
             />
           ))}
-
-          {filteredMembers.length === 0 ? (
-            <div className="px-2 py-6 text-center text-xs text-[#949ba4]">
-              No members match your search.
-            </div>
-          ) : null}
         </div>
 
         {error ? <div className="px-2 text-xs text-[#ed4245]">{error}</div> : null}

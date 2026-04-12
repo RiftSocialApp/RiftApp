@@ -539,16 +539,18 @@ export default function DMSidebar() {
 
             {menuDivider()}
 
-            <button
-              type="button"
-              onClick={() => {
-                setInviteConversation(contextMenu.conversation);
-                closeContextMenu();
-              }}
-              className={menuItemClassName}
-            >
-              Invites
-            </button>
+            {!isGroupConversation(contextMenu.conversation, currentUserId) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInviteConversation(contextMenu.conversation);
+                  closeContextMenu();
+                }}
+                className={menuItemClassName}
+              >
+                Invites
+              </button>
+            ) : null}
 
             {isGroupConversation(contextMenu.conversation, currentUserId) ? (
               <button
@@ -567,7 +569,11 @@ export default function DMSidebar() {
 
             <div
               className="relative mx-0.5"
-              onMouseEnter={() => setMuteSubmenuOpen(true)}
+              onMouseEnter={() => {
+                if (!contextConversationMuted) {
+                  setMuteSubmenuOpen(true);
+                }
+              }}
               onMouseLeave={() => setMuteSubmenuOpen(false)}
             >
               <button
@@ -583,27 +589,12 @@ export default function DMSidebar() {
                 className={`${menuItemClassName} justify-between ${muteSubmenuOpen ? 'bg-[#232428]' : ''}`}
               >
                 <span className="flex-1 text-left">{contextConversationMuted ? 'Unmute Conversation' : 'Mute Conversation'}</span>
-                <span className="text-[#8f949c]">›</span>
+                {!contextConversationMuted ? <span className="text-[#8f949c]">›</span> : null}
               </button>
 
-              {muteSubmenuOpen ? (
+              {!contextConversationMuted && muteSubmenuOpen ? (
                 <div className="absolute left-full top-0 z-10 pl-1" onMouseEnter={() => setMuteSubmenuOpen(true)}>
                   <div className="rift-context-submenu-shell min-w-[220px]">
-                    {contextConversationMuted ? (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          unmuteConversation(contextMenu.conversation.id);
-                          closeContextMenu();
-                        }}
-                        className={submenuItemClassName}
-                      >
-                        Unmute Conversation
-                      </button>
-                    ) : null}
-
-                    {contextConversationMuted ? menuDivider() : null}
-
                     {muteOptions.map((option) => (
                       <button
                         key={option.label}
@@ -634,7 +625,6 @@ export default function DMSidebar() {
                   }}
                   className={`${menuItemClassName} text-[#f38b8f]`}
                 >
-                  <span className="w-4 shrink-0" aria-hidden />
                   Leave Group
                 </button>
               </>

@@ -414,7 +414,11 @@ export default function HubSidebar() {
 
               <div
                 className="relative mx-0.5"
-                onMouseEnter={() => setMuteSubmenuOpen(true)}
+                onMouseEnter={() => {
+                  if (!contextHubMuted) {
+                    setMuteSubmenuOpen(true);
+                  }
+                }}
                 onMouseLeave={() => setMuteSubmenuOpen(false)}
               >
                 <button
@@ -423,24 +427,12 @@ export default function HubSidebar() {
                   className={`${menuItemClassName} justify-between ${muteSubmenuOpen ? 'bg-[#232428]' : ''}`}
                 >
                   <span className="flex-1 text-left">{contextHubMuted ? 'Unmute Server' : 'Mute Server'}</span>
-                  <span className="text-[#8f949c]">›</span>
+                  {!contextHubMuted ? <span className="text-[#8f949c]">›</span> : null}
                 </button>
 
-                {muteSubmenuOpen ? (
+                {!contextHubMuted && muteSubmenuOpen ? (
                   <div className="absolute left-full top-0 z-10 pl-1" onMouseEnter={() => setMuteSubmenuOpen(true)}>
                     <div className="rift-context-submenu-shell min-w-[220px]">
-                      {contextHubMuted ? (
-                        <button
-                          type="button"
-                          onClick={() => { void handleToggleHubMute(); }}
-                          className={submenuItemClassName}
-                        >
-                          Unmute Server
-                        </button>
-                      ) : null}
-
-                      {contextHubMuted ? <div className="mx-2 my-1 h-px bg-riftapp-border/40" /> : null}
-
                       {muteOptions.map((option) => (
                         <button
                           key={option.label}

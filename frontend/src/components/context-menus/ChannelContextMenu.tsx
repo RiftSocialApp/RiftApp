@@ -151,6 +151,7 @@ export default function ChannelContextMenu({
   };
 
   const markReadDisabled = !isText || unreadCount <= 0;
+  const channelMuted = Boolean(streamNotifSettings?.channel_muted);
   const menuItemClassName = 'mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-left text-[13px] text-[#dbdee1] transition-colors hover:bg-[#232428]';
   const submenuItemClassName = `${menuItemClassName} gap-2.5`;
 
@@ -236,16 +237,22 @@ export default function ChannelContextMenu({
 
         {menuDivider()}
 
-        <div className="relative mx-1" onMouseEnter={() => setMuteSubOpen(true)} onMouseLeave={() => setMuteSubOpen(false)}>
-          <div
-            className={`${menuItemClassName} justify-between gap-2 cursor-default ${
+        <div className="relative mx-1" onMouseEnter={() => {
+          if (!channelMuted) {
+            setMuteSubOpen(true);
+          }
+        }} onMouseLeave={() => setMuteSubOpen(false)}>
+          <button
+            type="button"
+            onClick={() => void setChannelMuted(!channelMuted)}
+            className={`${menuItemClassName} justify-between gap-2 ${
               muteSubOpen ? 'bg-[#232428]' : 'hover:bg-[#232428]'
             }`}
           >
-            <span>Mute Channel</span>
-            <span className="text-riftapp-text-dim">›</span>
-          </div>
-          {muteSubOpen && streamNotifSettings && (
+            <span>{channelMuted ? 'Unmute Channel' : 'Mute Channel'}</span>
+            {!channelMuted ? <span className="text-riftapp-text-dim">›</span> : null}
+          </button>
+          {!channelMuted && muteSubOpen && streamNotifSettings && (
             <div className="absolute left-full top-0 pl-1 z-10" onMouseEnter={() => setMuteSubOpen(true)} onMouseLeave={() => setMuteSubOpen(false)}>
               <div className="rift-context-submenu-shell min-w-[200px]">
                 {(['For 15 Minutes', 'For 1 Hour', 'For 8 Hours', 'Until I Turn It Back On'] as const).map((label) => (
@@ -258,14 +265,6 @@ export default function ChannelContextMenu({
                     {label}
                   </button>
                 ))}
-                <div className="mx-2 my-1 h-px bg-white/[0.06]" />
-                <button
-                  type="button"
-                  onClick={() => void setChannelMuted(false)}
-                  className={menuItemClassName}
-                >
-                  Unmute
-                </button>
               </div>
             </div>
           )}
