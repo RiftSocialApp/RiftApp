@@ -1726,15 +1726,26 @@ function buildParticipants(room: Room): VoiceParticipant[] {
     const explicitConversationScreenShare = voiceState.targetKind === 'conversation'
       && explicitConversationScreenSharers.has(p.identity);
 
+    const resolveInput = {
+      transientSpeaking: isTransientSpeaking(p.identity),
+      hasExplicitSpeakingSignal,
+      explicitSpeakingSignal,
+      liveKitSpeaking: p.isSpeaking,
+      isLocalParticipant,
+    };
+    const resolved = resolveVoiceParticipantSpeakingState(resolveInput);
+
+    if (resolveInput.liveKitSpeaking || resolveInput.explicitSpeakingSignal || resolveInput.transientSpeaking || resolved) {
+      debugVoiceSpeaking('buildParticipants resolve', {
+        identity: p.identity,
+        ...resolveInput,
+        resolved,
+      });
+    }
+
     return ({
       identity: p.identity,
-      isSpeaking: resolveVoiceParticipantSpeakingState({
-        transientSpeaking: isTransientSpeaking(p.identity),
-        hasExplicitSpeakingSignal,
-        explicitSpeakingSignal,
-        liveKitSpeaking: p.isSpeaking,
-        isLocalParticipant,
-      }),
+      isSpeaking: resolved,
       isMuted: !p.isMicrophoneEnabled,
       isCameraOn: p.isCameraEnabled,
       isScreenSharing: p.isScreenShareEnabled || explicitConversationScreenShare || Boolean(screenTrack),
@@ -1753,10 +1764,19 @@ function buildParticipants(room: Room): VoiceParticipant[] {
   return list;
 }
 
+let syncParticipantsTrigger = '';
 function syncParticipants() {
   if (!roomRef || roomRef.state !== ConnectionState.Connected) return;
   const participants = buildParticipants(roomRef);
   const localSharing = roomRef.localParticipant.isScreenShareEnabled;
+  const speakingIds = participants.filter((p) => p.isSpeaking).map((p) => p.identity);
+  if (speakingIds.length > 0) {
+    debugVoiceSpeaking('syncParticipants', {
+      trigger: syncParticipantsTrigger,
+      speakingIds,
+      liveKitActiveSpeakers: roomRef.activeSpeakers?.map((s) => s.identity) ?? [],
+    });
+  }
   hydrateMissingVoiceUsers(participants);
   useVoiceStore.setState({
     participants,
@@ -1906,15 +1926,27 @@ async function joinVoiceTarget(target: VoiceJoinTarget) {
     });
     roomRef = room;
 
-    room.on(RoomEvent.ParticipantConnected, () => { syncParticipants(); playJoinSound(); });
-    room.on(RoomEvent.ParticipantDisconnected, () => { syncParticipants(); playLeaveSound(); });
-    room.on(RoomEvent.TrackSubscribed, syncParticipants);
-    room.on(RoomEvent.TrackUnsubscribed, syncParticipants);
-    room.on(RoomEvent.TrackMuted, syncParticipants);
-    room.on(RoomEvent.TrackUnmuted, syncParticipants);
-    room.on(RoomEvent.ActiveSpeakersChanged, syncParticipants);
-    room.on(RoomEvent.LocalTrackPublished, syncParticipants);
-    room.on(RoomEvent.LocalTrackUnpublished, syncParticipants);
+    debugVoiceSpeaking('VOICE BRIDGE MOUNTED', {
+      roomName: room.name,
+      localIdentity: room.localParticipant.identity,
+    });
+
+    room.on(RoomEvent.ParticipantConnected, () => { syncParticipantsTrigger = 'ParticipantConnected'; syncParticipants(); playJoinSound(); });
+    room.on(RoomEvent.ParticipantDisconnected, () => { syncParticipantsTrigger = 'ParticipantDisconnected'; syncParticipants(); playLeaveSound(); });
+    room.on(RoomEvent.TrackSubscribed, () => { syncParticipantsTrigger = 'TrackSubscribed'; syncParticipants(); });
+    room.on(RoomEvent.TrackUnsubscribed, () => { syncParticipantsTrigger = 'TrackUnsubscribed'; syncParticipants(); });
+    room.on(RoomEvent.TrackMuted, () => { syncParticipantsTrigger = 'TrackMuted'; syncParticipants(); });
+    room.on(RoomEvent.TrackUnmuted, () => { syncParticipantsTrigger = 'TrackUnmuted'; syncParticipants(); });
+    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
+      syncParticipantsTrigger = 'ActiveSpeakersChanged';
+      debugVoiceSpeaking('ActiveSpeakersChanged RAW', {
+        speakers: speakers.map((s) => ({ identity: s.identity, isSpeaking: s.isSpeaking })),
+        remoteCount: room.remoteParticipants.size,
+      });
+      syncParticipants();
+    });
+    room.on(RoomEvent.LocalTrackPublished, () => { syncParticipantsTrigger = 'LocalTrackPublished'; syncParticipants(); });
+    room.on(RoomEvent.LocalTrackUnpublished, () => { syncParticipantsTrigger = 'LocalTrackUnpublished'; syncParticipants(); });
     room.on(RoomEvent.ConnectionQualityChanged, (_quality, participant) => {
       if (!participant.isLocal || roomRef !== room) return;
       syncConnectionStatsState(room);
@@ -2824,6 +2856,7 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     set((state) => {
       if (state.speakingSignals[identity] === speaking) return state;
       changed = true;
+      debugVoiceSpeaking('applySpeakingSignal', { identity, speaking, previous: state.speakingSignals[identity] });
       return {
         speakingSignals: { ...state.speakingSignals, [identity]: speaking },
       };
