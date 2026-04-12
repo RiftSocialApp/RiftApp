@@ -11,18 +11,11 @@ import {
   shouldAutoReloadForFrontendAssetFailure,
 } from './utils/frontendUpdate';
 import { initializeDateTimePreferences } from './utils/dateTime';
+import { createBackendIdentity, fetchBackendBuildInfo } from './utils/buildInfo';
 
-const API_BASE = import.meta.env.VITE_API_URL || '/api';
 const DEPLOY_CHECK_INTERVAL_MS = 3 * 60 * 1000;
 const DEPLOY_SCRIPT_RE = /<script[^>]+type=["']module["'][^>]+src=["']([^"']*\/assets\/[^"']+\.js[^"']*)["']/i;
 const DEPLOY_STYLE_RE = /<link[^>]+rel=["']stylesheet["'][^>]+href=["']([^"']*\/assets\/[^"']+\.css[^"']*)["']/i;
-
-type BackendBuildInfoResponse = {
-  data?: {
-    commit_sha?: string;
-    build_id?: string;
-  };
-};
 
 function normalizeAssetPath(value: string) {
   try {
@@ -35,31 +28,6 @@ function normalizeAssetPath(value: string) {
 function createDeploySignature(scriptPath: string | null, stylePath: string | null) {
   if (!scriptPath && !stylePath) return null;
   return `${scriptPath ?? ''}|${stylePath ?? ''}`;
-}
-
-function createBackendIdentity(commitSha: string | null, buildId: string | null) {
-  if (!commitSha && !buildId) return null;
-  return `${commitSha ?? ''}|${buildId ?? ''}`;
-}
-
-function normalizeBuildToken(value: unknown) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function buildApiUrl(path: string) {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
-
-  if (/^https?:\/\//i.test(API_BASE)) {
-    return `${API_BASE.replace(/\/+$/, '')}${normalizedPath}`;
-  }
-
-  const normalizedBase = API_BASE.startsWith('/') ? API_BASE : `/${API_BASE}`;
-  return `${window.location.origin}${normalizedBase.replace(/\/+$/, '')}${normalizedPath}`;
 }
 
 function getCurrentDeploySignature() {
@@ -98,27 +66,14 @@ async function fetchLatestDeploySignature() {
 }
 
 async function fetchLatestBackendIdentity(): Promise<{ available: boolean; identity: string | null } | null> {
-  const response = await fetch(`${buildApiUrl('/build-info')}?deploy-check=${Date.now()}`, {
-    cache: 'no-store',
-  });
-
-  if (response.status === 404) {
-    return { available: false, identity: null };
-  }
-
-  if (!response.ok) {
+  const result = await fetchBackendBuildInfo();
+  if (!result) {
     return null;
   }
 
-  const payload = await response.json().catch(() => null) as BackendBuildInfoResponse | null;
-  const buildInfo = payload?.data;
-
   return {
-    available: true,
-    identity: createBackendIdentity(
-      normalizeBuildToken(buildInfo?.commit_sha),
-      normalizeBuildToken(buildInfo?.build_id),
-    ),
+    available: result.available,
+    identity: createBackendIdentity(result.info.commitSha, result.info.buildId),
   };
 }
 

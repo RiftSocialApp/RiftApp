@@ -19,6 +19,13 @@ import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { stripAssetVersion } from '../../utils/entityAssets';
 import { formatShortDate, formatShortDateTime } from '../../utils/dateTime';
 import {
+  emptyBackendBuildInfo,
+  fetchBackendBuildInfo,
+  formatShortCommitSha,
+  parseBackendIdentity,
+  type BackendBuildInfo,
+} from '../../utils/buildInfo';
+import {
   AUTO_THRESHOLD_MIN,
   AUTO_THRESHOLD_MAX,
   DEFAULT_MIC_GATE_RELEASE_MS,
@@ -58,7 +65,7 @@ async function loadSettingsTrackProcessorsModule() {
 }
 
 function formatFrontendCommitSha(commitSha: string) {
-  return commitSha.trim().slice(0, 7);
+  return formatShortCommitSha(commitSha);
 }
 
 function formatFrontendBuildTimestamp(buildId: string) {
@@ -97,8 +104,10 @@ function SettingsModal() {
   const setSettingsTab = useAppSettingsStore((s) => s.setSettingsTab);
   const frontendCommitSha = useFrontendUpdateStore((s) => s.currentCommitSha);
   const frontendBuildId = useFrontendUpdateStore((s) => s.currentBuildId);
+  const currentBackendIdentity = useFrontendUpdateStore((s) => s.currentBackendIdentity);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [desktopBuildInfo, setDesktopBuildInfo] = useState<DesktopBuildInfo>(emptyDesktopBuildInfo);
+  const [backendBuildInfo, setBackendBuildInfo] = useState<BackendBuildInfo>(() => parseBackendIdentity(currentBackendIdentity));
   const [appVersionLabel, setAppVersionLabel] = useState('Web App');
 
   useEffect(() => {
@@ -134,9 +143,47 @@ function SettingsModal() {
     }
   }, []);
 
+  useEffect(() => {
+    const nextBackendBuildInfo = parseBackendIdentity(currentBackendIdentity);
+    if (!nextBackendBuildInfo.commitSha && !nextBackendBuildInfo.buildId) {
+      return;
+    }
+
+    setBackendBuildInfo((current) => {
+      if (current.commitSha === nextBackendBuildInfo.commitSha && current.buildId === nextBackendBuildInfo.buildId) {
+        return current;
+      }
+
+      return nextBackendBuildInfo;
+    });
+  }, [currentBackendIdentity]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void fetchBackendBuildInfo()
+      .then((result) => {
+        if (cancelled || !result?.available) {
+          return;
+        }
+
+        setBackendBuildInfo(result.info);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBackendBuildInfo((current) => current ?? emptyBackendBuildInfo);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const desktopOsLabel = formatDesktopOsLabel(desktopBuildInfo);
   const frontendCommitLabel = formatFrontendCommitSha(frontendCommitSha);
   const frontendBuildLabel = formatFrontendBuildTimestamp(frontendBuildId);
+  const backendCommitLabel = formatShortCommitSha(backendBuildInfo.commitSha);
 
   if (!user) return null;
 
@@ -230,6 +277,7 @@ function SettingsModal() {
                   <p className="mt-1 text-[12px] font-semibold text-riftapp-text">{appVersionLabel}</p>
                   <div className="mt-2 space-y-1 text-[11px] leading-5 text-riftapp-text-muted">
                     <p>{`Frontend • ${frontendCommitLabel}`}</p>
+                    {backendCommitLabel ? <p>{`Backend • ${backendCommitLabel}`}</p> : null}
                     {frontendBuildLabel && <p>{`Build: ${frontendBuildLabel}`}</p>}
                     {desktopBuildInfo.electronVersion ? <p>Electron {desktopBuildInfo.electronVersion}</p> : null}
                     {desktopOsLabel && <p>{desktopOsLabel}</p>}
