@@ -125,7 +125,7 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
   return (
     <div
       className={`relative min-h-[170px] overflow-hidden rounded-2xl border bg-black/30 transition-all duration-300 ${
-        member.isSpeaking
+        hasCameraVideo && member.isSpeaking
           ? 'border-[#23a55a]/50 shadow-[0_0_0_1px_rgba(35,165,90,0.25)]'
           : 'border-white/10'
       }`}
@@ -135,7 +135,13 @@ function ParticipantTile({ member }: { member: ConversationCallStageMember }) {
         <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
       ) : (
         <div className="flex h-full w-full items-center justify-center p-6">
-          <div className="flex h-[min(28vw,112px)] w-[min(28vw,112px)] max-h-[112px] max-w-[112px] items-center justify-center overflow-hidden rounded-full ring-4 ring-black/25">
+          <div
+            className={`flex h-[min(28vw,112px)] w-[min(28vw,112px)] max-h-[112px] max-w-[112px] items-center justify-center overflow-hidden rounded-full transition-all duration-150 ${
+              member.isSpeaking
+                ? 'ring-[3px] ring-[#3ba55d] shadow-[0_0_0_4px_rgba(59,165,93,0.18)] scale-[1.02]'
+                : 'ring-4 ring-black/25'
+            }`}
+          >
             {avatarUrl ? (
               <img src={publicAssetUrl(avatarUrl)} alt={label} className="h-full w-full object-cover" />
             ) : (
