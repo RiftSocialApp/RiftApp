@@ -46,6 +46,9 @@ const desktop = {
       message: string;
     }>,
   isUpdateReady: () => ipcRenderer.invoke("app:is-update-ready") as Promise<boolean>,
+  setAttentionRequested: (requested: boolean) => {
+    ipcRenderer.send("app:set-attention-requested", requested);
+  },
   reloadFrontendIgnoringCache: () =>
     ipcRenderer.invoke("app:reload-frontend-ignoring-cache") as Promise<boolean>,
   checkForUpdates: () =>

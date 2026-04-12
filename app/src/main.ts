@@ -89,6 +89,7 @@ let updateStatus: DesktopUpdateStatus = {
 };
 let pendingDisplaySourceId: string | null = null;
 let desktopDateTimePreferencesCache: DesktopDateTimePreferences | null = null;
+let taskbarAttentionRequested = false;
 
 // ── Paths ──────────────────────────────────────────────────
 
@@ -508,6 +509,19 @@ function closeSplash(): void {
   }
 }
 
+function syncTaskbarAttention(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+
+  mainWindow.flashFrame(taskbarAttentionRequested && !mainWindow.isFocused());
+}
+
+function setTaskbarAttentionRequested(requested: boolean): void {
+  taskbarAttentionRequested = requested;
+  syncTaskbarAttention();
+}
+
 // ── Main window ────────────────────────────────────────────
 
 function broadcastMaximized(win: BrowserWindow | null): void {
@@ -548,6 +562,7 @@ function createWindow(show: boolean): void {
 
   mainWindow.on("maximize", () => broadcastMaximized(mainWindow));
   mainWindow.on("unmaximize", () => broadcastMaximized(mainWindow));
+  mainWindow.on("blur", () => syncTaskbarAttention());
 
   mainWindow.on("close", (e) => {
     if (allowMainWindowClose) return;
@@ -556,6 +571,7 @@ function createWindow(show: boolean): void {
   });
 
   mainWindow.on("focus", () => {
+    setTaskbarAttentionRequested(false);
     if (!isDev) {
       void runBackgroundUpdateCheck("focus");
     }
@@ -708,6 +724,14 @@ function registerIpc(): void {
 
   ipcMain.on("app:restart-to-update", () => {
     restartToApplyUpdate();
+  });
+
+  ipcMain.on("app:set-attention-requested", (event, requested: boolean) => {
+    if (!isTrustedRendererOrigin(event.sender.getURL())) {
+      return;
+    }
+
+    setTaskbarAttentionRequested(requested === true);
   });
 
   ipcMain.handle("app:reload-frontend-ignoring-cache", async (event) => {
@@ -978,6 +1002,7 @@ if (!gotLock) {
   app.on("before-quit", () => {
     allowMainWindowClose = true;
     pendingDisplaySourceId = null;
+    taskbarAttentionRequested = false;
     clearUpdateStatusResetTimer();
     clearBackgroundUpdateTimer();
     tray?.destroy();

@@ -39,6 +39,7 @@ export interface DesktopAPI {
   getDateTimePreferences: () => Promise<DesktopDateTimePreferences>;
   getUpdateStatus: () => Promise<DesktopUpdateStatus>;
   isUpdateReady: () => Promise<boolean>;
+  setAttentionRequested: (requested: boolean) => void;
   reloadFrontendIgnoringCache: () => Promise<boolean>;
   checkForUpdates: () => Promise<DesktopUpdateStatus>;
   listDisplaySources: () => Promise<DesktopDisplaySource[]>;

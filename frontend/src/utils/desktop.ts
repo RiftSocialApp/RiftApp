@@ -48,6 +48,9 @@ export function getDesktop(): DesktopAPI | undefined {
       getDateTimePreferences: () => d.getDateTimePreferences?.() ?? Promise.resolve(defaultDesktopDateTimePreferences),
       getUpdateStatus: () => d.getUpdateStatus?.() ?? Promise.resolve(idleDesktopUpdateStatus),
       isUpdateReady: () => d.isUpdateReady?.() ?? Promise.resolve(false),
+      setAttentionRequested: (requested) => {
+        d.setAttentionRequested?.(requested);
+      },
       reloadFrontendIgnoringCache: () => d.reloadFrontendIgnoringCache?.() ?? Promise.resolve(false),
       checkForUpdates: () => d.checkForUpdates?.() ?? Promise.resolve(idleDesktopUpdateStatus),
       listDisplaySources: () => d.listDisplaySources?.() ?? Promise.resolve([] satisfies DesktopDisplaySource[]),
@@ -86,6 +89,7 @@ export function getDesktop(): DesktopAPI | undefined {
     getDateTimePreferences: async () => defaultDesktopDateTimePreferences,
     getUpdateStatus: async () => idleDesktopUpdateStatus,
     isUpdateReady: async () => false,
+    setAttentionRequested: () => {},
     reloadFrontendIgnoringCache: async () => false,
     checkForUpdates: async () => idleDesktopUpdateStatus,
     listDisplaySources: async () => [],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import HubSidebar from '../sidebar/HubSidebar';
 import StreamSidebar from '../sidebar/StreamSidebar';
@@ -17,6 +17,7 @@ import IncomingDMCallPrompt from '../voice/IncomingDMCallPrompt';
 import VoiceBottomBar from '../voice/VoiceBottomBar';
 import FloatingActiveSpeakerMedia from '../voice/FloatingActiveSpeakerMedia';
 import { useWebSocket } from '../../hooks/useWebSocket';
+import { useAuthStore } from '../../stores/auth';
 import { useHubStore } from '../../stores/hubStore';
 import { useStreamStore } from '../../stores/streamStore';
 import { useDMStore } from '../../stores/dmStore';
@@ -24,17 +25,33 @@ import { useNotificationStore } from '../../stores/notificationStore';
 import { useFriendStore } from '../../stores/friendStore';
 import { useVoiceStore } from '../../stores/voiceStore';
 import { useVoiceChannelUiStore } from '../../stores/voiceChannelUiStore';
+import { getDesktop } from '../../utils/desktop';
+import { getDesktopAttentionSignalCount } from '../../utils/desktopAttention';
 
 export default function AppLayout() {
   useWebSocket();
   const [showMemberList, setShowMemberList] = useState(true);
   const [searchSidebarOpen, setSearchSidebarOpen] = useState(false);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? null);
   const loadHubs = useHubStore((s) => s.loadHubs);
   const loadConversations = useDMStore((s) => s.loadConversations);
+  const dmTotalUnread = useDMStore((s) => s.dmTotalUnread);
   const loadNotifications = useNotificationStore((s) => s.loadNotifications);
+  const notificationUnreadCount = useNotificationStore((s) => s.unreadCount);
   const loadConversationCallStates = useVoiceStore((s) => s.loadConversationCallStates);
+  const conversationCallRings = useVoiceStore((s) => s.conversationCallRings);
   const activeConversationId = useDMStore((s) => s.activeConversationId);
+  const streamUnreads = useStreamStore((s) => s.streamUnreads);
   const params = useParams<{ hubId?: string; streamId?: string; conversationId?: string }>();
+  const desktopAttentionSignalCount = useMemo(() => getDesktopAttentionSignalCount({
+    notificationUnreadCount,
+    dmUnreadCount: dmTotalUnread,
+    streamUnreads,
+    conversationCallRings,
+    currentUserId,
+  }), [conversationCallRings, currentUserId, dmTotalUnread, notificationUnreadCount, streamUnreads]);
+  const currentAttentionSignalCountRef = useRef(desktopAttentionSignalCount);
+  const previousAttentionSignalCountRef = useRef<number | null>(null);
 
   useEffect(() => {
     loadHubs();
@@ -42,6 +59,10 @@ export default function AppLayout() {
     loadNotifications();
     void loadConversationCallStates();
   }, [loadConversationCallStates, loadConversations, loadHubs, loadNotifications]);
+
+  useEffect(() => {
+    currentAttentionSignalCountRef.current = desktopAttentionSignalCount;
+  }, [desktopAttentionSignalCount]);
 
   // Keep DM list, friend requests, and notifications fresh when returning to the tab.
   useEffect(() => {
@@ -64,6 +85,61 @@ export default function AppLayout() {
       document.removeEventListener('visibilitychange', refresh);
     };
   }, []);
+
+  useEffect(() => {
+    const desktop = getDesktop();
+    if (!desktop) {
+      return undefined;
+    }
+
+    const clearTaskbarAttention = () => {
+      if (document.visibilityState !== 'visible' || !document.hasFocus()) {
+        return;
+      }
+
+      desktop.setAttentionRequested(false);
+      previousAttentionSignalCountRef.current = currentAttentionSignalCountRef.current;
+    };
+
+    window.addEventListener('focus', clearTaskbarAttention);
+    document.addEventListener('visibilitychange', clearTaskbarAttention);
+
+    return () => {
+      desktop.setAttentionRequested(false);
+      window.removeEventListener('focus', clearTaskbarAttention);
+      document.removeEventListener('visibilitychange', clearTaskbarAttention);
+    };
+  }, []);
+
+  useEffect(() => {
+    const desktop = getDesktop();
+    if (!desktop) {
+      return;
+    }
+
+    const hasWindowAttention = document.visibilityState === 'visible' && document.hasFocus();
+    if (previousAttentionSignalCountRef.current === null) {
+      previousAttentionSignalCountRef.current = desktopAttentionSignalCount;
+      if (hasWindowAttention || desktopAttentionSignalCount === 0) {
+        desktop.setAttentionRequested(false);
+      }
+      return;
+    }
+
+    if (hasWindowAttention) {
+      desktop.setAttentionRequested(false);
+      previousAttentionSignalCountRef.current = desktopAttentionSignalCount;
+      return;
+    }
+
+    if (desktopAttentionSignalCount === 0) {
+      desktop.setAttentionRequested(false);
+    } else if (desktopAttentionSignalCount > previousAttentionSignalCountRef.current) {
+      desktop.setAttentionRequested(true);
+    }
+
+    previousAttentionSignalCountRef.current = desktopAttentionSignalCount;
+  }, [desktopAttentionSignalCount]);
 
   useEffect(() => {
     if (params.hubId) {
