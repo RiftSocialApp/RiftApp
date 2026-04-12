@@ -2,8 +2,11 @@ package integration
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"testing"
 
+	"github.com/riftapp-cloud/riftapp/internal/apperror"
 	"github.com/riftapp-cloud/riftapp/internal/auth"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
 	"github.com/riftapp-cloud/riftapp/internal/service"
@@ -224,6 +227,70 @@ func TestGroupDMCreateWithSameMembersCreatesNewConversation(t *testing.T) {
 	}
 	if storedSecondConversation.OwnerID == nil || *storedSecondConversation.OwnerID != creatorTwo.User.ID {
 		t.Fatalf("expected stored second conversation owner %q, got %v", creatorTwo.User.ID, storedSecondConversation.OwnerID)
+	}
+}
+
+func TestGroupDMMemberLimit(t *testing.T) {
+	cleanTables(t)
+	ctx := context.Background()
+
+	authSvc := auth.NewService(testPool, "integration-test-secret")
+	owner, err := authSvc.Register(ctx, auth.RegisterInput{
+		Username: "group_limit_owner",
+		Password: "password123",
+	})
+	if err != nil {
+		t.Fatalf("register owner failed: %v", err)
+	}
+
+	memberIDs := make([]string, 0, 15)
+	for index := 0; index < 15; index++ {
+		member, registerErr := authSvc.Register(ctx, auth.RegisterInput{
+			Username: fmt.Sprintf("group_limit_member_%02d", index),
+			Password: "password123",
+		})
+		if registerErr != nil {
+			t.Fatalf("register member %d failed: %v", index, registerErr)
+		}
+		memberIDs = append(memberIDs, member.User.ID)
+	}
+
+	dmSvc := service.NewDMService(
+		repository.NewDMRepo(testPool),
+		repository.NewMessageRepo(testPool),
+		nil,
+		ws.NewHub(testPool),
+	)
+
+	if _, _, err := dmSvc.CreateOrOpenGroup(ctx, owner.User.ID, memberIDs); err == nil {
+		t.Fatal("expected oversized group creation to fail")
+	} else {
+		if apperror.HTTPCode(err) != http.StatusBadRequest {
+			t.Fatalf("expected bad request for oversized group creation, got %v", err)
+		}
+		if apperror.Message(err) != "group DMs can have up to 15 members" {
+			t.Fatalf("unexpected oversized group creation message: %q", apperror.Message(err))
+		}
+	}
+
+	conversation, _, err := dmSvc.CreateOrOpenGroup(ctx, owner.User.ID, memberIDs[:12])
+	if err != nil {
+		t.Fatalf("create capped group dm failed: %v", err)
+	}
+
+	if _, err := dmSvc.AddMembers(ctx, owner.User.ID, conversation.ID, memberIDs[12:14]); err != nil {
+		t.Fatalf("expected add up to limit to succeed: %v", err)
+	}
+
+	if _, err := dmSvc.AddMembers(ctx, owner.User.ID, conversation.ID, memberIDs[14:15]); err == nil {
+		t.Fatal("expected add beyond group limit to fail")
+	} else {
+		if apperror.HTTPCode(err) != http.StatusBadRequest {
+			t.Fatalf("expected bad request for oversized group add, got %v", err)
+		}
+		if apperror.Message(err) != "group DMs can have up to 15 members" {
+			t.Fatalf("unexpected oversized group add message: %q", apperror.Message(err))
+		}
 	}
 }
 

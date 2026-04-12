@@ -2975,6 +2975,7 @@ export default function ChatPanel({
 	  {showAddFriendsModal && activeConversation ? (
 		  <AddFriendsToDMModal
 			  conversation={activeConversation}
+        mode={activeConversationIsGroup ? 'add' : 'create'}
 			  onClose={() => setShowAddFriendsModal(false)}
 		  />
 	  ) : null}

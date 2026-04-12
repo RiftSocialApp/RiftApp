@@ -5,11 +5,13 @@ import { useDMStore } from '../../stores/dmStore';
 import { useFriendStore } from '../../stores/friendStore';
 import {
   getConversationOtherMembers,
-  getConversationTitle,
   getUserLabel,
 } from '../../utils/conversations';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import ModalOverlay from '../shared/ModalOverlay';
+import ModalCloseButton from '../shared/ModalCloseButton';
+
+const MAX_GROUP_DM_MEMBERS = 15;
 
 interface Props {
   conversation: Conversation;
@@ -67,6 +69,9 @@ export default function AddFriendsToDMModal({ conversation, mode = 'create', onC
     return ids;
   }, [currentUserId, existingMembers]);
 
+  const currentMemberCount = existingMemberIds.size;
+  const remainingSlots = Math.max(0, MAX_GROUP_DM_MEMBERS - currentMemberCount);
+
   const availableFriends = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return friends
@@ -81,15 +86,30 @@ export default function AddFriendsToDMModal({ conversation, mode = 'create', onC
   }, [existingMemberIds, friends, query]);
 
   const handleToggle = (userId: string) => {
-    setSelectedIds((current) => (
-      current.includes(userId)
-        ? current.filter((id) => id !== userId)
-        : [...current, userId]
-    ));
+    let hitLimit = false;
+    setSelectedIds((current) => {
+      if (current.includes(userId)) {
+        return current.filter((id) => id !== userId);
+      }
+
+      if (current.length >= remainingSlots) {
+        hitLimit = true;
+        return current;
+      }
+
+      return [...current, userId];
+    });
+
+    if (hitLimit) {
+      setError(`Group chats can have up to ${MAX_GROUP_DM_MEMBERS} members.`);
+      return;
+    }
+
+    setError(null);
   };
 
   const handleSubmit = async () => {
-    if (selectedIds.length === 0 || submitting) return;
+    if (selectedIds.length === 0 || submitting || remainingSlots <= 0) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -109,103 +129,108 @@ export default function AddFriendsToDMModal({ conversation, mode = 'create', onC
     }
   };
 
-  const title = mode === 'add' ? 'Add Members' : 'Add Friends to DM';
-  const description = mode === 'add'
-    ? `Add more people to ${getConversationTitle(conversation, currentUserId)}.`
-    : `Start a group conversation from ${getConversationTitle(conversation, currentUserId)}.`;
-  const submitLabel = mode === 'add' ? 'Add to Group' : 'Create Group DM';
-  const footerHint = selectedIds.length === 0
-    ? `Select at least one friend to ${mode === 'add' ? 'add to this group DM' : 'create a group DM'}.`
-    : `${selectedIds.length} friend${selectedIds.length === 1 ? '' : 's'} selected`;
+  const title = mode === 'add' ? 'Add Friends to Group DM' : 'Create Group DM';
+  const description = remainingSlots > 0
+    ? `${mode === 'add' ? 'You can add' : 'You can choose'} ${remainingSlots} more friend${remainingSlots === 1 ? '' : 's'}.`
+    : `This group chat already has the maximum ${MAX_GROUP_DM_MEMBERS} members.`;
+  const submitLabel = mode === 'add' ? 'Add' : 'Create';
+  const selectedSummary = selectedIds.length > 0
+    ? `${selectedIds.length} selected`
+    : 'Select friends to continue';
 
   return (
     <ModalOverlay isOpen onClose={submitting ? () => {} : onClose} zIndex={330} className="p-4 sm:p-6">
-      <div className="w-[min(92vw,520px)] overflow-hidden rounded-2xl border border-white/10 bg-[#111214] shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
-        <div className="border-b border-white/6 px-5 py-4">
-          <h2 className="text-lg font-semibold text-[#f2f3f5]">{title}</h2>
-          <p className="mt-1 text-sm text-[#949ba4]">{description}</p>
+      <div className="w-[min(92vw,430px)] overflow-hidden rounded-2xl border border-white/10 bg-riftapp-menu text-[#f2f3f5] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+        <div className="flex items-start justify-between gap-4 px-4 pb-3 pt-4">
+          <div className="min-w-0">
+            <h2 className="text-[20px] font-semibold leading-none text-[#f2f3f5]">{title}</h2>
+            <p className="mt-2 text-[13px] text-[#b5bac1]">{description}</p>
+          </div>
+          <ModalCloseButton
+            onClick={onClose}
+            disabled={submitting}
+            size="sm"
+            className="mt-[-2px] shrink-0 border-white/10 bg-transparent hover:bg-white/5"
+          />
         </div>
 
-        <div className="space-y-4 px-5 py-4">
-          <div>
-            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#949ba4]">
-              Search Friends
-            </label>
+        <div className="px-4 pb-4">
+          <div className="flex items-center gap-2">
             <input
               type="text"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Filter by name or username"
-              className="w-full rounded-xl border border-[#2e3138] bg-[#17181c] px-3 py-2.5 text-sm text-[#f2f3f5] outline-none transition-colors placeholder:text-[#72767d] focus:border-[#5865f2]"
+              placeholder="Search for friends"
+              className="h-9 min-w-0 flex-1 rounded-md border border-[#3a3d45] bg-[#23252a] px-3 text-sm text-[#f2f3f5] outline-none transition-colors placeholder:text-[#8f949c] focus:border-[#5865f2]"
             />
+            <button
+              type="button"
+              onClick={() => void handleSubmit()}
+              disabled={selectedIds.length === 0 || submitting || remainingSlots <= 0}
+              className="inline-flex h-9 min-w-[64px] items-center justify-center rounded-md bg-[#5865f2] px-4 text-sm font-semibold text-white transition-colors hover:bg-[#6b77ff] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {submitting ? (mode === 'add' ? 'Adding…' : 'Creating…') : submitLabel}
+            </button>
           </div>
 
-          <div className="rounded-xl border border-white/6 bg-[#17181c]">
-            <div className="border-b border-white/6 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#949ba4]">
-              Available Friends
-            </div>
-            <div className="max-h-[320px] overflow-y-auto p-2">
-              {loading && friends.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-[#949ba4]">Loading friends…</div>
-              ) : availableFriends.length === 0 ? (
-                <div className="px-3 py-6 text-center text-sm text-[#949ba4]">
-                  {friends.length === 0 ? 'You do not have any friends to add yet.' : 'No matching friends available for this DM.'}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {availableFriends.map((friend) => {
-                    const selected = selectedIds.includes(friend.id);
-                    return (
-                      <button
-                        key={friend.id}
-                        type="button"
-                        onClick={() => handleToggle(friend.id)}
-                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+          <div className="mt-2 flex items-center justify-between text-[12px] text-[#b5bac1]">
+            <span>{selectedSummary}</span>
+            <span>{remainingSlots} slot{remainingSlots === 1 ? '' : 's'} left</span>
+          </div>
+
+          {error ? <div className="mt-2 text-[12px] text-[#ff8d8f]">{error}</div> : null}
+
+          <div className="mt-3 max-h-[360px] overflow-y-auto rounded-md border border-white/8 bg-[#23252a] py-1">
+            {loading && friends.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-[#949ba4]">Loading friends…</div>
+            ) : availableFriends.length === 0 ? (
+              <div className="px-3 py-6 text-center text-sm text-[#949ba4]">
+                {friends.length === 0 ? 'You do not have any friends to add yet.' : 'No matching friends available for this group DM.'}
+              </div>
+            ) : (
+              <div className="space-y-0.5 px-1 py-1">
+                {availableFriends.map((friend) => {
+                  const selected = selectedIds.includes(friend.id);
+                  const disabled = !selected && (remainingSlots <= 0 || selectedIds.length >= remainingSlots);
+
+                  return (
+                    <button
+                      key={friend.id}
+                      type="button"
+                      onClick={() => {
+                        if (!disabled || selected) {
+                          handleToggle(friend.id);
+                        }
+                      }}
+                      disabled={disabled && !selected}
+                      className={`flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors ${
+                        selected
+                          ? 'bg-[#313338] text-[#f2f3f5]'
+                          : disabled
+                            ? 'cursor-not-allowed text-[#7b818e] opacity-60'
+                            : 'text-[#dbdee1] hover:bg-[#313338]'
+                      }`}
+                    >
+                      <FriendAvatar user={friend} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[14px] font-medium text-inherit">{getUserLabel(friend)}</div>
+                        <div className="truncate text-[11px] text-[#949ba4]">@{friend.username}</div>
+                      </div>
+                      <span
+                        className={`flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-[5px] border text-[11px] font-bold transition-colors ${
                           selected
-                            ? 'border-[#5865f2] bg-[#1f2340] text-[#f2f3f5]'
-                            : 'border-transparent bg-transparent text-[#dbdee1] hover:border-white/6 hover:bg-[#1c1d22]'
+                            ? 'border-[#7a85ff] bg-[#5865f2] text-white'
+                            : 'border-[#5a5e68] bg-transparent text-transparent'
                         }`}
+                        aria-hidden
                       >
-                        <FriendAvatar user={friend} />
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-inherit">{getUserLabel(friend)}</div>
-                          <div className="truncate text-xs text-[#949ba4]">@{friend.username}</div>
-                        </div>
-                        <div className={`flex h-5 w-5 items-center justify-center rounded-md border text-[11px] font-bold ${selected ? 'border-[#7a85ff] bg-[#5865f2] text-white' : 'border-white/10 text-transparent'}`}>
-                          ✓
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {error ? <div className="text-sm text-[#ed4245]">{error}</div> : null}
-        </div>
-
-        <div className="flex items-center justify-between border-t border-white/6 px-5 py-4">
-          <div className="text-sm text-[#949ba4]">
-            {footerHint}
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-[#dbdee1] transition-colors hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={selectedIds.length === 0 || submitting}
-              className="rounded-lg bg-[#5865f2] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#6b77ff] disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {submitting ? (mode === 'add' ? 'Adding…' : 'Starting…') : submitLabel}
-            </button>
+                        ✓
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

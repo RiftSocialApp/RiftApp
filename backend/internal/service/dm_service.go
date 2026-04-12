@@ -26,6 +26,8 @@ type DMService struct {
 	modSvc   *moderation.Service
 }
 
+const maxGroupDMMembers = 15
+
 func NewDMService(dmRepo *repository.DMRepo, msgRepo *repository.MessageRepo, notifSvc *NotificationService, hub *ws.Hub) *DMService {
 	svc := &DMService{dmRepo: dmRepo, msgRepo: msgRepo, notifSvc: notifSvc, hub: hub}
 	if hub != nil {
@@ -424,6 +426,9 @@ func (s *DMService) createOrOpenConversation(ctx context.Context, userID string,
 	if requireGroup && len(memberIDs) < 3 {
 		return repository.ConvResponse{}, false, apperror.BadRequest("group DMs require at least 3 members")
 	}
+	if requireGroup && len(memberIDs) > maxGroupDMMembers {
+		return repository.ConvResponse{}, false, apperror.BadRequest(fmt.Sprintf("group DMs can have up to %d members", maxGroupDMMembers))
+	}
 
 	for _, memberID := range memberIDs {
 		if memberID == userID {
@@ -598,6 +603,9 @@ func (s *DMService) AddMembers(ctx context.Context, userID, convID string, membe
 
 	if len(newMemberIDs) == 0 {
 		return s.buildConversationResponse(ctx, convID, userID)
+	}
+	if len(existingMembers)+len(newMemberIDs) > maxGroupDMMembers {
+		return repository.ConvResponse{}, apperror.BadRequest(fmt.Sprintf("group DMs can have up to %d members", maxGroupDMMembers))
 	}
 
 	tx, err := s.dmRepo.BeginTx(ctx)
