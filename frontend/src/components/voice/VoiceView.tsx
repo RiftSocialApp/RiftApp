@@ -518,7 +518,7 @@ export default function VoiceView() {
                       {qualitySubOpen && (
                         <div className="border-t border-white/[0.06] mx-2 pt-2 pb-1">
                           <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">Frame Rate</p>
-                          {([15, 30, 60] as ScreenShareFps[]).map((fps) => (
+                          {([24, 30, 60] as ScreenShareFps[]).map((fps) => (
                             <button
                               key={fps}
                               type="button"
@@ -532,7 +532,7 @@ export default function VoiceView() {
                             </button>
                           ))}
                           <p className="px-1 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-[#949ba4]">Resolution</p>
-                          {(['480p', '720p', '1080p', '1440p', 'source'] as ScreenShareResolution[]).map((res) => (
+                          {(['720p', '1080p', '1440p', 'source'] as ScreenShareResolution[]).map((res) => (
                             <button
                               key={res}
                               type="button"
