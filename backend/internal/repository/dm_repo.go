@@ -421,6 +421,7 @@ func (r *DMRepo) GetReadStates(ctx context.Context, userID string) ([]DMReadStat
 		        COALESCE(rs.last_read_message_id::text, '') AS last_read_message_id,
 		        (SELECT COUNT(*) FROM messages m
 		         WHERE m.conversation_id = c.id
+		           AND m.author_id <> $1
 		           AND (rs.last_read_message_id IS NULL OR m.created_at > (
 		               SELECT created_at FROM messages WHERE id = rs.last_read_message_id
 		           ))
