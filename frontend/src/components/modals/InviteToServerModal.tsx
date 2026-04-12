@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFriendStore } from '../../stores/friendStore';
+import { useStreamStore } from '../../stores/streamStore';
 import { api } from '../../api/client';
 import type { Hub, Friendship } from '../../types';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
@@ -34,6 +35,25 @@ const MAX_USES_OPTIONS = [
   { label: '100 uses', value: 100 },
 ] as const;
 
+const DEFAULT_EXPIRE_AFTER = 604800;
+
+function SearchIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="11" cy="11" r="8" />
+      <path d="m21 21-4.3-4.3" />
+    </svg>
+  );
+}
+
+function CheckIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
 function expireLabel(seconds: number): string {
   const opt = EXPIRE_OPTIONS.find((o) => o.value === seconds);
   return opt?.label ?? '7 days';
@@ -45,7 +65,10 @@ function getInviteUrl(code: string): string {
 
 export default function InviteToServerModal({ hub, onClose }: Props) {
   const friends = useFriendStore((s) => s.friends);
+  const friendsLoading = useFriendStore((s) => s.loading);
   const loadFriends = useFriendStore((s) => s.loadFriends);
+  const streams = useStreamStore((s) => s.streams);
+  const activeStreamId = useStreamStore((s) => s.activeStreamId);
 
   const [search, setSearch] = useState('');
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
@@ -54,24 +77,14 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
   const [sentTo, setSentTo] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState<Set<string>>(new Set());
   const [showSettings, setShowSettings] = useState(false);
-  const [expireAfter, setExpireAfter] = useState(604800); // 7 days default
+  const [expireAfter, setExpireAfter] = useState(DEFAULT_EXPIRE_AFTER);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // ESC to close
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && showSettings) {
-        e.stopImmediatePropagation();
-        setShowSettings(false);
-      }
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [showSettings]);
-
-  useEffect(() => {
-    loadFriends();
-  }, [loadFriends]);
+    if (friends.length === 0) {
+      void loadFriends();
+    }
+  }, [friends.length, loadFriends]);
 
   const generateInvite = useCallback(async (expires: number, maxUses?: number) => {
     setGenerating(true);
@@ -94,7 +107,7 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
     (async () => {
       setGenerating(true);
       try {
-        const invite = await api.createInvite(hub.id, { expires_in: 604800 });
+        const invite = await api.createInvite(hub.id, { expires_in: DEFAULT_EXPIRE_AFTER });
         if (!cancelled) {
           setInviteUrl(getInviteUrl(invite.code));
         }
@@ -108,17 +121,37 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
   }, [hub.id]);
 
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (!showSettings) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }
+  }, [showSettings]);
 
-  const filtered = friends.filter((f) => {
-    if (!f.user) return false;
-    const q = search.toLowerCase();
-    return (
-      f.user.display_name.toLowerCase().includes(q) ||
-      f.user.username.toLowerCase().includes(q)
-    );
-  });
+  const firstChannelName = useMemo(() => {
+    const activeTextStream = streams.find((stream) => stream.id === activeStreamId && stream.hub_id === hub.id && stream.type === 0);
+    if (activeTextStream) {
+      return activeTextStream.name;
+    }
+    return streams.find((stream) => stream.hub_id === hub.id && stream.type === 0)?.name ?? 'general';
+  }, [activeStreamId, hub.id, streams]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return friends
+      .filter((friendship): friendship is Friendship & { user: NonNullable<Friendship['user']> } => friendship.user != null)
+      .filter((friendship) => {
+        if (!query) return true;
+        const label = (friendship.user.display_name || friendship.user.username).toLowerCase();
+        const username = friendship.user.username.toLowerCase();
+        return label.includes(query) || username.includes(query);
+      })
+      .sort((left, right) => {
+        const leftLabel = left.user.display_name || left.user.username;
+        const rightLabel = right.user.display_name || right.user.username;
+        return leftLabel.localeCompare(rightLabel);
+      });
+  }, [friends, search]);
 
   const handleInvite = async (friend: Friendship) => {
     if (!friend.user || !inviteUrl) return;
@@ -141,117 +174,102 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
 
   const handleCopy = () => {
     if (!inviteUrl) return;
-    navigator.clipboard.writeText(inviteUrl);
+    void navigator.clipboard.writeText(inviteUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Get first text channel name for subtitle
-  const firstChannelName = 'general';
-
   return (
-    <ModalOverlay isOpen onClose={showSettings ? () => setShowSettings(false) : onClose} zIndex={300}>
-      {/* ───── Invite Friends View ───── */}
+    <ModalOverlay isOpen onClose={onClose} zIndex={300} className="p-4 sm:p-6">
       {!showSettings && (
       <div
-        className="flex max-h-[620px] w-[440px] flex-col overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal"
+        className="flex max-h-[min(78vh,620px)] w-[min(92vw,360px)] flex-col overflow-hidden rounded-[16px] border border-white/8 bg-[#313338] text-[#f2f3f5] shadow-[0_28px_80px_rgba(0,0,0,0.52)]"
       >
-        {/* ───── Header ───── */}
-        <div className="px-5 pt-5 pb-0 flex-shrink-0">
-          <div className="flex items-start justify-between mb-1">
+        <div className="flex-shrink-0 px-4 pb-0 pt-4">
+          <div className="mb-1 flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-[18px] font-bold text-white leading-snug">
+              <h2 className="text-[17px] font-semibold leading-snug text-[#f2f3f5]">
                 Invite friends to {hub.name}
               </h2>
-              <p className="text-[13px] text-[#b5bac1] mt-0.5">
+              <p className="mt-0.5 text-[12px] leading-5 text-[#b5bac1]">
                 Recipients will land in <span className="font-medium text-[#dbdee1]">#{firstChannelName}</span>
               </p>
             </div>
-            <ModalCloseButton onClick={onClose} className="-mr-1 -mt-1" />
+            <ModalCloseButton onClick={onClose} className="-mr-1 -mt-1 border-white/10 bg-transparent hover:bg-white/5" />
           </div>
 
-          {/* Search */}
-          <div className="relative mt-3 mb-3">
-            <svg
-              width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#949ba4] pointer-events-none"
-            >
-              <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
+          <div className="relative mt-3">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 h-[14px] w-[14px] -translate-y-1/2 text-[#949ba4]" />
             <input
               ref={inputRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search for friends"
-              className="w-full rounded-lg border border-riftapp-border/60 bg-riftapp-content-elevated py-2.5 pl-10 pr-3 text-sm text-white
-                transition-all placeholder:text-riftapp-text-dim focus:outline-none focus:ring-1 focus:ring-[#5865f2]"
+              className="h-9 w-full rounded-[8px] border border-white/8 bg-[#1e1f22] py-2 pl-9 pr-3 text-[13px] text-[#f2f3f5] outline-none transition-colors placeholder:text-[#878b92] focus:border-[#5865f2]"
             />
           </div>
         </div>
 
-        {/* ───── Friends list ───── */}
-        <div className="flex-1 overflow-y-auto px-2 pb-2 min-h-[120px] max-h-[320px]">
-          {friends.length === 0 && !generating && (
-            <div className="text-center py-8 text-[#949ba4] text-sm">
+        <div className="mt-3 flex-1 overflow-y-auto px-2 pb-2">
+          {friendsLoading && friends.length === 0 ? (
+            <div className="py-10 text-center text-[13px] text-[#949ba4]">
+              Loading friends...
+            </div>
+          ) : null}
+          {friends.length === 0 && !friendsLoading && !generating && (
+            <div className="py-10 text-center text-[13px] text-[#949ba4]">
               No friends to invite yet
             </div>
           )}
           {filtered.length === 0 && friends.length > 0 && search && (
-            <div className="text-center py-8 text-[#949ba4] text-sm">
+            <div className="py-10 text-center text-[13px] text-[#949ba4]">
               No results for "{search}"
             </div>
           )}
           {filtered.map((friend) => {
-            if (!friend.user) return null;
             const u = friend.user;
             const isSent = sentTo.has(u.id);
             const isSending = sending.has(u.id);
+            const label = u.display_name || u.username;
+
             return (
               <div
                 key={u.id}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/[0.04] transition-colors"
+                className="flex items-center gap-2.5 rounded-[8px] px-2.5 py-2 transition-colors hover:bg-white/[0.04]"
               >
-                {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                  <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-riftapp-content-elevated">
+                  <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#232428]">
                     {u.avatar_url ? (
                       <img src={publicAssetUrl(u.avatar_url)} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-xs font-semibold text-[#dbdee1]">
-                        {u.display_name.slice(0, 2).toUpperCase()}
+                      <span className="text-[11px] font-semibold uppercase text-[#dbdee1]">
+                        {label.slice(0, 2)}
                       </span>
                     )}
                   </div>
-                  <StatusDot
-                    userId={u.id}
-                    fallbackStatus={u.status}
-                    size="md"
-                    className="absolute -bottom-0.5 -right-0.5 border-2 border-riftapp-panel"
-                  />
+                  <div className="absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-[#313338]">
+                    <StatusDot userId={u.id} fallbackStatus={u.status} size="sm" />
+                  </div>
                 </div>
 
-                {/* Name */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate text-[#dbdee1]">{u.display_name}</p>
-                  <p className="text-[11px] text-[#949ba4] truncate">{u.username}</p>
+                  <p className="truncate text-[13px] font-medium text-[#f2f3f5]">{label}</p>
+                  <p className="truncate text-[11px] text-[#949ba4]">{u.username}</p>
                 </div>
 
-                {/* Invite button */}
                 <button
                   onClick={() => handleInvite(friend)}
                   disabled={isSent || isSending || !inviteUrl}
-                  className={`flex-shrink-0 px-4 py-1.5 rounded-[4px] text-[13px] font-medium transition-all ${
+                  className={`flex h-7 min-w-[64px] flex-shrink-0 items-center justify-center rounded-[6px] px-3 text-[12px] font-semibold transition-colors ${
                     isSent
-                      ? 'bg-[#248046]/20 text-[#57f287] border border-[#248046]/40 cursor-default'
-                      : 'bg-[#5865f2] text-white hover:bg-[#4752c4] active:scale-95'
-                  } disabled:opacity-50`}
+                      ? 'cursor-default border border-[#3ba55d]/40 bg-[#2b6a43]/20 text-[#57f287]'
+                      : 'border border-white/10 bg-[#4e5058] text-[#f2f3f5] hover:bg-[#5d6068]'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {isSent ? (
-                    <span className="flex items-center gap-1">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
+                    <span className="flex items-center gap-1 text-[11px]">
+                      <CheckIcon className="h-3.5 w-3.5" />
                       Sent
                     </span>
                   ) : isSending ? 'Sending...' : 'Invite'}
@@ -261,43 +279,37 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
           })}
         </div>
 
-        {/* ───── Divider ───── */}
-        <div className="mx-5">
-          <div className="h-px bg-riftapp-border/60" />
-        </div>
-
-        {/* ───── Footer: invite link ───── */}
-        <div className="px-5 py-4 flex-shrink-0">
-          <p className="text-[12px] text-[#b5bac1] mb-2 font-semibold uppercase tracking-wide">
+        <div className="border-t border-white/8 bg-[#2b2d31] px-4 pb-4 pt-3">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#b5bac1]">
             Or send a server invite link
           </p>
-          <div className="flex gap-2">
-            <div className="flex-1 truncate rounded-[4px] bg-riftapp-content-elevated px-3 py-2.5 font-mono text-sm text-riftapp-text select-all">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 flex-1 items-center overflow-hidden rounded-[8px] bg-[#1e1f22] px-3 font-mono text-[12px] text-[#f2f3f5]">
               {generating ? (
-                <span className="text-riftapp-text-dim">Generating...</span>
+                <span className="text-[#878b92]">Generating...</span>
               ) : inviteUrl || (
-                <span className="text-riftapp-text-dim">—</span>
+                <span className="text-[#878b92]">—</span>
               )}
             </div>
             <button
               onClick={handleCopy}
               disabled={!inviteUrl}
-              className={`px-5 py-2.5 rounded-[4px] text-[13px] font-medium flex-shrink-0 transition-all active:scale-95 ${
+              className={`flex h-9 min-w-[76px] flex-shrink-0 items-center justify-center rounded-[8px] px-4 text-[12px] font-semibold transition-colors ${
                 copied
                   ? 'bg-[#248046] text-white'
                   : 'bg-[#5865f2] text-white hover:bg-[#4752c4]'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
+              } disabled:cursor-not-allowed disabled:opacity-50`}
             >
               {copied ? 'Copied!' : 'Copy'}
             </button>
           </div>
-          <div className="flex items-center gap-1 mt-2">
-            <p className="text-[11px] text-[#949ba4]">
+          <div className="mt-2 flex items-center gap-1 text-[11px]">
+            <p className="text-[#949ba4]">
               Invite expires in {expireLabel(expireAfter)}.
             </p>
             <button
               onClick={() => setShowSettings(true)}
-              className="text-[11px] text-[#00a8fc] hover:underline font-medium"
+              className="font-medium text-[#00a8fc] hover:underline"
             >
               Edit invite link
             </button>
@@ -306,7 +318,6 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
       </div>
       )}
 
-      {/* ───── Invite Settings View (replaces invite view) ───── */}
       {showSettings && (
         <InviteSettingsModal
           currentExpire={expireAfter}
@@ -316,22 +327,23 @@ export default function InviteToServerModal({ hub, onClose }: Props) {
             generateInvite(expire, maxUses);
           }}
           onBack={() => setShowSettings(false)}
+          onClose={onClose}
         />
       )}
     </ModalOverlay>
   );
 }
 
-/* ───── Invite Link Settings Modal ───── */
-
 function InviteSettingsModal({
   currentExpire,
   onGenerate,
   onBack,
+  onClose,
 }: {
   currentExpire: number;
   onGenerate: (expire: number, maxUses: number) => void;
   onBack: () => void;
+  onClose: () => void;
 }) {
   const [expire, setExpire] = useState(currentExpire);
   const [maxUses, setMaxUses] = useState(0);
@@ -339,15 +351,14 @@ function InviteSettingsModal({
 
   return (
       <div
-        className="w-[400px] overflow-hidden rounded-xl border border-riftapp-border/60 bg-riftapp-panel shadow-modal animate-scale-in"
+        className="w-[min(92vw,360px)] overflow-hidden rounded-[16px] border border-white/8 bg-[#313338] text-[#f2f3f5] shadow-[0_28px_80px_rgba(0,0,0,0.52)] animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="px-5 pt-5 pb-3 flex items-start justify-between">
+        <div className="flex items-start justify-between px-4 pb-3 pt-4">
           <div className="flex items-center gap-2.5">
             <button
               onClick={onBack}
-              className="-ml-1 rounded-md p-1 text-riftapp-text-muted transition-colors hover:bg-riftapp-content-elevated/80 hover:text-white"
+              className="-ml-1 rounded-md p-1 text-[#b5bac1] transition-colors hover:bg-white/5 hover:text-white"
               title="Back"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -355,26 +366,24 @@ function InviteSettingsModal({
               </svg>
             </button>
             <div>
-              <h3 className="text-[16px] font-bold text-white">Server invite link settings</h3>
-              <p className="text-[13px] text-[#b5bac1] mt-0.5">
+              <h3 className="text-[16px] font-semibold text-[#f2f3f5]">Server invite link settings</h3>
+              <p className="mt-0.5 text-[12px] text-[#b5bac1]">
                 Customize your invite link
               </p>
             </div>
           </div>
-          <ModalCloseButton onClick={onBack} className="-mr-1 -mt-1" title="Close invite settings" ariaLabel="Close invite settings" />
+          <ModalCloseButton onClick={onClose} className="-mr-1 -mt-1 border-white/10 bg-transparent hover:bg-white/5" title="Close invite settings" ariaLabel="Close invite settings" />
         </div>
 
-        <div className="px-5 pb-5 space-y-4">
-          {/* Expire after */}
+        <div className="space-y-4 px-4 pb-4">
           <div>
-            <label className="text-[12px] font-semibold text-[#b5bac1] uppercase tracking-wide mb-1.5 block">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#b5bac1]">
               Expire after
             </label>
             <select
               value={expire}
               onChange={(e) => setExpire(Number(e.target.value))}
-              className="w-full rounded-[4px] bg-riftapp-content-elevated px-3 py-2.5 text-sm text-riftapp-text border-none
-                focus:outline-none focus:ring-1 focus:ring-[#5865f2] appearance-none cursor-pointer"
+              className="h-10 w-full cursor-pointer appearance-none rounded-[8px] border border-white/8 bg-[#1e1f22] px-3 text-[13px] text-[#f2f3f5] outline-none transition-colors focus:border-[#5865f2]"
             >
               {EXPIRE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -384,16 +393,14 @@ function InviteSettingsModal({
             </select>
           </div>
 
-          {/* Max uses */}
           <div>
-            <label className="text-[12px] font-semibold text-[#b5bac1] uppercase tracking-wide mb-1.5 block">
+            <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.08em] text-[#b5bac1]">
               Max number of uses
             </label>
             <select
               value={maxUses}
               onChange={(e) => setMaxUses(Number(e.target.value))}
-              className="w-full rounded-[4px] bg-riftapp-content-elevated px-3 py-2.5 text-sm text-riftapp-text border-none
-                focus:outline-none focus:ring-1 focus:ring-[#5865f2] appearance-none cursor-pointer"
+              className="h-10 w-full cursor-pointer appearance-none rounded-[8px] border border-white/8 bg-[#1e1f22] px-3 text-[13px] text-[#f2f3f5] outline-none transition-colors focus:border-[#5865f2]"
             >
               {MAX_USES_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -403,19 +410,18 @@ function InviteSettingsModal({
             </select>
           </div>
 
-          {/* Grant temporary membership */}
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start justify-between gap-4 rounded-[10px] bg-[#2b2d31] px-3 py-3">
             <div>
               <p className="text-[13px] font-medium text-[#dbdee1]">
                 Grant temporary membership
               </p>
-              <p className="text-[12px] text-[#949ba4] mt-0.5 leading-relaxed">
+              <p className="mt-0.5 text-[12px] leading-relaxed text-[#949ba4]">
                 Temporary members are automatically kicked when they disconnect unless a role has been assigned
               </p>
             </div>
             <button
               onClick={() => setTempMembership(!tempMembership)}
-              className={`flex-shrink-0 mt-0.5 w-10 h-6 rounded-full transition-colors relative ${
+              className={`relative mt-0.5 h-6 w-10 flex-shrink-0 rounded-full transition-colors ${
                 tempMembership ? 'bg-[#5865f2]' : 'bg-[#72767d]'
               }`}
             >
@@ -428,18 +434,16 @@ function InviteSettingsModal({
           </div>
         </div>
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 border-t border-riftapp-border/60 bg-riftapp-content-elevated px-5 py-4">
+        <div className="flex items-center justify-end gap-3 border-t border-white/8 bg-[#2b2d31] px-4 py-3">
           <button
             onClick={onBack}
-            className="px-4 py-2 text-[13px] font-medium text-riftapp-text hover:underline"
+            className="px-2 py-2 text-[13px] font-medium text-[#f2f3f5] hover:underline"
           >
             Cancel
           </button>
           <button
             onClick={() => onGenerate(expire, maxUses)}
-            className="px-5 py-2.5 rounded-[4px] bg-[#5865f2] text-white text-[13px] font-medium
-              hover:bg-[#4752c4] active:scale-95 transition-all"
+            className="rounded-[8px] bg-[#5865f2] px-4 py-2 text-[13px] font-semibold text-white transition-colors hover:bg-[#4752c4]"
           >
             Generate a New Link
           </button>

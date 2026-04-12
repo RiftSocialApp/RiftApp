@@ -298,11 +298,11 @@ export default function UserContextMenu() {
           >
             <div className={`${menuItemClassName} cursor-default justify-between ${inviteSubmenuOpen ? 'bg-[#232428]' : ''}`}>
               <span>Invite to Server</span>
-              <span className="text-riftapp-text-dim">›</span>
+              <span className="text-riftapp-text-dim">‹</span>
             </div>
 
             {inviteSubmenuOpen ? (
-              <div className="absolute left-full top-0 z-10 pl-1" onMouseEnter={() => setInviteSubmenuOpen(true)}>
+              <div className="absolute right-full top-0 z-10 pr-1" onMouseEnter={() => setInviteSubmenuOpen(true)}>
                 <div className="rift-context-submenu-shell min-w-[220px] max-h-[min(70vh,340px)] overflow-y-auto">
                   {inviteLoading ? (
                     <div className="mx-1.5 flex w-[calc(100%-12px)] items-center rounded-[6px] px-2.5 py-[7px] text-[13px] text-[#8f949c]">
