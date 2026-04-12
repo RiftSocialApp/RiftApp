@@ -12,6 +12,7 @@ import {
   type RemoteTrack,
   type RemoteTrackPublication,
   type LocalTrackPublication,
+  type LocalAudioTrack,
   type LocalVideoTrack,
   type Participant,
   ConnectionQuality,
@@ -1313,6 +1314,25 @@ async function disableMicrophoneAfterFailedAttempt(room: Room) {
   }
 }
 
+async function tryAttachMicGatePostPublish(room: Room, identity: string) {
+  try {
+    const micPub = room.localParticipant.getTrackPublication(Track.Source.Microphone);
+    const audioTrack = micPub?.track;
+    if (audioTrack && 'setProcessor' in audioTrack) {
+      const gate = createMicGate(identity);
+      await (audioTrack as LocalAudioTrack).setProcessor(gate);
+      debugVoiceSpeaking('Mic gate attached post-publish');
+      return;
+    }
+  } catch (err) {
+    console.warn('Failed to attach mic processor post-publish:', err);
+  }
+  // Processor not attached; clean up and clear stale explicit signal so LiveKit VAD works
+  stopMicProcessing();
+  useVoiceStore.getState().clearSpeakingSignal(identity);
+  debugVoiceSpeaking('Mic gate unavailable, falling back to LiveKit VAD', { identity });
+}
+
 async function enableLocalMicrophone(room: Room) {
   const currentState = useVoiceStore.getState();
   const identity = room.localParticipant.identity;
@@ -1329,6 +1349,13 @@ async function enableLocalMicrophone(room: Room) {
       const options = micAudioCaptureOptions(currentState, processor, overrides);
       await room.localParticipant.setMicrophoneEnabled(true, options);
       setScreenShareNotice(null);
+
+      if (!processor) {
+        // Mic enabled without processor (raw fallback).
+        // Try to attach the mic gate now that the track has an AudioContext from being published.
+        await tryAttachMicGatePostPublish(room, identity);
+      }
+
       return true;
     } catch (err) {
       lastError = err;
