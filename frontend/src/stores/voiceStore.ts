@@ -33,6 +33,7 @@ import { publicAssetUrl } from '../utils/publicAssetUrl';
 import { getDesktop } from '../utils/desktop';
 import { resolveVoiceParticipantSpeakingState } from '../utils/voiceSpeakingState';
 import { startOutgoingCallSound, stopOutgoingCallSound } from '../utils/audio/appSounds';
+import { debugVoiceSpeaking } from '../utils/audio/voiceSpeakingDebug';
 import {
   DEFAULT_MANUAL_MIC_THRESHOLD,
   DEFAULT_MIC_GATE_RELEASE_MS,
@@ -1172,6 +1173,13 @@ function broadcastLocalSpeakingState(identity: string, speaking: boolean, force 
   micLastSpeakingBroadcastAt = now;
 
   state.applySpeakingSignal(identity, speaking);
+  debugVoiceSpeaking('Broadcasting local speaking update', {
+    identity,
+    speaking,
+    force,
+    streamId: targetPayload.stream_id ?? null,
+    conversationId: targetPayload.conversation_id ?? null,
+  });
   if (targetPayload.stream_id || targetPayload.conversation_id) {
     wsSend('voice_speaking_update', { ...targetPayload, speaking });
   }

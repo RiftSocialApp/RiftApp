@@ -3,12 +3,15 @@ import rnnoiseWorkletPath from '@sapphi-red/web-noise-suppressor/rnnoiseWorklet.
 import rnnoiseWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise.wasm?url';
 import rnnoiseSimdWasmPath from '@sapphi-red/web-noise-suppressor/rnnoise_simd.wasm?url';
 
+import { debugVoiceSpeaking, isVoiceSpeakingDebugEnabled } from './voiceSpeakingDebug';
+
 const AUTO_THRESHOLD_MULTIPLIER = 1.55;
 const AUTO_THRESHOLD_OFFSET = 0.0025;
 export const AUTO_THRESHOLD_MIN = 0.006;
 export const AUTO_THRESHOLD_MAX = 0.08;
 const NOISE_FLOOR_RISE_SMOOTHING = 0.05;
 const NOISE_FLOOR_FALL_SMOOTHING = 0.012;
+const SPEAKING_DEBUG_LOG_INTERVAL_MS = 250;
 
 export const DEFAULT_MANUAL_MIC_THRESHOLD = 0.025;
 export const DEFAULT_MIC_GATE_RELEASE_MS = 30;
@@ -26,6 +29,9 @@ export interface MicNoiseGateMetrics {
   threshold: number;
   aboveThreshold: boolean;
   speaking: boolean;
+  rawLevel?: number;
+  processedLevel?: number;
+  outputLevel?: number;
 }
 
 interface MicNoiseGateCallbacks {
@@ -127,7 +133,11 @@ export class MicNoiseGateProcessor {
 
   private source: MediaStreamAudioSourceNode | null = null;
 
-  private analyser: AnalyserNode | null = null;
+  private rawAnalyser: AnalyserNode | null = null;
+
+  private processedAnalyser: AnalyserNode | null = null;
+
+  private outputAnalyser: AnalyserNode | null = null;
 
   private gain: GainNode | null = null;
 
@@ -139,7 +149,11 @@ export class MicNoiseGateProcessor {
 
   private destination: MediaStreamAudioDestinationNode | null = null;
 
-  private samples: Uint8Array<ArrayBuffer> | null = null;
+  private rawSamples: Uint8Array<ArrayBuffer> | null = null;
+
+  private processedSamples: Uint8Array<ArrayBuffer> | null = null;
+
+  private outputSamples: Uint8Array<ArrayBuffer> | null = null;
 
   private frame: ReturnType<typeof setInterval> | null = null;
 
@@ -149,7 +163,13 @@ export class MicNoiseGateProcessor {
 
   private noiseFloor = AUTO_THRESHOLD_MIN;
 
-  private lastLevel = 0;
+  private lastRawLevel = 0;
+
+  private lastProcessedLevel = 0;
+
+  private lastOutputLevel = 0;
+
+  private lastDebugLogAt = 0;
 
   constructor(settings: MicNoiseGateSettings, callbacks: MicNoiseGateCallbacks) {
     this.settings = settings;
@@ -168,7 +188,7 @@ export class MicNoiseGateProcessor {
       this.setGain(this.getOpenGain());
     }
 
-    this.emitMetrics(this.lastLevel, this.getThreshold(), this.lastLevel >= this.getThreshold());
+    this.emitMetrics(this.lastRawLevel, this.lastProcessedLevel, this.lastOutputLevel, this.getThreshold(), this.lastRawLevel >= this.getThreshold());
   }
 
   async init({ track, audioContext }: MicNoiseGateInitOptions) {
@@ -176,17 +196,30 @@ export class MicNoiseGateProcessor {
 
     const inputChannelCount = clamp(Math.round(track.getSettings().channelCount ?? 1), 1, 2);
     this.source = audioContext.createMediaStreamSource(new MediaStream([track]));
-    this.analyser = audioContext.createAnalyser();
-    this.analyser.fftSize = 256;
-    this.analyser.smoothingTimeConstant = 0.08;
+    this.rawAnalyser = audioContext.createAnalyser();
+    this.rawAnalyser.fftSize = 256;
+    this.rawAnalyser.smoothingTimeConstant = 0.08;
+    this.processedAnalyser = audioContext.createAnalyser();
+    this.processedAnalyser.fftSize = 256;
+    this.processedAnalyser.smoothingTimeConstant = 0.08;
+    this.outputAnalyser = audioContext.createAnalyser();
+    this.outputAnalyser.fftSize = 256;
+    this.outputAnalyser.smoothingTimeConstant = 0.08;
     this.gain = audioContext.createGain();
     this.destination = audioContext.createMediaStreamDestination();
-    this.samples = new Uint8Array(new ArrayBuffer(this.analyser.fftSize));
+    this.rawSamples = new Uint8Array(new ArrayBuffer(this.rawAnalyser.fftSize));
+    this.processedSamples = new Uint8Array(new ArrayBuffer(this.processedAnalyser.fftSize));
+    this.outputSamples = new Uint8Array(new ArrayBuffer(this.outputAnalyser.fftSize));
     this.noiseFloor = AUTO_THRESHOLD_MIN;
     this.holdUntil = 0;
     this.speaking = false;
+    this.lastRawLevel = 0;
+    this.lastProcessedLevel = 0;
+    this.lastOutputLevel = 0;
+    this.lastDebugLogAt = 0;
 
     let processedSource: AudioNode = this.source;
+    this.source.connect(this.rawAnalyser);
 
     if (this.settings.noiseSuppressionEnabled) {
       try {
@@ -198,13 +231,14 @@ export class MicNoiseGateProcessor {
       }
     }
 
-    processedSource.connect(this.analyser);
+    processedSource.connect(this.processedAnalyser);
     this.stereoSplitter = audioContext.createChannelSplitter(2);
     this.stereoMerger = audioContext.createChannelMerger(2);
     processedSource.connect(this.stereoSplitter);
     this.stereoSplitter.connect(this.stereoMerger, 0, 0);
     this.stereoSplitter.connect(this.stereoMerger, inputChannelCount > 1 ? 1 : 0, 1);
     this.stereoMerger.connect(this.gain);
+    this.gain.connect(this.outputAnalyser);
     this.gain.connect(this.destination);
 
     this.processedTrack = this.destination.stream.getAudioTracks()[0] ?? track;
@@ -216,7 +250,7 @@ export class MicNoiseGateProcessor {
       this.setGain(0);
     }
 
-    this.emitMetrics(0, this.getThreshold(), false);
+    this.emitMetrics(0, 0, 0, this.getThreshold(), false);
 
     try {
       if (audioContext.state === 'suspended') {
@@ -245,22 +279,24 @@ export class MicNoiseGateProcessor {
   }
 
   private tick() {
-    if (!this.analyser || !this.samples) {
+    if (!this.rawAnalyser || !this.rawSamples) {
       return;
     }
 
-    this.analyser.getByteTimeDomainData(this.samples);
-    let sumSquares = 0;
-    for (let index = 0; index < this.samples.length; index += 1) {
-      const sample = (this.samples[index] - 128) / 128;
-      sumSquares += sample * sample;
-    }
+    const rawLevel = this.measureLevel(this.rawAnalyser, this.rawSamples);
+    const processedLevel = this.processedAnalyser && this.processedSamples
+      ? this.measureLevel(this.processedAnalyser, this.processedSamples)
+      : rawLevel;
+    const outputLevel = this.outputAnalyser && this.outputSamples
+      ? this.measureLevel(this.outputAnalyser, this.outputSamples)
+      : processedLevel;
 
-    const level = Math.sqrt(sumSquares / this.samples.length);
-    this.lastLevel = level;
+    this.lastRawLevel = rawLevel;
+    this.lastProcessedLevel = processedLevel;
+    this.lastOutputLevel = outputLevel;
     const now = performance.now();
     const threshold = this.getThreshold();
-    const shouldOpen = threshold <= 0 || level >= threshold;
+    const shouldOpen = threshold <= 0 || rawLevel >= threshold;
 
     if (shouldOpen) {
       this.holdUntil = now + this.settings.releaseMs;
@@ -272,11 +308,22 @@ export class MicNoiseGateProcessor {
     }
 
     if (this.settings.automaticSensitivity && !this.speaking && threshold > 0) {
-      this.updateNoiseFloor(level);
+      this.updateNoiseFloor(rawLevel);
     }
 
     const currentThreshold = this.getThreshold();
-    this.emitMetrics(level, currentThreshold, level >= currentThreshold);
+    this.emitMetrics(rawLevel, processedLevel, outputLevel, currentThreshold, rawLevel >= currentThreshold);
+  }
+
+  private measureLevel(analyser: AnalyserNode, samples: Uint8Array<ArrayBuffer>) {
+    analyser.getByteTimeDomainData(samples);
+    let sumSquares = 0;
+    for (let index = 0; index < samples.length; index += 1) {
+      const sample = (samples[index] - 128) / 128;
+      sumSquares += sample * sample;
+    }
+
+    return Math.sqrt(sumSquares / samples.length);
   }
 
   private getThreshold() {
@@ -309,16 +356,49 @@ export class MicNoiseGateProcessor {
     }
 
     this.speaking = speaking;
+    debugVoiceSpeaking('Local speaking state changed', {
+      speaking,
+      rawLevel: this.roundLevel(this.lastRawLevel),
+      processedLevel: this.roundLevel(this.lastProcessedLevel),
+      outputLevel: this.roundLevel(this.lastOutputLevel),
+      threshold: this.roundLevel(this.getThreshold()),
+      noiseSuppressionEnabled: this.settings.noiseSuppressionEnabled,
+      inputVolume: this.settings.inputVolume,
+    });
     this.callbacks.onSpeakingStateChange(speaking);
   }
 
-  private emitMetrics(level: number, threshold: number, aboveThreshold: boolean) {
+  private emitMetrics(rawLevel: number, processedLevel: number, outputLevel: number, threshold: number, aboveThreshold: boolean) {
+    if (isVoiceSpeakingDebugEnabled()) {
+      const now = performance.now();
+      if (this.lastDebugLogAt === 0 || now - this.lastDebugLogAt >= SPEAKING_DEBUG_LOG_INTERVAL_MS) {
+        this.lastDebugLogAt = now;
+        debugVoiceSpeaking('Mic levels sampled', {
+          rawLevel: this.roundLevel(rawLevel),
+          processedLevel: this.roundLevel(processedLevel),
+          outputLevel: this.roundLevel(outputLevel),
+          threshold: this.roundLevel(threshold),
+          aboveThreshold,
+          speaking: this.speaking,
+          noiseSuppressionEnabled: this.settings.noiseSuppressionEnabled,
+          inputVolume: this.settings.inputVolume,
+        });
+      }
+    }
+
     this.callbacks.onMetricsChange?.({
-      level,
+      level: rawLevel,
       threshold,
       aboveThreshold,
       speaking: this.speaking,
+      rawLevel,
+      processedLevel,
+      outputLevel,
     });
+  }
+
+  private roundLevel(value: number) {
+    return Math.round(value * 10000) / 10000;
   }
 
   private teardownGraph() {
@@ -328,7 +408,9 @@ export class MicNoiseGateProcessor {
     }
 
     this.source?.disconnect();
-    this.analyser?.disconnect();
+    this.rawAnalyser?.disconnect();
+    this.processedAnalyser?.disconnect();
+    this.outputAnalyser?.disconnect();
     this.gain?.disconnect();
     this.stereoSplitter?.disconnect();
     this.stereoMerger?.disconnect();
@@ -342,12 +424,16 @@ export class MicNoiseGateProcessor {
     }
 
     this.source = null;
-    this.analyser = null;
+    this.rawAnalyser = null;
+    this.processedAnalyser = null;
+    this.outputAnalyser = null;
     this.gain = null;
     this.stereoSplitter = null;
     this.stereoMerger = null;
     this.destination = null;
     this.rnnoise = null;
-    this.samples = null;
+    this.rawSamples = null;
+    this.processedSamples = null;
+    this.outputSamples = null;
   }
 }

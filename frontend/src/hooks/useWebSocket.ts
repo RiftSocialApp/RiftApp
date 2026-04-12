@@ -13,6 +13,7 @@ import type { Message, Notification, Conversation, Hub, User, WSEvent, DMCallRin
 import { publicAssetUrl } from '../utils/publicAssetUrl';
 import { api } from '../api/client';
 import { playNotificationSound } from '../utils/audio/appSounds';
+import { debugVoiceSpeaking } from '../utils/audio/voiceSpeakingDebug';
 
 const HEARTBEAT_INTERVAL = 30000;
 const TYPING_EXPIRE_MS = 3000;
@@ -302,6 +303,12 @@ export function useWebSocket() {
             if (conversation_id && !canApplyVoiceConversationEvent(conversation_id)) {
               break;
             }
+            debugVoiceSpeaking('Received speaking update', {
+              userId: user_id,
+              speaking,
+              streamId: stream_id ?? null,
+              conversationId: conversation_id ?? null,
+            });
             useVoiceStore.getState().applySpeakingSignal(user_id, speaking);
             break;
           }
