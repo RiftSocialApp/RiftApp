@@ -12,12 +12,11 @@ import (
 )
 
 type ReportHandler struct {
-	svc    *service.ReportService
-	devSvc *service.DeveloperService
+	svc *service.ReportService
 }
 
-func NewReportHandler(svc *service.ReportService, devSvc *service.DeveloperService) *ReportHandler {
-	return &ReportHandler{svc: svc, devSvc: devSvc}
+func NewReportHandler(svc *service.ReportService) *ReportHandler {
+	return &ReportHandler{svc: svc}
 }
 
 func (h *ReportHandler) isAdminContext(r *http.Request) bool {

@@ -90,8 +90,8 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	}
 
 	var reportH *ReportHandler
-	if deps.ReportService != nil && deps.DeveloperService != nil {
-		reportH = NewReportHandler(deps.ReportService, deps.DeveloperService)
+	if deps.ReportService != nil {
+		reportH = NewReportHandler(deps.ReportService)
 	}
 
 	var hubModH *HubModerationHandler
