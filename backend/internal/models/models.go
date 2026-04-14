@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type User struct {
 	ID           string     `json:"id"`
@@ -85,27 +88,31 @@ type StreamPermissionOverwrite struct {
 }
 
 type Message struct {
-	ID                 string        `json:"id"`
-	StreamID           *string       `json:"stream_id,omitempty"`
-	ConversationID     *string       `json:"conversation_id,omitempty"`
-	AuthorID           string        `json:"author_id"`
-	AuthorType         string        `json:"author_type"`
-	SystemType         *string       `json:"system_type,omitempty"`
-	Content            string        `json:"content"`
-	EditedAt           *time.Time    `json:"edited_at,omitempty"`
-	CreatedAt          time.Time     `json:"created_at"`
-	ReplyToMessageID   *string       `json:"reply_to_message_id,omitempty"`
-	ForwardedMessageID *string       `json:"forwarded_message_id,omitempty"`
-	WebhookName        *string       `json:"webhook_name,omitempty"`
-	WebhookAvatarURL   *string       `json:"webhook_avatar_url,omitempty"`
-	Pinned             bool          `json:"pinned"`
-	PinnedAt           *time.Time    `json:"pinned_at,omitempty"`
-	PinnedByID         *string       `json:"pinned_by_id,omitempty"`
-	Author             *User         `json:"author,omitempty"`
-	ReplyTo            *Message      `json:"reply_to,omitempty"`
-	PinnedBy           *User         `json:"pinned_by,omitempty"`
-	Attachments        []Attachment  `json:"attachments,omitempty"`
-	Reactions          []ReactionAgg `json:"reactions,omitempty"`
+	ID                 string           `json:"id"`
+	StreamID           *string          `json:"stream_id,omitempty"`
+	ConversationID     *string          `json:"conversation_id,omitempty"`
+	AuthorID           string           `json:"author_id"`
+	AuthorType         string           `json:"author_type"`
+	SystemType         *string          `json:"system_type,omitempty"`
+	Content            string           `json:"content"`
+	Embeds             []Embed          `json:"embeds,omitempty"`
+	Components         []Component      `json:"components,omitempty"`
+	EditedAt           *time.Time       `json:"edited_at,omitempty"`
+	CreatedAt          time.Time        `json:"created_at"`
+	ReplyToMessageID   *string          `json:"reply_to_message_id,omitempty"`
+	ForwardedMessageID *string          `json:"forwarded_message_id,omitempty"`
+	WebhookName        *string          `json:"webhook_name,omitempty"`
+	WebhookAvatarURL   *string          `json:"webhook_avatar_url,omitempty"`
+	Pinned             bool             `json:"pinned"`
+	PinnedAt           *time.Time       `json:"pinned_at,omitempty"`
+	PinnedByID         *string          `json:"pinned_by_id,omitempty"`
+	Author             *User            `json:"author,omitempty"`
+	ReplyTo            *Message         `json:"reply_to,omitempty"`
+	PinnedBy           *User            `json:"pinned_by,omitempty"`
+	Attachments        []Attachment     `json:"attachments,omitempty"`
+	Reactions          []ReactionAgg    `json:"reactions,omitempty"`
+	RawEmbeds          json.RawMessage  `json:"-"`
+	RawComponents      json.RawMessage  `json:"-"`
 }
 
 const (
@@ -231,4 +238,111 @@ type HubSound struct {
 	Name      string    `json:"name"`
 	FileURL   string    `json:"file_url"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+// ─── Embeds & Components (rich messages) ────────────────────────────
+
+type EmbedFooter struct {
+	Text    string `json:"text"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
+type EmbedAuthor struct {
+	Name    string `json:"name"`
+	URL     string `json:"url,omitempty"`
+	IconURL string `json:"icon_url,omitempty"`
+}
+
+type EmbedField struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline,omitempty"`
+}
+
+type EmbedMedia struct {
+	URL    string `json:"url"`
+	Width  int    `json:"width,omitempty"`
+	Height int    `json:"height,omitempty"`
+}
+
+type Embed struct {
+	Title       string      `json:"title,omitempty"`
+	Description string      `json:"description,omitempty"`
+	URL         string      `json:"url,omitempty"`
+	Color       int         `json:"color,omitempty"`
+	Timestamp   string      `json:"timestamp,omitempty"`
+	Footer      *EmbedFooter `json:"footer,omitempty"`
+	Author      *EmbedAuthor `json:"author,omitempty"`
+	Thumbnail   *EmbedMedia  `json:"thumbnail,omitempty"`
+	Image       *EmbedMedia  `json:"image,omitempty"`
+	Fields      []EmbedField `json:"fields,omitempty"`
+}
+
+const (
+	ComponentTypeActionRow  = 1
+	ComponentTypeButton     = 2
+	ComponentTypeSelectMenu = 3
+)
+
+const (
+	ButtonStylePrimary   = 1
+	ButtonStyleSecondary = 2
+	ButtonStyleSuccess   = 3
+	ButtonStyleDanger    = 4
+	ButtonStyleLink      = 5
+)
+
+type SelectOption struct {
+	Label       string `json:"label"`
+	Value       string `json:"value"`
+	Description string `json:"description,omitempty"`
+	Default     bool   `json:"default,omitempty"`
+}
+
+type Component struct {
+	Type        int            `json:"type"`
+	Style       int            `json:"style,omitempty"`
+	Label       string         `json:"label,omitempty"`
+	CustomID    string         `json:"custom_id,omitempty"`
+	URL         string         `json:"url,omitempty"`
+	Disabled    bool           `json:"disabled,omitempty"`
+	Placeholder string         `json:"placeholder,omitempty"`
+	MinValues   *int           `json:"min_values,omitempty"`
+	MaxValues   *int           `json:"max_values,omitempty"`
+	Options     []SelectOption `json:"options,omitempty"`
+	Components  []Component    `json:"components,omitempty"`
+}
+
+func MarshalEmbeds(embeds []Embed) json.RawMessage {
+	if len(embeds) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(embeds)
+	return b
+}
+
+func UnmarshalEmbeds(data json.RawMessage) []Embed {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var embeds []Embed
+	_ = json.Unmarshal(data, &embeds)
+	return embeds
+}
+
+func MarshalComponents(components []Component) json.RawMessage {
+	if len(components) == 0 {
+		return nil
+	}
+	b, _ := json.Marshal(components)
+	return b
+}
+
+func UnmarshalComponents(data json.RawMessage) []Component {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var components []Component
+	_ = json.Unmarshal(data, &components)
+	return components
 }

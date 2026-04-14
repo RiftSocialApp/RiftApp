@@ -14,6 +14,7 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/models"
 	"github.com/riftapp-cloud/riftapp/internal/moderation"
 	"github.com/riftapp-cloud/riftapp/internal/repository"
+	"github.com/riftapp-cloud/riftapp/internal/ws"
 )
 
 type HubService struct {
@@ -26,6 +27,7 @@ type HubService struct {
 	rankRepo       *repository.RankRepo
 	discordHTTP    *http.Client
 	modSvc         *moderation.Service
+	wsHub          *ws.Hub
 }
 
 func NewHubService(
@@ -51,6 +53,21 @@ func NewHubService(
 
 func (s *HubService) SetModerationService(mod *moderation.Service) {
 	s.modSvc = mod
+}
+
+func (s *HubService) SetWSHub(hub *ws.Hub) {
+	s.wsHub = hub
+}
+
+func (s *HubService) notifyMemberEvent(op string, hubID, userID, username string) {
+	if s.wsHub == nil {
+		return
+	}
+	s.wsHub.NotifyEventListeners(op, ws.MemberJoinLeaveData{
+		HubID:    hubID,
+		UserID:   userID,
+		Username: username,
+	})
 }
 
 func (s *HubService) Create(ctx context.Context, userID, name string) (*models.Hub, error) {
@@ -154,6 +171,7 @@ func (s *HubService) Join(ctx context.Context, hubID, userID string) error {
 	if err := s.hubRepo.AddMember(ctx, hubID, userID, models.RoleMember); err != nil {
 		return apperror.Internal("failed to join", err)
 	}
+	s.notifyMemberEvent(ws.OpMemberJoin, hubID, userID, "")
 	return nil
 }
 
@@ -168,6 +186,7 @@ func (s *HubService) Leave(ctx context.Context, hubID, userID string) error {
 	if err := s.hubRepo.RemoveMember(ctx, hubID, userID); err != nil {
 		return apperror.Internal("failed to leave", err)
 	}
+	s.notifyMemberEvent(ws.OpMemberLeave, hubID, userID, "")
 	return nil
 }
 
@@ -293,6 +312,7 @@ func (s *HubService) JoinViaInvite(ctx context.Context, code, userID string) (*m
 	}
 
 	hub, _ := s.hubRepo.GetByID(ctx, invite.HubID)
+	s.notifyMemberEvent(ws.OpMemberJoin, invite.HubID, userID, "")
 	return hub, invite.CreatorID, nil
 }
 

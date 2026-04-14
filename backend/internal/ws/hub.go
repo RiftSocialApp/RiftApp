@@ -97,12 +97,31 @@ type Hub struct {
 	permChecker               StreamPermissionChecker
 	conversationCallRecorder  ConversationCallHistoryRecorder
 	missingPermCheckerOnce    sync.Once
+	eventListeners            []EventListenerFunc
+	eventListenerMu           sync.RWMutex
 }
 
 type BroadcastMessage struct {
 	StreamID string
 	Data     []byte
 	Exclude  string
+}
+
+type EventListenerFunc func(op string, data interface{})
+
+func (h *Hub) RegisterEventListener(fn EventListenerFunc) {
+	h.eventListenerMu.Lock()
+	defer h.eventListenerMu.Unlock()
+	h.eventListeners = append(h.eventListeners, fn)
+}
+
+func (h *Hub) NotifyEventListeners(op string, data interface{}) {
+	h.eventListenerMu.RLock()
+	listeners := h.eventListeners
+	h.eventListenerMu.RUnlock()
+	for _, fn := range listeners {
+		fn(op, data)
+	}
 }
 
 func NewHub(db *pgxpool.Pool) *Hub {

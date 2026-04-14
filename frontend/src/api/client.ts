@@ -564,6 +564,22 @@ class ApiClient {
   sendInteraction(data: InteractionPayload) {
     return this.request<InteractionResponse>('/interactions', { method: 'POST', body: JSON.stringify(data) });
   }
+
+  post<T = unknown>(path: string, data: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  get<T = unknown>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
+  patch<T = unknown>(path: string, data: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  del<T = void>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'DELETE' });
+  }
 }
 
 export const api = new ApiClient();

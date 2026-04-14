@@ -12,6 +12,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/admin"
 	"github.com/riftapp-cloud/riftapp/internal/auth"
+	"github.com/riftapp-cloud/riftapp/internal/botengine"
 	"github.com/riftapp-cloud/riftapp/internal/buildinfo"
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
@@ -52,6 +53,10 @@ type RouterDeps struct {
 	HubModerationRepo       *repository.HubModerationRepo
 	DeviceTokenRepo         *repository.DeviceTokenRepo
 	AppCommandRepo          *repository.AppCommandRepo
+	HubBotRepo              *repository.HubBotRepo
+	PollRepo                *repository.PollRepo
+	XPRepo                  *repository.XPRepo
+	BotEngine               *botengine.Engine
 	DB                      interface{}
 	AdminService            *admin.Service
 	SMTPService             *smtp.Service
@@ -319,6 +324,47 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		if deviceTokenH != nil {
 			r.Post("/api/device-tokens", deviceTokenH.Register)
 			r.Delete("/api/device-tokens", deviceTokenH.Unregister)
+		}
+
+		if deps.HubBotRepo != nil {
+			hubBotH := NewHubBotHandler(deps.HubBotRepo, deps.HubService, deps.HubRepo, deps.DBPool, deps.BotEngine)
+			r.Get("/api/hubs/{hubID}/bots", hubBotH.ListHubBots)
+			r.Post("/api/hubs/{hubID}/bots", hubBotH.CreateHubBot)
+			r.Patch("/api/hubs/{hubID}/bots/{botID}", hubBotH.UpdateHubBot)
+			r.Delete("/api/hubs/{hubID}/bots/{botID}", hubBotH.DeleteHubBot)
+		}
+
+		if deps.BotEngine != nil {
+			r.Post("/api/component-interactions", func(w http.ResponseWriter, r *http.Request) {
+				userID := middleware.GetUserID(r.Context())
+				var body struct {
+					MessageID string   `json:"message_id"`
+					CustomID  string   `json:"custom_id"`
+					Values    []string `json:"values"`
+				}
+				if err := readJSON(r, &body); err != nil || body.MessageID == "" || body.CustomID == "" {
+					writeError(w, http.StatusBadRequest, "message_id and custom_id required")
+					return
+				}
+				streamID := ""
+				if deps.MsgRepo != nil {
+					if msg, err := deps.MsgRepo.GetByID(r.Context(), body.MessageID); err == nil && msg.StreamID != nil {
+						streamID = *msg.StreamID
+					}
+				}
+				hubID := ""
+				if streamID != "" && deps.StreamRepo != nil {
+					if s, err := deps.StreamRepo.GetByID(r.Context(), streamID); err == nil {
+						hubID = s.HubID
+					}
+				}
+				if hubID == "" {
+					writeError(w, http.StatusNotFound, "message not found in any hub")
+					return
+				}
+				_ = deps.BotEngine.HandleComponentInteraction(r.Context(), hubID, streamID, userID, body.MessageID, body.CustomID, body.Values)
+				writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+			})
 		}
 	})
 

@@ -322,13 +322,21 @@ func (h *DiscordCompatHandler) CreateChannelMessage(w http.ResponseWriter, r *ht
 		return
 	}
 	var body struct {
-		Content string `json:"content"`
+		Content string         `json:"content"`
+		Embeds  []models.Embed `json:"embeds"`
 	}
-	if err := readJSON(r, &body); err != nil || body.Content == "" {
-		discordError(w, 50035, "content is required", http.StatusBadRequest)
+	if err := readJSON(r, &body); err != nil {
+		discordError(w, 50035, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	msg, err := h.msgSvc.Create(r.Context(), botUserID, channelID, service.CreateMessageInput{Content: body.Content})
+	if body.Content == "" && len(body.Embeds) == 0 {
+		discordError(w, 50035, "content or embeds is required", http.StatusBadRequest)
+		return
+	}
+	msg, err := h.msgSvc.Create(r.Context(), botUserID, channelID, service.CreateMessageInput{
+		Content: body.Content,
+		Embeds:  body.Embeds,
+	})
 	if err != nil {
 		switch apperror.HTTPCode(err) {
 		case http.StatusForbidden:
@@ -514,6 +522,12 @@ func toDiscordRole(rank *models.Rank) map[string]interface{} {
 }
 
 func toDiscordMessage(msg *models.Message) map[string]interface{} {
+	embedsOut := []interface{}{}
+	if len(msg.Embeds) > 0 {
+		for _, e := range msg.Embeds {
+			embedsOut = append(embedsOut, e)
+		}
+	}
 	result := map[string]interface{}{
 		"id":               msg.ID,
 		"channel_id":       msg.StreamID,
@@ -522,7 +536,7 @@ func toDiscordMessage(msg *models.Message) map[string]interface{} {
 		"tts":              false,
 		"pinned":           msg.Pinned,
 		"type":             0,
-		"embeds":           []interface{}{},
+		"embeds":           embedsOut,
 		"attachments":      []interface{}{},
 		"mentions":         []interface{}{},
 		"mention_roles":    []string{},
