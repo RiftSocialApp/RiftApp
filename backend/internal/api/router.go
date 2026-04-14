@@ -351,6 +351,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			deps.HubService,
 			deps.StreamService,
 			deps.RankRepo,
+			deps.WSHub,
 			deps.Config.AllowedOrigins,
 		)
 

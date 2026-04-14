@@ -208,6 +208,10 @@ func (h *Hub) Run() {
 }
 
 func (h *Hub) setPresence(userID string, status int) {
+	h.SetPresence(userID, status)
+}
+
+func (h *Hub) SetPresence(userID string, status int) {
 	if h.db == nil {
 		return
 	}

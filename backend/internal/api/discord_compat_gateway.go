@@ -52,7 +52,12 @@ type DiscordGatewayHandler struct {
 	hubSvc    *service.HubService
 	streamSvc *service.StreamService
 	rankRepo  *repository.RankRepo
+	wsHub     presenceSetter
 	upgrader  websocket.Upgrader
+}
+
+type presenceSetter interface {
+	SetPresence(userID string, status int)
 }
 
 func NewDiscordGatewayHandler(
@@ -61,6 +66,7 @@ func NewDiscordGatewayHandler(
 	hubSvc *service.HubService,
 	streamSvc *service.StreamService,
 	rankRepo *repository.RankRepo,
+	wsHub presenceSetter,
 	origins []string,
 ) *DiscordGatewayHandler {
 	originSet := make(map[string]struct{}, len(origins))
@@ -73,6 +79,7 @@ func NewDiscordGatewayHandler(
 		hubSvc:    hubSvc,
 		streamSvc: streamSvc,
 		rankRepo:  rankRepo,
+		wsHub:     wsHub,
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
 				if len(originSet) == 0 {
@@ -96,6 +103,13 @@ func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer conn.Close()
+
+	var identifiedBotUserID string
+	defer func() {
+		if identifiedBotUserID != "" && h.wsHub != nil {
+			h.wsHub.SetPresence(identifiedBotUserID, 0)
+		}
+	}()
 
 	sessionID := uuid.New().String()
 	var seq int64
@@ -185,6 +199,11 @@ func (h *DiscordGatewayHandler) Handle(w http.ResponseWriter, r *http.Request) {
 					"flags": 0,
 				},
 			}, "READY")
+
+			identifiedBotUserID = bt.BotUserID
+			if h.wsHub != nil {
+				h.wsHub.SetPresence(bt.BotUserID, 1)
+			}
 
 			go h.sendGuildCreates(ctx, bt.BotUserID, send)
 
