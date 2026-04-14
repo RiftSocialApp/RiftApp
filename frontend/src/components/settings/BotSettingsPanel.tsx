@@ -12,6 +12,13 @@ interface HubBot {
   updated_at: string;
 }
 
+interface MusicConfig {
+  default_volume: number;
+  max_queue_size: number;
+  spotify_client_id: string;
+  spotify_client_secret: string;
+}
+
 const TEMPLATES = [
   {
     type: 'moderation',
@@ -30,9 +37,10 @@ const TEMPLATES = [
   {
     type: 'music',
     name: 'Music Bot',
-    description: 'Play music in voice channels with queue management, search, and now-playing embeds.',
+    description: 'Play music from YouTube, SoundCloud, and Spotify in voice channels. Supports playlists, queue, and controls.',
     icon: '🎵',
     color: 'from-purple-500 to-pink-500',
+    hasConfig: true,
   },
   {
     type: 'utility',
@@ -54,6 +62,9 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
   const [bots, setBots] = useState<HubBot[]>([]);
   const [loading, setLoading] = useState(true);
   const [toggling, setToggling] = useState<string | null>(null);
+  const [expandedConfig, setExpandedConfig] = useState<string | null>(null);
+  const [configDraft, setConfigDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
 
   const loadBots = useCallback(async () => {
     try {
@@ -106,6 +117,39 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
     }
   };
 
+  const openConfig = (bot: HubBot) => {
+    if (expandedConfig === bot.template_type) {
+      setExpandedConfig(null);
+      return;
+    }
+    setExpandedConfig(bot.template_type);
+
+    const cfg = (bot.config ?? {}) as Partial<MusicConfig>;
+    setConfigDraft({
+      spotify_client_id: (cfg.spotify_client_id as string) ?? '',
+      spotify_client_secret: (cfg.spotify_client_secret as string) ?? '',
+    });
+  };
+
+  const saveConfig = async (bot: HubBot) => {
+    setSaving(true);
+    try {
+      const existing = (bot.config ?? {}) as Record<string, unknown>;
+      const merged = {
+        ...existing,
+        spotify_client_id: configDraft.spotify_client_id?.trim() || '',
+        spotify_client_secret: configDraft.spotify_client_secret?.trim() || '',
+      };
+      await api.patch(`/hubs/${hubId}/bots/${bot.id}`, { config: merged });
+      await loadBots();
+      setExpandedConfig(null);
+    } catch {
+      // failed
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 flex items-center justify-center">
@@ -130,6 +174,7 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
           const bot = enabledMap.get(tmpl.type);
           const isEnabled = bot?.enabled ?? false;
           const isToggling = toggling === tmpl.type;
+          const isConfigOpen = expandedConfig === tmpl.type;
 
           return (
             <div
@@ -158,6 +203,15 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
                 <div className="flex items-center gap-2 shrink-0">
                   {bot ? (
                     <>
+                      {tmpl.hasConfig && isEnabled && (
+                        <button
+                          type="button"
+                          onClick={() => openConfig(bot)}
+                          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-riftapp-content-elevated hover:bg-riftapp-border text-riftapp-text-dim transition-colors"
+                        >
+                          ⚙️ Config
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={isToggling}
@@ -191,6 +245,79 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
                   )}
                 </div>
               </div>
+
+              {/* Music Bot Config Panel */}
+              {bot && isConfigOpen && tmpl.type === 'music' && (
+                <div className="px-4 pb-4 border-t border-riftapp-border/20 mt-2 pt-4 space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-riftapp-text mb-3">Spotify Integration</h4>
+                    <p className="text-xs text-riftapp-text-dim mb-3">
+                      To play Spotify tracks, albums, and playlists, provide your Spotify API credentials.
+                      Get them free at{' '}
+                      <a
+                        href="https://developer.spotify.com/dashboard"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-riftapp-accent hover:underline"
+                      >
+                        developer.spotify.com/dashboard
+                      </a>
+                      . YouTube and SoundCloud work without any credentials.
+                    </p>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-riftapp-text-dim mb-1">
+                          Spotify Client ID
+                        </label>
+                        <input
+                          type="text"
+                          value={configDraft.spotify_client_id ?? ''}
+                          onChange={(e) =>
+                            setConfigDraft((d) => ({ ...d, spotify_client_id: e.target.value }))
+                          }
+                          placeholder="e.g. a1b2c3d4e5f6..."
+                          className="w-full px-3 py-2 rounded-lg bg-riftapp-content-elevated border border-riftapp-border/40 text-sm text-riftapp-text placeholder:text-riftapp-text-dim/50 focus:outline-none focus:border-riftapp-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-riftapp-text-dim mb-1">
+                          Spotify Client Secret
+                        </label>
+                        <input
+                          type="password"
+                          value={configDraft.spotify_client_secret ?? ''}
+                          onChange={(e) =>
+                            setConfigDraft((d) => ({ ...d, spotify_client_secret: e.target.value }))
+                          }
+                          placeholder="e.g. x9y8z7w6..."
+                          className="w-full px-3 py-2 rounded-lg bg-riftapp-content-elevated border border-riftapp-border/40 text-sm text-riftapp-text placeholder:text-riftapp-text-dim/50 focus:outline-none focus:border-riftapp-accent"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={() => void saveConfig(bot)}
+                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-riftapp-accent hover:bg-riftapp-accent-hover text-white transition-colors disabled:opacity-50"
+                    >
+                      {saving ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedConfig(null)}
+                      className="px-4 py-1.5 rounded-lg text-sm font-medium bg-riftapp-content-elevated hover:bg-riftapp-border text-riftapp-text-dim transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    {configDraft.spotify_client_id && (
+                      <span className="text-xs text-green-400 ml-2">✓ Spotify configured</span>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           );
         })}
@@ -198,7 +325,8 @@ export default function BotSettingsPanel({ hubId }: { hubId: string }) {
 
       <div className="pt-4 border-t border-riftapp-border/20">
         <p className="text-xs text-riftapp-text-dim">
-          Bot templates run on Rift's infrastructure. More templates and a custom bot SDK are coming soon.
+          Bot templates run on Rift's infrastructure. YouTube and SoundCloud work out of the box.
+          Spotify requires a free API key from the hub owner. More templates and a custom bot SDK are coming soon.
         </p>
       </div>
     </div>

@@ -14,7 +14,9 @@ RUN CGO_ENABLED=0 go build \
   -o /riftapp ./cmd/riftapp
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata curl && \
+RUN apk add --no-cache ca-certificates tzdata curl ffmpeg python3 && \
+    curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp && \
+    chmod +x /usr/local/bin/yt-dlp && \
     adduser -D -H -u 65532 appuser
 COPY --from=builder --chown=65532:65532 /riftapp /riftapp
 USER appuser

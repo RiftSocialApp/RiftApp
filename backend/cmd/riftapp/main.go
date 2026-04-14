@@ -129,19 +129,22 @@ func main() {
 	pollRepo := repository.NewPollRepo(db)
 	xpRepo := repository.NewXPRepo(db)
 	botEngine := botengine.NewEngine(botengine.EngineDeps{
-		HubBotRepo: hubBotRepo,
-		HubRepo:    hubRepo,
-		RankRepo:   rankRepo,
-		PollRepo:   pollRepo,
-		XPRepo:     xpRepo,
-		ModRepo:    hubModRepo,
-		MsgSvc:     msgSvc,
-		HubSvc:     hubSvc,
-		ModSvc:     modSvc,
+		HubBotRepo:    hubBotRepo,
+		HubRepo:       hubRepo,
+		RankRepo:      rankRepo,
+		PollRepo:      pollRepo,
+		XPRepo:        xpRepo,
+		ModRepo:       hubModRepo,
+		MsgSvc:        msgSvc,
+		HubSvc:        hubSvc,
+		ModSvc:        modSvc,
+		LiveKitURL:    cfg.LiveKitURL,
+		LiveKitKey:    cfg.LiveKitKey,
+		LiveKitSecret: cfg.LiveKitSecret,
 	})
 	botEngine.RegisterTemplate(botengine.NewModerationTemplate())
 	botEngine.RegisterTemplate(botengine.NewWelcomeTemplate())
-	botEngine.RegisterTemplate(botengine.NewMusicTemplate())
+	botEngine.RegisterTemplate(botengine.NewMusicTemplate(cfg.LiveKitURL, cfg.LiveKitKey, cfg.LiveKitSecret))
 	botEngine.RegisterTemplate(botengine.NewUtilityTemplate())
 	botEngine.RegisterTemplate(botengine.NewLevelingTemplate())
 

@@ -13,9 +13,9 @@ type MusicTemplate struct {
 	tmpl *music.Template
 }
 
-func NewMusicTemplate() *MusicTemplate {
+func NewMusicTemplate(lkURL, lkKey, lkSecret string) *MusicTemplate {
 	return &MusicTemplate{
-		tmpl: music.NewTemplate(),
+		tmpl: music.NewTemplate(lkURL, lkKey, lkSecret),
 	}
 }
 
@@ -47,6 +47,7 @@ func (t *MusicTemplate) OnEvent(ctx context.Context, hctx *HubContext, event Eve
 		if !found {
 			return nil
 		}
+		t.tmpl.SetHubConfig(hctx.HubID, hctx.Config)
 		return t.tmpl.HandleCommand(ctx, &musicHubContextAdapter{hctx: hctx}, hctx.HubID, music.SlashCommandData{
 			CommandName: cmd.CommandName,
 			Options:     cmd.Options,
@@ -61,6 +62,7 @@ func (t *MusicTemplate) OnEvent(ctx context.Context, hctx *HubContext, event Eve
 		if !strings.HasPrefix(click.CustomID, "music:") {
 			return nil
 		}
+		t.tmpl.SetHubConfig(hctx.HubID, hctx.Config)
 		cmdName := strings.TrimPrefix(click.CustomID, "music:")
 		return t.tmpl.HandleCommand(ctx, &musicHubContextAdapter{hctx: hctx}, hctx.HubID, music.SlashCommandData{
 			CommandName: cmdName,

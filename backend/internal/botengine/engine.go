@@ -24,6 +24,10 @@ type EngineDeps struct {
 	MsgSvc     *service.MessageService
 	HubSvc     *service.HubService
 	ModSvc     *moderation.Service
+
+	LiveKitURL    string
+	LiveKitKey    string
+	LiveKitSecret string
 }
 
 type Engine struct {
