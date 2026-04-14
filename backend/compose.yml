@@ -11,7 +11,7 @@ services:
         target: /etc/livekit.yaml
 
   backend:
-    image: ghcr.io/skila1/riftapp/backend:latest
+    image: ghcr.io/riftsocialapp/riftapp/backend:latest
     restart: unless-stopped
     ports:
       - "8080:8080"
