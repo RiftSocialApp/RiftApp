@@ -83,8 +83,10 @@ describe('frontendUpdateStore', () => {
 
   it('reloads the desktop shell immediately when a desktop bridge is available', async () => {
     useFrontendUpdateStore.setState({ updateReady: true });
+    reloadFrontendIgnoringCache.mockResolvedValueOnce(true);
 
     useFrontendUpdateStore.getState().applyUpdate();
+    await Promise.resolve();
 
     expect(useFrontendUpdateStore.getState().applyingUpdate).toBe(true);
     expect(reloadFrontendIgnoringCache).toHaveBeenCalledTimes(1);
