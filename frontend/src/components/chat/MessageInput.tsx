@@ -100,8 +100,15 @@ export default function MessageInput({
   const [activeSlashCommand, setActiveSlashCommand] = useState<SlashCommand | null>(null);
   const [slashOptionValues, setSlashOptionValues] = useState<Record<string, string>>({});
   const [activeOptionIndex, setActiveOptionIndex] = useState(0);
-  const hubCommands = useCommandStore((s) => (activeHubId ? s.getCommandsForHub(activeHubId) : []));
+  const loadCommandsForHub = useCommandStore((s) => s.loadCommandsForHub);
+  const hubCommands = useCommandStore((s) => (activeHubId ? s.hubCommands[activeHubId] ?? [] : []));
   const activeStreamId = useStreamStore((s) => s.activeStreamId);
+
+  useEffect(() => {
+    if (activeHubId && !isDMMode) {
+      void loadCommandsForHub(activeHubId);
+    }
+  }, [activeHubId, isDMMode, loadCommandsForHub]);
 
   const memberList = useMemo<User[]>(
     () => Object.values(hubMembers),

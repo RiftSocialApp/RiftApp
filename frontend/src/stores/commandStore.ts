@@ -6,7 +6,6 @@ interface CommandState {
   hubCommands: Record<string, SlashCommand[]>;
   loading: Record<string, boolean>;
   loadCommandsForHub: (hubId: string) => Promise<SlashCommand[]>;
-  getCommandsForHub: (hubId: string) => SlashCommand[];
   invalidateHub: (hubId: string) => void;
   clear: () => void;
 }
@@ -16,8 +15,7 @@ export const useCommandStore = create<CommandState>((set, get) => ({
   loading: {},
 
   loadCommandsForHub: async (hubId: string) => {
-    const cached = get().hubCommands[hubId];
-    if (cached) return cached;
+    if (hubId in get().hubCommands) return get().hubCommands[hubId];
     if (get().loading[hubId]) return [];
 
     set((s) => ({ loading: { ...s.loading, [hubId]: true } }));
@@ -29,16 +27,12 @@ export const useCommandStore = create<CommandState>((set, get) => ({
       }));
       return commands;
     } catch {
-      set((s) => ({ loading: { ...s.loading, [hubId]: false } }));
+      set((s) => ({
+        hubCommands: { ...s.hubCommands, [hubId]: [] },
+        loading: { ...s.loading, [hubId]: false },
+      }));
       return [];
     }
-  },
-
-  getCommandsForHub: (hubId: string) => {
-    const cached = get().hubCommands[hubId];
-    if (cached) return cached;
-    void get().loadCommandsForHub(hubId);
-    return [];
   },
 
   invalidateHub: (hubId: string) => {
