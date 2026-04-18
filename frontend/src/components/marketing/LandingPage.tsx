@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import MarketingLogo from './MarketingLogo';
 
-const DOWNLOAD_URL = 'https://github.com/Skila1/RiftApp/releases/latest';
+const DOWNLOAD_URL = 'https://github.com/RiftSocialApp/RiftApp/releases/latest';
 
 export default function LandingPage() {
   return (

@@ -65,10 +65,12 @@ func (s *MessageService) SetModerationService(mod *moderation.Service) {
 }
 
 type CreateMessageInput struct {
-	Content            string   `json:"content"`
-	AttachmentIDs      []string `json:"attachment_ids"`
-	ReplyToMessageID   *string  `json:"reply_to_message_id"`
-	ForwardedMessageID *string  `json:"-"`
+	Content            string            `json:"content"`
+	AttachmentIDs      []string          `json:"attachment_ids"`
+	ReplyToMessageID   *string           `json:"reply_to_message_id"`
+	ForwardedMessageID *string           `json:"-"`
+	Embeds             []models.Embed     `json:"embeds"`
+	Components         []models.Component `json:"components"`
 }
 
 type SearchMessagesInput struct {
@@ -123,14 +125,17 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 		return nil, apperror.Forbidden("you do not have permission to send messages")
 	}
 
-	if input.Content == "" && len(input.AttachmentIDs) == 0 {
-		return nil, apperror.BadRequest("content or attachments required")
+	if input.Content == "" && len(input.AttachmentIDs) == 0 && len(input.Embeds) == 0 {
+		return nil, apperror.BadRequest("content, attachments, or embeds required")
 	}
 	if len(input.Content) > 4000 {
 		return nil, apperror.BadRequest("content too long (max 4000)")
 	}
 	if len(input.AttachmentIDs) > maxAttachmentsPerMessage {
 		return nil, apperror.BadRequest(fmt.Sprintf("too many attachments (max %d)", maxAttachmentsPerMessage))
+	}
+	if len(input.Embeds) > 10 {
+		return nil, apperror.BadRequest("too many embeds (max 10)")
 	}
 	replyToMessageID := normalizeOptionalMessageID(input.ReplyToMessageID)
 	if err := s.validateStreamReplyTarget(ctx, streamID, replyToMessageID); err != nil {
@@ -148,6 +153,8 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 		StreamID:           &streamID,
 		AuthorID:           userID,
 		Content:            input.Content,
+		Embeds:             input.Embeds,
+		Components:         input.Components,
 		ReplyToMessageID:   replyToMessageID,
 		ForwardedMessageID: normalizeOptionalMessageID(input.ForwardedMessageID),
 		CreatedAt:          time.Now(),
@@ -169,6 +176,14 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 	evt := ws.NewEvent(ws.OpMessageCreate, msg)
 	s.hub.BroadcastToStream(streamID, evt, "")
 
+	s.hub.NotifyEventListeners(ws.OpMessageCreate, map[string]interface{}{
+		"message_id": msg.ID,
+		"author_id":  msg.AuthorID,
+		"content":    msg.Content,
+		"stream_id":  streamID,
+		"hub_id":     hubID,
+	})
+
 	if s.notifSvc != nil {
 		notifCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		go func() {
@@ -177,6 +192,28 @@ func (s *MessageService) Create(ctx context.Context, userID, streamID string, in
 		}()
 	}
 
+	return msg, nil
+}
+
+func (s *MessageService) CreateBotMessage(ctx context.Context, streamID, content string, embeds []models.Embed, components []models.Component) (*models.Message, error) {
+	msg := &models.Message{
+		ID:        uuid.New().String(),
+		StreamID:  &streamID,
+		AuthorID:  "system",
+		Content:   content,
+		Embeds:    embeds,
+		Components: components,
+		CreatedAt: time.Now(),
+	}
+	if err := s.msgRepo.Create(ctx, msg); err != nil {
+		return nil, apperror.Internal("failed to create bot message", err)
+	}
+	msg, err := s.loadDetailedMessage(ctx, msg.ID)
+	if err != nil {
+		return nil, apperror.Internal("failed to load bot message", err)
+	}
+	evt := ws.NewEvent(ws.OpMessageCreate, msg)
+	s.hub.BroadcastToStream(streamID, evt, "")
 	return msg, nil
 }
 

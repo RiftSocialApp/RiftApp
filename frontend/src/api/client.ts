@@ -1,4 +1,4 @@
-import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType, HubEmoji, HubSticker, HubSound, HubRole, HubPermissions, MessageSearchFilters, StreamNotificationSettings, DiscordTemplatePreview, StreamPermissionOverwrite, Report, HubAutoModSettings, HubBan, DMCallMode, DMConversationCallState } from '../types';
+import type { AuthResponse, Hub, HubInvite, HubNotificationSettings, Stream, Category, Message, User, Attachment, Notification, Conversation, Friendship, Block, RelationshipType, HubEmoji, HubSticker, HubSound, HubRole, HubPermissions, MessageSearchFilters, StreamNotificationSettings, DiscordTemplatePreview, StreamPermissionOverwrite, Report, HubAutoModSettings, HubBan, DMCallMode, DMConversationCallState, SlashCommand, InteractionPayload, InteractionResponse } from '../types';
 
 const BASE = import.meta.env.VITE_API_URL || '/api';
 
@@ -554,6 +554,31 @@ class ApiClient {
 
   unbanMember(hubId: string, userId: string) {
     return this.requestRaw<{ status: string }>(`/hubs/${hubId}/bans/${userId}`, { method: 'DELETE' });
+  }
+
+  // Slash Commands
+  getHubCommands(hubId: string) {
+    return this.request<SlashCommand[]>(`/hubs/${hubId}/commands`);
+  }
+
+  sendInteraction(data: InteractionPayload) {
+    return this.request<InteractionResponse>('/interactions', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  post<T = unknown>(path: string, data: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  get<T = unknown>(path: string): Promise<T> {
+    return this.request<T>(path);
+  }
+
+  patch<T = unknown>(path: string, data: unknown): Promise<T> {
+    return this.request<T>(path, { method: 'PATCH', body: JSON.stringify(data) });
+  }
+
+  del<T = void>(path: string): Promise<T> {
+    return this.request<T>(path, { method: 'DELETE' });
   }
 }
 

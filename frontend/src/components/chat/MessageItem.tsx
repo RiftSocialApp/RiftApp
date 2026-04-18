@@ -16,6 +16,8 @@ import DeleteMessageModal from '../modals/DeleteMessageModal';
 import ForwardMessageModal from '../modals/ForwardMessageModal';
 import ModalCloseButton from '../shared/ModalCloseButton';
 import BotBadge from '../shared/BotBadge';
+import MessageEmbedCard from './MessageEmbedCard';
+import MessageComponents from './MessageComponents';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { formatShortDate, formatShortTime, isSameCalendarDay } from '../../utils/dateTime';
 import { hasPermission, PermManageMessages } from '../../utils/permissions';
@@ -628,6 +630,16 @@ const MessageItem = memo(function MessageItem({
           <>
             <div className="text-[15px] leading-[1.375rem] text-riftapp-text/[0.90]">{renderedContent}</div>
             {embedUrls.length > 0 && <LinkEmbeds urls={embedUrls} compact={isPinnedPreview} />}
+            {message.embeds && message.embeds.length > 0 && (
+              <div className="space-y-1">
+                {message.embeds.map((embed, i) => (
+                  <MessageEmbedCard key={i} embed={embed} />
+                ))}
+              </div>
+            )}
+            {message.components && message.components.length > 0 && (
+              <MessageComponents components={message.components} messageId={message.id} />
+            )}
           </>
         )}
         <Attachments message={message} compact={isPinnedPreview} />

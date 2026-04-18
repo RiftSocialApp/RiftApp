@@ -122,6 +122,8 @@ export interface Message {
     | 'conversation_call_ended'
     | 'conversation_video_call_ended';
   content: string;
+  embeds?: MessageEmbed[];
+  components?: MessageComponent[];
   edited_at?: string;
   created_at: string;
   reply_to_message_id?: string;
@@ -136,6 +138,63 @@ export interface Message {
   pinned_by?: User;
   attachments?: Attachment[];
   reactions?: ReactionAgg[];
+}
+
+export interface EmbedFooter {
+  text: string;
+  icon_url?: string;
+}
+
+export interface EmbedAuthor {
+  name: string;
+  url?: string;
+  icon_url?: string;
+}
+
+export interface EmbedField {
+  name: string;
+  value: string;
+  inline?: boolean;
+}
+
+export interface EmbedMedia {
+  url: string;
+  width?: number;
+  height?: number;
+}
+
+export interface MessageEmbed {
+  title?: string;
+  description?: string;
+  url?: string;
+  color?: number;
+  timestamp?: string;
+  footer?: EmbedFooter;
+  author?: EmbedAuthor;
+  thumbnail?: EmbedMedia;
+  image?: EmbedMedia;
+  fields?: EmbedField[];
+}
+
+export interface SelectOption {
+  label: string;
+  value: string;
+  description?: string;
+  default?: boolean;
+}
+
+export interface MessageComponent {
+  type: number; // 1=ActionRow, 2=Button, 3=SelectMenu
+  style?: number; // 1=Primary, 2=Secondary, 3=Success, 4=Danger, 5=Link
+  label?: string;
+  custom_id?: string;
+  url?: string;
+  disabled?: boolean;
+  placeholder?: string;
+  min_values?: number;
+  max_values?: number;
+  options?: SelectOption[];
+  components?: MessageComponent[];
 }
 
 export type NotificationLevel = 'all' | 'mentions_only' | 'nothing';
@@ -445,4 +504,48 @@ export interface HubBan {
   username?: string;
   display_name?: string;
   avatar_url?: string;
+}
+
+export interface SlashCommandOptionChoice {
+  name: string;
+  value: string;
+}
+
+export interface SlashCommandOption {
+  name: string;
+  description: string;
+  type: number; // 3=string, 4=integer, 5=boolean, 6=user, 7=channel, 8=role, 10=number
+  required: boolean;
+  choices?: SlashCommandOptionChoice[];
+}
+
+export interface SlashCommand {
+  id: string;
+  application_id: string;
+  guild_id?: string;
+  name: string;
+  description: string;
+  options: SlashCommandOption[];
+  type: number;
+  created_at: string;
+  updated_at: string;
+  bot?: User;
+}
+
+export interface InteractionPayload {
+  command_id: string;
+  hub_id: string;
+  stream_id: string;
+  options: Record<string, string>;
+}
+
+export interface InteractionResponse {
+  id: string;
+  type: number;
+  data?: {
+    type?: number;
+    data?: {
+      content?: string;
+    };
+  };
 }

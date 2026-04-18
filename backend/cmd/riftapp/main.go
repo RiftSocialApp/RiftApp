@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"log"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/riftapp-cloud/riftapp/internal/admin"
 	"github.com/riftapp-cloud/riftapp/internal/api"
 	"github.com/riftapp-cloud/riftapp/internal/auth"
+	"github.com/riftapp-cloud/riftapp/internal/botengine"
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/database"
 	"github.com/riftapp-cloud/riftapp/internal/moderation"
@@ -76,6 +78,7 @@ func main() {
 	customRepo := repository.NewHubCustomizationRepo(db)
 	rankRepo := repository.NewRankRepo(db)
 	hubSvc := service.NewHubService(hubRepo, streamRepo, streamPermRepo, inviteRepo, notifRepo, hubNotifRepo, rankRepo)
+	hubSvc.SetWSHub(wsHub)
 	customSvc := service.NewHubCustomizationService(customRepo, hubRepo, rankRepo)
 	streamSvc := service.NewStreamService(streamRepo, streamPermRepo, hubSvc, msgRepo, notifRepo, streamNotifRepo)
 	catSvc := service.NewCategoryService(catRepo, hubSvc)
@@ -117,6 +120,33 @@ func main() {
 
 	// Device token repo for push notifications
 	deviceTokenRepo := repository.NewDeviceTokenRepo(db)
+
+	// Application command repo for slash commands
+	appCommandRepo := repository.NewAppCommandRepo(db)
+
+	// Bot engine and repos
+	hubBotRepo := repository.NewHubBotRepo(db)
+	pollRepo := repository.NewPollRepo(db)
+	xpRepo := repository.NewXPRepo(db)
+	botEngine := botengine.NewEngine(botengine.EngineDeps{
+		HubBotRepo:    hubBotRepo,
+		HubRepo:       hubRepo,
+		RankRepo:      rankRepo,
+		PollRepo:      pollRepo,
+		XPRepo:        xpRepo,
+		ModRepo:       hubModRepo,
+		MsgSvc:        msgSvc,
+		HubSvc:        hubSvc,
+		ModSvc:        modSvc,
+		LiveKitURL:    cfg.LiveKitURL,
+		LiveKitKey:    cfg.LiveKitKey,
+		LiveKitSecret: cfg.LiveKitSecret,
+	})
+	botEngine.RegisterTemplate(botengine.NewModerationTemplate())
+	botEngine.RegisterTemplate(botengine.NewWelcomeTemplate())
+	botEngine.RegisterTemplate(botengine.NewMusicTemplate(cfg.LiveKitURL, cfg.LiveKitKey, cfg.LiveKitSecret))
+	botEngine.RegisterTemplate(botengine.NewUtilityTemplate())
+	botEngine.RegisterTemplate(botengine.NewLevelingTemplate())
 
 	// Push notification service (Firebase Cloud Messaging)
 	pushSvc, err := push.NewService(deviceTokenRepo)
@@ -189,10 +219,75 @@ func main() {
 		ReportService:           reportSvc,
 		HubModerationRepo:       hubModRepo,
 		DeviceTokenRepo:         deviceTokenRepo,
+		AppCommandRepo:          appCommandRepo,
+		HubBotRepo:              hubBotRepo,
+		PollRepo:                pollRepo,
+		XPRepo:                  xpRepo,
+		BotEngine:               botEngine,
 		DB:                      db,
 		AdminService:            adminSvc,
 		SMTPService:             smtpSvc,
 		DBPool:                  db,
+	})
+
+	// Start bot engine and register event listener
+	botEngineCtx, botEngineCancel := context.WithCancel(context.Background())
+	defer botEngineCancel()
+	botEngine.Start(botEngineCtx)
+
+	wsHub.RegisterEventListener(func(op string, data interface{}) {
+		switch op {
+		case ws.OpMessageCreate:
+			if d, ok := data.(map[string]interface{}); ok {
+				hubID, _ := d["hub_id"].(string)
+				streamID, _ := d["stream_id"].(string)
+				authorID, _ := d["author_id"].(string)
+				msgID, _ := d["message_id"].(string)
+				content, _ := d["content"].(string)
+				if hubID == "" {
+					return
+				}
+				raw, _ := json.Marshal(botengine.MessageEventData{
+					MessageID: msgID,
+					AuthorID:  authorID,
+					Content:   content,
+					StreamID:  streamID,
+				})
+				botEngine.HandleEvent(context.Background(), botengine.Event{
+					Type:     botengine.EventMessageCreate,
+					HubID:    hubID,
+					StreamID: streamID,
+					UserID:   authorID,
+					Data:     raw,
+				})
+			}
+		case ws.OpMemberJoin:
+			if d, ok := data.(ws.MemberJoinLeaveData); ok {
+				raw, _ := json.Marshal(botengine.MemberEventData{
+					UserID:   d.UserID,
+					Username: d.Username,
+				})
+				botEngine.HandleEvent(context.Background(), botengine.Event{
+					Type:   botengine.EventMemberJoin,
+					HubID:  d.HubID,
+					UserID: d.UserID,
+					Data:   raw,
+				})
+			}
+		case ws.OpMemberLeave:
+			if d, ok := data.(ws.MemberJoinLeaveData); ok {
+				raw, _ := json.Marshal(botengine.MemberEventData{
+					UserID:   d.UserID,
+					Username: d.Username,
+				})
+				botEngine.HandleEvent(context.Background(), botengine.Event{
+					Type:   botengine.EventMemberLeave,
+					HubID:  d.HubID,
+					UserID: d.UserID,
+					Data:   raw,
+				})
+			}
+		}
 	})
 
 	srv := &http.Server{

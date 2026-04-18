@@ -17,7 +17,7 @@ type MessageRepo struct {
 	db *pgxpool.Pool
 }
 
-const detailedMessageSelect = `m.id, m.stream_id, m.conversation_id, m.author_id, m.system_type, m.content, m.edited_at, m.created_at,
+const detailedMessageSelect = `m.id, m.stream_id, m.conversation_id, m.author_id, m.system_type, m.content, m.embeds, m.components, m.edited_at, m.created_at,
 		m.reply_to_message_id, m.forwarded_message_id, m.webhook_name, m.webhook_avatar_url,
 		m.pinned_at, m.pinned_by_id,
 		author.id, author.username, author.display_name, author.avatar_url, author.is_bot,
@@ -70,6 +70,8 @@ func scanDetailedMessage(scanner messageScanner) (models.Message, error) {
 		&msg.AuthorID,
 		&msg.SystemType,
 		&msg.Content,
+		&msg.RawEmbeds,
+		&msg.RawComponents,
 		&msg.EditedAt,
 		&msg.CreatedAt,
 		&msg.ReplyToMessageID,
@@ -115,14 +117,19 @@ func scanDetailedMessage(scanner messageScanner) (models.Message, error) {
 		msg.PinnedBy = pinner
 	}
 
+	msg.Embeds = models.UnmarshalEmbeds(msg.RawEmbeds)
+	msg.Components = models.UnmarshalComponents(msg.RawComponents)
+
 	return msg, nil
 }
 
 func (r *MessageRepo) Create(ctx context.Context, msg *models.Message) error {
 	_, err := r.db.Exec(ctx,
-		`INSERT INTO messages (id, stream_id, conversation_id, author_id, system_type, content, reply_to_message_id, forwarded_message_id, webhook_name, webhook_avatar_url, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-		msg.ID, msg.StreamID, msg.ConversationID, msg.AuthorID, msg.SystemType, msg.Content, msg.ReplyToMessageID, msg.ForwardedMessageID, msg.WebhookName, msg.WebhookAvatarURL, msg.CreatedAt)
+		`INSERT INTO messages (id, stream_id, conversation_id, author_id, system_type, content, embeds, components, reply_to_message_id, forwarded_message_id, webhook_name, webhook_avatar_url, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		msg.ID, msg.StreamID, msg.ConversationID, msg.AuthorID, msg.SystemType, msg.Content,
+		models.MarshalEmbeds(msg.Embeds), models.MarshalComponents(msg.Components),
+		msg.ReplyToMessageID, msg.ForwardedMessageID, msg.WebhookName, msg.WebhookAvatarURL, msg.CreatedAt)
 	return err
 }
 

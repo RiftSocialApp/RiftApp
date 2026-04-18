@@ -1,0 +1,9 @@
+-- +goose Up
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS embeds JSONB DEFAULT NULL;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS components JSONB DEFAULT NULL;
+
+-- +goose Down
+
+ALTER TABLE messages DROP COLUMN IF EXISTS components;
+ALTER TABLE messages DROP COLUMN IF EXISTS embeds;

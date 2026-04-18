@@ -5,7 +5,7 @@ const COLUMNS = [
   {
     title: 'Product',
     links: [
-      { label: 'Download', to: 'https://github.com/Skila1/RiftApp/releases/latest', external: true },
+      { label: 'Download', to: 'https://github.com/RiftSocialApp/RiftApp/releases/latest', external: true },
       { label: 'Status', to: '#' },
     ],
   },

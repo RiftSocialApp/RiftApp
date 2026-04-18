@@ -12,6 +12,7 @@ import (
 
 	"github.com/riftapp-cloud/riftapp/internal/admin"
 	"github.com/riftapp-cloud/riftapp/internal/auth"
+	"github.com/riftapp-cloud/riftapp/internal/botengine"
 	"github.com/riftapp-cloud/riftapp/internal/buildinfo"
 	"github.com/riftapp-cloud/riftapp/internal/config"
 	"github.com/riftapp-cloud/riftapp/internal/middleware"
@@ -51,6 +52,11 @@ type RouterDeps struct {
 	ReportService           *service.ReportService
 	HubModerationRepo       *repository.HubModerationRepo
 	DeviceTokenRepo         *repository.DeviceTokenRepo
+	AppCommandRepo          *repository.AppCommandRepo
+	HubBotRepo              *repository.HubBotRepo
+	PollRepo                *repository.PollRepo
+	XPRepo                  *repository.XPRepo
+	BotEngine               *botengine.Engine
 	DB                      interface{}
 	AdminService            *admin.Service
 	SMTPService             *smtp.Service
@@ -104,6 +110,13 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 	if deps.DeviceTokenRepo != nil {
 		deviceTokenH = NewDeviceTokenHandler(deps.DeviceTokenRepo)
 	}
+
+	var cmdH *CommandHandler
+	if deps.AppCommandRepo != nil || deps.BotEngine != nil {
+		cmdH = NewCommandHandler(deps.AppCommandRepo, deps.BotEngine)
+	}
+
+	botReg := NewBotSessionRegistry()
 
 	r.Get("/ws", wsH.Handle)
 
@@ -312,6 +325,47 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			r.Post("/api/device-tokens", deviceTokenH.Register)
 			r.Delete("/api/device-tokens", deviceTokenH.Unregister)
 		}
+
+		if deps.HubBotRepo != nil {
+			hubBotH := NewHubBotHandler(deps.HubBotRepo, deps.HubService, deps.HubRepo, deps.DBPool, deps.BotEngine)
+			r.Get("/api/hubs/{hubID}/bots", hubBotH.ListHubBots)
+			r.Post("/api/hubs/{hubID}/bots", hubBotH.CreateHubBot)
+			r.Patch("/api/hubs/{hubID}/bots/{botID}", hubBotH.UpdateHubBot)
+			r.Delete("/api/hubs/{hubID}/bots/{botID}", hubBotH.DeleteHubBot)
+		}
+
+		if deps.BotEngine != nil {
+			r.Post("/api/component-interactions", func(w http.ResponseWriter, r *http.Request) {
+				userID := middleware.GetUserID(r.Context())
+				var body struct {
+					MessageID string   `json:"message_id"`
+					CustomID  string   `json:"custom_id"`
+					Values    []string `json:"values"`
+				}
+				if err := readJSON(r, &body); err != nil || body.MessageID == "" || body.CustomID == "" {
+					writeError(w, http.StatusBadRequest, "message_id and custom_id required")
+					return
+				}
+				streamID := ""
+				if deps.MsgRepo != nil {
+					if msg, err := deps.MsgRepo.GetByID(r.Context(), body.MessageID); err == nil && msg.StreamID != nil {
+						streamID = *msg.StreamID
+					}
+				}
+				hubID := ""
+				if streamID != "" && deps.StreamRepo != nil {
+					if s, err := deps.StreamRepo.GetByID(r.Context(), streamID); err == nil {
+						hubID = s.HubID
+					}
+				}
+				if hubID == "" {
+					writeError(w, http.StatusNotFound, "message not found in any hub")
+					return
+				}
+				_ = deps.BotEngine.HandleComponentInteraction(r.Context(), hubID, streamID, userID, body.MessageID, body.CustomID, body.Values)
+				writeData(w, http.StatusOK, map[string]string{"status": "ok"})
+			})
+		}
 	})
 
 	// Customization write routes — tighter rate limit (5 req / 10s to prevent abuse).
@@ -331,6 +385,21 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 		r.Delete("/api/hubs/{hubID}/sounds/{soundID}", customH.DeleteSound)
 	})
 
+	// Slash commands & interactions — separate group so they don't share the main rate limit bucket.
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.Auth(deps.AuthService))
+		if deps.UserRepo != nil {
+			r.Use(middleware.BanCheck(deps.UserRepo))
+		}
+		if cmdH != nil {
+			r.Get("/api/hubs/{hubID}/commands", cmdH.ListHubCommands)
+		}
+		if deps.AppCommandRepo != nil && deps.DeveloperService != nil {
+			intH := NewInteractionHandler(deps.AppCommandRepo, deps.DeveloperService, deps.MsgService, botReg, deps.BotEngine)
+			r.Post("/api/interactions", intH.Create)
+		}
+	})
+
 	// Discord-compatible REST API (v9/v10) for bot libraries
 	if deps.DeveloperService != nil && deps.DeveloperRepo != nil && deps.HubService != nil && deps.HubRepo != nil && deps.StreamService != nil && deps.StreamRepo != nil && deps.MsgService != nil && deps.MsgRepo != nil && deps.RankRepo != nil {
 		dcH := NewDiscordCompatHandler(DiscordCompatDeps{
@@ -343,6 +412,7 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			MsgRepo:    deps.MsgRepo,
 			RankRepo:   deps.RankRepo,
 			DevRepo:    deps.DeveloperRepo,
+			CmdRepo:    deps.AppCommandRepo,
 			BaseURL:    "",
 		})
 		gwH := NewDiscordGatewayHandler(
@@ -351,6 +421,8 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 			deps.HubService,
 			deps.StreamService,
 			deps.RankRepo,
+			deps.WSHub,
+			botReg,
 			deps.Config.AllowedOrigins,
 		)
 
@@ -374,9 +446,15 @@ func NewRouter(deps RouterDeps) *chi.Mux {
 					r.Get("/channels/{channelID}", dcH.GetChannel)
 					r.Get("/channels/{channelID}/messages", dcH.GetChannelMessages)
 					r.Post("/channels/{channelID}/messages", dcH.CreateChannelMessage)
-					r.Get("/channels/{channelID}/messages/{messageID}", dcH.GetChannelMessage)
-					r.Delete("/channels/{channelID}/messages/{messageID}", dcH.DeleteChannelMessage)
-				})
+				r.Get("/channels/{channelID}/messages/{messageID}", dcH.GetChannelMessage)
+				r.Delete("/channels/{channelID}/messages/{messageID}", dcH.DeleteChannelMessage)
+
+				r.Put("/applications/{appId}/commands", dcH.BulkOverwriteGlobalCommands)
+				r.Get("/applications/{appId}/commands", dcH.GetGlobalCommands)
+				r.Delete("/applications/{appId}/commands/{commandId}", dcH.DeleteCommand)
+				r.Put("/applications/{appId}/guilds/{guildId}/commands", dcH.BulkOverwriteGuildCommands)
+				r.Get("/applications/{appId}/guilds/{guildId}/commands", dcH.GetGuildCommands)
+			})
 			})
 		}
 		mountDiscordRoutes("/api/v10")

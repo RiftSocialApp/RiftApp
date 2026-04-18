@@ -50,6 +50,8 @@ const (
 	OpRoleUpdate             = "role_update"
 	OpStreamUpdate           = "stream_update"
 	OpCategoryUpdate         = "category_update"
+	OpMemberJoin             = "member_join"
+	OpMemberLeave            = "member_leave"
 )
 
 type SubscribeData struct {
@@ -181,4 +183,10 @@ func NewEvent(op string, data interface{}) []byte {
 	evt := Event{Op: op, Data: d}
 	b, _ := json.Marshal(evt)
 	return b
+}
+
+type MemberJoinLeaveData struct {
+	HubID    string `json:"hub_id"`
+	UserID   string `json:"user_id"`
+	Username string `json:"username,omitempty"`
 }

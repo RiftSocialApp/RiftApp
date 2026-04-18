@@ -13,6 +13,7 @@ import ModalOverlay from '../shared/ModalOverlay';
 import StatusDot from '../shared/StatusDot';
 import type { Hub, User, HubEmoji, HubSticker, HubSound, HubRole, HubInvite, RelationshipType } from '../../types';
 import { formatMediumDate, formatShortDate } from '../../utils/dateTime';
+import BotSettingsPanel from './BotSettingsPanel';
 import { publicAssetUrl } from '../../utils/publicAssetUrl';
 import { normalizeUser, normalizeUsers } from '../../utils/entityAssets';
 import {
@@ -61,6 +62,7 @@ type SettingsPage =
   | 'roles'
   | 'invites'
   | 'access'
+  | 'bots'
   | 'integrations'
   | 'app-directory'
   | 'safety'
@@ -106,6 +108,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     label: 'APPS',
     items: [
+      { id: 'bots', label: 'Bot Builder' },
       { id: 'integrations', label: 'Integrations' },
       { id: 'app-directory', label: 'App Directory', external: true },
     ],
@@ -174,6 +177,8 @@ function HubSettingsModal({ hub, onClose }: { hub: Hub; onClose: () => void }) {
         return <InvitesTab hub={hub} currentUser={currentUser} />;
       case 'access':
         return <AccessPanel />;
+      case 'bots':
+        return <BotSettingsPanel hubId={hub.id} />;
       case 'integrations':
         return <IntegrationsPanel />;
       case 'app-directory':
