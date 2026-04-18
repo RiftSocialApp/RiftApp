@@ -494,12 +494,12 @@ function HeaderIconButton({
       onClick={onClick}
       aria-label={label}
       title={title ?? label}
-      className={`relative inline-flex h-8 items-center justify-center rounded-md border px-2 transition-colors ${
+      className={`relative inline-flex h-8 w-8 items-center justify-center rounded-[4px] transition-colors ${
         success
-          ? 'border-[#2f8555] bg-[#248046] text-white hover:bg-[#2d9d58]'
+          ? 'bg-[#248046] text-white hover:bg-[#2d9d58]'
           : active
-            ? 'border-riftapp-border-light bg-riftapp-content-elevated text-[#f2f3f5]'
-            : 'border-transparent bg-transparent text-[#aeb4bf] hover:bg-riftapp-content-elevated hover:text-[#f2f3f5]'
+            ? 'bg-riftapp-border-light text-[#f2f3f5]'
+            : 'bg-transparent text-[#b5bac1] hover:bg-[#3a3c43] hover:text-[#f2f3f5]'
       } ${className ?? ''}`.trim()}
     >
       <span className="inline-flex items-center justify-center">{children}</span>
@@ -724,7 +724,7 @@ function ConversationCallStage({
   };
 
   return (
-    <div className="border-b border-riftapp-border/50 bg-[#111214] px-4 py-3">
+    <div className="bg-[#2b2d31] px-4 py-3 shadow-[0_1px_0_rgba(0,0,0,0.24),0_-1px_0_rgba(0,0,0,0.18)]">
       <div className="flex flex-col items-center gap-3">
         <ConversationCallMediaStage
           participants={stageParticipants}
@@ -886,8 +886,8 @@ function FloatingPanel({
   children: ReactNode;
 }) {
   return (
-    <div className={`${widthClass} overflow-hidden rounded-2xl border border-white/10 bg-[#111214]/95 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl animate-scale-in`}>
-      <div className={`flex items-start justify-between gap-3 px-4 py-3 ${showHeaderDivider ? 'border-b border-white/6' : ''}`}>
+    <div className={`${widthClass} animate-scale-in overflow-hidden rounded-xl border border-white/[0.06] bg-[#111214]/96 shadow-[0_18px_48px_rgba(0,0,0,0.45)] backdrop-blur-xl`}>
+      <div className={`flex items-start justify-between gap-3 px-4 py-3 ${showHeaderDivider ? 'shadow-[0_1px_0_rgba(255,255,255,0.04)]' : ''}`}>
         <div className="min-w-0">
           <h4 className="text-sm font-semibold text-[#f2f3f5]">{title}</h4>
           {subtitle ? <p className="mt-0.5 text-xs text-[#949ba4]">{subtitle}</p> : null}
@@ -897,7 +897,7 @@ function FloatingPanel({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#949ba4] transition-colors hover:bg-[#232428] hover:text-[#f2f3f5]"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#949ba4] transition-colors hover:bg-[#2b2d31] hover:text-[#f2f3f5]"
             aria-label="Close panel"
           >
             <IconClose className="h-4 w-4" />
@@ -919,8 +919,8 @@ function EmptyPanelState({
   icon: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/8 bg-[#0f1012] px-5 py-10 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#1b1d22] text-[#b5bac1]">
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-white/8 bg-[#17181c] px-5 py-10 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#232428] text-[#b5bac1]">
         {icon}
       </div>
       <h5 className="text-sm font-semibold text-[#f2f3f5]">{title}</h5>
@@ -948,8 +948,8 @@ function SearchSidebarActionButton({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-[4px] border px-2 py-1 text-[12px] font-semibold transition-colors ${
         active
-          ? 'border-[#4f545c] bg-[#2b2d31] text-[#f2f3f5]'
-          : 'border-[#232428] bg-[#1b1c20] text-[#b5bac1] hover:border-[#313338] hover:bg-[#232428] hover:text-[#f2f3f5]'
+          ? 'border-[#4f545c] bg-[#404249] text-[#f2f3f5]'
+          : 'border-[#232428] bg-[#1b1c20] text-[#b5bac1] hover:border-[#313338] hover:bg-[#2b2d31] hover:text-[#f2f3f5]'
       }`}
     >
       <span className="inline-flex items-center justify-center text-[#b5bac1]">{icon}</span>
@@ -982,7 +982,7 @@ function SearchResultCard({
     <button
       type="button"
       onClick={onOpen}
-      className="w-full rounded-[8px] border border-[#2c2f33] bg-[#18191c] px-3 py-2.5 text-left transition-colors hover:bg-[#202225]"
+      className="w-full rounded-[8px] border border-black/20 bg-[#232428] px-3 py-2.5 text-left transition-colors hover:bg-[#2b2d31]"
     >
       <div className="flex items-start gap-3">
         <UserAvatar user={message.author} sizeClass="w-9 h-9" textClass="text-[11px]" />
@@ -1027,7 +1027,7 @@ function PinnedMessageCard({
       tabIndex={0}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
-      className="group rounded-xl bg-[#17181c] px-3 py-3 text-left transition-colors hover:bg-[#1d1f24] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2]/40"
+      className="group rounded-xl bg-[#232428] px-3 py-3 text-left transition-colors hover:bg-[#2b2d31] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#5865f2]/40"
     >
       <div className="pointer-events-none">
         <MessageItem
@@ -1058,7 +1058,7 @@ function NotificationPreviewCard({
   const unread = !notification.read;
 
   return (
-    <div className="rounded-xl border border-white/6 bg-[#17181c] px-3 py-3">
+    <div className="rounded-xl border border-black/20 bg-[#232428] px-3 py-3">
       <div className="flex items-start gap-3">
         <UserAvatar user={notification.actor} sizeClass="w-9 h-9" textClass="text-xs" />
         <div className="min-w-0 flex-1">
@@ -1132,7 +1132,7 @@ function NotificationToggleRow({
     <button
       type="button"
       onClick={onToggle}
-      className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/6 bg-[#17181c] px-3 py-3 text-left transition-colors hover:bg-[#1d1f24]"
+      className="flex w-full items-center justify-between gap-3 rounded-xl border border-black/20 bg-[#232428] px-3 py-3 text-left transition-colors hover:bg-[#2b2d31]"
     >
       <span className="text-sm text-[#dbdee1]">{label}</span>
       <span className={`relative inline-flex h-5 w-9 rounded-full transition-colors ${checked ? 'bg-[#5865f2]' : 'bg-[#4e5058]'}`}>
@@ -2014,12 +2014,12 @@ export default function ChatPanel({
   }, [activeConversation, cancelConversationCallRing, isCurrentConversationCall, joinConversationVoice, setActiveVoiceChannel, startConversationCallRing, toggleVoiceCamera, user?.id, voiceConnected]);
 
   return (
-    <div className={`flex-1 min-h-0 flex flex-col bg-riftapp-content min-w-0 relative ${searchSidebarOpen ? 'pr-[320px]' : ''}`}>
+    <div className={`relative flex min-h-0 min-w-0 flex-1 flex-col bg-riftapp-content ${searchSidebarOpen ? 'pr-[320px]' : ''}`}>
       {/* Header */}
       {!showWelcome && (
         <div
           ref={headerRef}
-          className="flex h-12 items-center gap-3 border-b border-riftapp-border/50 bg-riftapp-content px-4 flex-shrink-0"
+          className="flex h-12 flex-shrink-0 items-center gap-3 bg-riftapp-content px-4 shadow-[0_1px_0_rgba(0,0,0,0.24)]"
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
             {isDMMode ? (
@@ -2027,7 +2027,7 @@ export default function ChatPanel({
                 <button
                   type="button"
                   onClick={() => setShowGroupSettingsModal(true)}
-                  className="-mx-1 flex min-w-0 items-center gap-3 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-white/5"
+                  className="-mx-1 flex min-w-0 items-center gap-3 rounded-md px-1 py-0.5 text-left transition-colors hover:bg-white/[0.06]"
                   aria-label={`Open settings for ${activeConversationLabel}`}
                 >
                   <ConversationAvatar conversation={activeConversation} viewerUserId={user?.id} sizeClass="w-7 h-7" textClass="text-[11px]" />
@@ -2069,8 +2069,8 @@ export default function ChatPanel({
 
           {canShowNotificationTools ? (
             <>
-              <div className="hidden h-5 w-px bg-white/10 lg:block" />
-              <div className="hidden items-center gap-2 lg:flex">
+              <div className="hidden h-5 w-px bg-black/30 lg:block" />
+              <div className="hidden items-center gap-1 lg:flex">
                 <HeaderIconButton
                   label="Notification settings"
                   active={activePanel === 'notifications'}
@@ -2091,7 +2091,7 @@ export default function ChatPanel({
           ) : null}
 
           {!showWelcome ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
         {isDMMode && activeConversation ? (
           <>
             <HeaderIconButton
@@ -2134,7 +2134,7 @@ export default function ChatPanel({
               <button
                 type="button"
                 onClick={() => setActivePanel('search')}
-                className="hidden h-7 min-w-[220px] max-w-[260px] items-center justify-between gap-3 rounded-[4px] bg-[#202225] px-3 text-left text-[12px] text-[#949ba4] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-colors hover:bg-[#25262b] hover:text-[#dcddde] lg:flex"
+                className="hidden h-6 min-w-[220px] max-w-[260px] items-center justify-between gap-3 rounded-[4px] bg-[#1e1f22] px-3 text-left text-[12px] text-[#949ba4] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-[#191a1d] hover:text-[#dcddde] lg:flex"
                 aria-label={`Search messages with ${activeConversationLabel}`}
               >
                 <span className="truncate">{searchQuery.trim() || `Search ${activeConversationLabel}`}</span>
@@ -2180,9 +2180,9 @@ export default function ChatPanel({
       ) : null}
 
       {searchSidebarOpen ? (
-        <div ref={floatingPanelRef} className="absolute inset-y-0 right-0 z-30 flex w-[320px] flex-col bg-riftapp-panel shadow-modal">
+        <div ref={floatingPanelRef} className="absolute inset-y-0 right-0 z-30 flex w-[320px] flex-col bg-[#1e1f22] shadow-[0_0_0_1px_rgba(0,0,0,0.18),-18px_0_30px_rgba(0,0,0,0.18)]">
           <div className="flex h-12 items-center px-4">
-            <div className="flex h-7 w-full items-center gap-2 rounded-[4px] bg-[#202225] px-2 text-[#dcddde] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+            <div className="flex h-7 w-full items-center gap-2 rounded-[4px] bg-[#111214] px-2 text-[#dcddde] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
               <IconSearch className="h-3.5 w-3.5 shrink-0 text-[#72767d]" />
               <input
                 type="text"

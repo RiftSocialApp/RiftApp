@@ -377,10 +377,10 @@ export default function DMSidebar() {
 
   return (
     <>
-      <div className="w-60 flex-shrink-0 border-r border-riftapp-border/60 bg-riftapp-chrome flex flex-col">
-      <div className="relative z-20 h-12 border-b border-riftapp-border/50 bg-riftapp-chrome px-3 flex-shrink-0">
+      <div className="flex w-60 flex-shrink-0 flex-col bg-riftapp-chrome shadow-[1px_0_0_rgba(0,0,0,0.24)]">
+      <div className="relative z-20 h-12 flex-shrink-0 bg-riftapp-chrome px-2.5 shadow-[0_1px_0_rgba(0,0,0,0.24)]">
         <div className="flex h-full items-center">
-          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#24272d] px-2 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors hover:bg-[#262930] focus-within:bg-[#262930]">
+          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#1e1f22] px-2 text-[#b5bac1] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-[#191a1d] focus-within:bg-[#191a1d]">
             <SearchIcon className="h-[13px] w-[13px] shrink-0 text-[#72767d]" />
             <input
               ref={searchInputRef}
@@ -421,12 +421,12 @@ export default function DMSidebar() {
       </div>
 
       {shouldShowSearchPanel && (
-        <div className="border-b border-riftapp-border/50 px-3 py-2 animate-fade-in">
+        <div className="animate-fade-in px-2.5 py-2 shadow-[0_1px_0_rgba(0,0,0,0.24)]">
           {searchResult ? (
             <button
               onClick={() => void handleOpenDM(searchResult.id)}
               disabled={opening}
-              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg bg-riftapp-chrome-hover hover:bg-riftapp-chrome-hover/90 border border-riftapp-border/40 transition-all duration-150 active:scale-[0.98]"
+              className="flex w-full items-center gap-2.5 rounded-[8px] bg-riftapp-chrome-hover px-2.5 py-2 transition-all duration-150 hover:bg-riftapp-border-light active:scale-[0.98]"
             >
               <div className="w-7 h-7 rounded-full bg-riftapp-accent/20 flex items-center justify-center text-[10px] font-semibold text-riftapp-accent flex-shrink-0">
                 {searchResult.display_name.slice(0, 2).toUpperCase()}
@@ -448,13 +448,13 @@ export default function DMSidebar() {
       )}
 
       {/* Navigation items */}
-      <div className="px-2 pt-2 pb-1 space-y-0.5">
+      <div className="space-y-0.5 px-2 pt-2 pb-1">
         <button
           onClick={() => useDMStore.getState().clearActive()}
           className={`w-full flex items-center gap-3 px-2.5 py-2 rounded-md transition-colors ${
             !activeConversationId
-              ? 'bg-riftapp-chrome-hover text-riftapp-text'
-              : 'text-riftapp-text-muted hover:bg-riftapp-chrome-hover/80 hover:text-riftapp-text'
+              ? 'bg-riftapp-border-light text-riftapp-text'
+              : 'text-riftapp-text-muted hover:bg-riftapp-chrome-hover hover:text-riftapp-text'
           }`}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -473,7 +473,7 @@ export default function DMSidebar() {
       </div>
 
       {/* Separator */}
-      <div className="px-4 pt-2 pb-1">
+      <div className="px-4 pt-3 pb-1">
         <div className="flex items-center justify-between">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-riftapp-text-dim">Direct Messages</h3>
           <button
@@ -546,11 +546,11 @@ export default function DMSidebar() {
                     : 'bg-[#72767d]';
               const rowClassName = conversationMuted
                 ? isActive
-                  ? 'bg-[#2a2d31] text-[#c8ccd1]'
-                  : 'text-[#8f949c] hover:bg-[#25282d] hover:text-[#c8ccd1]'
+                  ? 'bg-[#3b3d44] text-[#d7dade]'
+                  : 'text-[#8f949c] hover:bg-[#35373c] hover:text-[#d7dade]'
                 : isActive
-                  ? 'bg-riftapp-chrome-hover text-riftapp-text'
-                  : 'text-riftapp-text-muted hover:bg-riftapp-chrome-hover/80 hover:text-riftapp-text';
+                  ? 'bg-riftapp-border-light text-riftapp-text'
+                  : 'text-riftapp-text-muted hover:bg-riftapp-chrome-hover hover:text-riftapp-text';
               const titleClassName = conversationMuted ? 'text-[#aeb4bb]' : '';
               const subtitleClassName = conversationMuted ? 'text-[#747a84]' : 'text-riftapp-text-dim';
               const timeClassName = conversationMuted ? 'text-[#686e78]' : 'text-riftapp-text-dim';

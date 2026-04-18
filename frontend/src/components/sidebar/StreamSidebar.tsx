@@ -211,7 +211,7 @@ export default function StreamSidebar() {
 
   if (!activeHubId) {
     return (
-      <div className="sidebar w-60 min-h-0 overflow-hidden flex-shrink-0 border-r border-riftapp-border/60 bg-riftapp-chrome flex flex-col">
+      <div className="sidebar flex w-60 min-h-0 flex-shrink-0 flex-col overflow-hidden bg-riftapp-chrome shadow-[1px_0_0_rgba(0,0,0,0.24)]">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-6">
             <div className="w-12 h-12 rounded-2xl bg-riftapp-panel flex items-center justify-center mx-auto mb-3">
@@ -229,10 +229,10 @@ export default function StreamSidebar() {
   }
 
   return (
-    <div className="sidebar w-60 min-h-0 overflow-hidden flex-shrink-0 border-r border-riftapp-border/60 bg-riftapp-chrome flex flex-col">
+    <div className="sidebar flex w-60 min-h-0 flex-shrink-0 flex-col overflow-hidden bg-riftapp-chrome shadow-[1px_0_0_rgba(0,0,0,0.24)]">
       {/* Hub header */}
       <div
-        className="h-12 flex items-center border-b border-riftapp-border/50 flex-shrink-0"
+        className="flex h-12 flex-shrink-0 items-center bg-riftapp-chrome shadow-[0_1px_0_rgba(0,0,0,0.24)]"
         onContextMenu={handleHeaderContext}
       >
         <button
@@ -758,7 +758,7 @@ function DndChannelList({
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto py-3 px-2 space-y-1" onContextMenu={onContextMenu}>
+      <div ref={scrollRef} className="flex-1 min-h-0 space-y-1 overflow-y-auto px-2 py-3" onContextMenu={onContextMenu}>
         {/* Uncategorized channels */}
         {uncategorized.length > 0 && (
           <SortableContext items={uncatIds} strategy={verticalListSortingStrategy}>

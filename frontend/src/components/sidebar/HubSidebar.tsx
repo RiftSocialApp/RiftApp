@@ -238,7 +238,7 @@ export default function HubSidebar() {
   };
 
   return (
-    <div className="flex w-[72px] flex-shrink-0 flex-col items-center gap-2 overflow-x-hidden overflow-y-auto border-r border-riftapp-border/60 bg-riftapp-chrome py-3">
+    <div className="flex w-[72px] flex-shrink-0 flex-col items-center gap-2 overflow-x-hidden overflow-y-auto bg-[#1e1f22] py-3.5">
       {/* DM Button */}
       <div
         className="relative flex items-center justify-center w-full"
@@ -270,7 +270,7 @@ export default function HubSidebar() {
           </svg>
           {dmTotalUnread > 0 && (
             <span
-              className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-riftapp-bg-alt bg-red-600 px-1 text-[11px] font-bold leading-none text-white"
+              className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-[#1e1f22] bg-[#f23f42] px-1 text-[11px] font-bold leading-none text-white"
               aria-label={`${dmTotalUnread} unread direct messages`}
             >
               {formatMentionBadge(dmTotalUnread)}
@@ -280,7 +280,7 @@ export default function HubSidebar() {
       </div>
 
       {/* Separator */}
-      <div className="w-8 h-0.5 rounded-full bg-riftapp-border my-0.5" />
+      <div className="my-0.5 h-0.5 w-8 rounded-full bg-white/[0.08]" />
 
       {/* Hub list */}
       {hubs.map((hub) => {
@@ -340,7 +340,7 @@ export default function HubSidebar() {
               )}
               {mentions > 0 && (
                 <span
-                  className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-riftapp-bg-alt bg-red-600 px-1 text-[11px] font-bold leading-none text-white"
+                  className="absolute -bottom-1 -right-1 z-20 flex h-[18px] min-w-[18px] items-center justify-center rounded-full border-2 border-[#1e1f22] bg-[#f23f42] px-1 text-[11px] font-bold leading-none text-white"
                   aria-label={`${mentions} mentions`}
                 >
                   {formatMentionBadge(mentions)}
@@ -352,13 +352,13 @@ export default function HubSidebar() {
       })}
 
       {/* Separator */}
-      <div className="w-8 h-0.5 rounded-full bg-riftapp-border my-0.5" />
+      <div className="my-0.5 h-0.5 w-8 rounded-full bg-white/[0.08]" />
 
       {/* Add server button */}
       <div className="relative flex items-center justify-center w-full">
         <button
           onClick={() => setShowAddServer(true)}
-          className="hub-icon rounded-3xl bg-riftapp-chrome-hover text-riftapp-success hover:rounded-2xl hover:bg-riftapp-success hover:text-white transition-all duration-300"
+          className="hub-icon rounded-3xl bg-riftapp-content text-riftapp-success shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-all duration-300 hover:rounded-2xl hover:bg-riftapp-success hover:text-white"
           title="Add a server"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">

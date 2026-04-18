@@ -111,10 +111,10 @@ function HeaderActionButton({
       disabled={disabled}
       className={`flex h-7 w-7 items-center justify-center rounded-md text-[#b5bac1] transition-all duration-150 ${
         danger
-          ? 'hover:bg-[#ed4245]/12 hover:text-[#ed4245]'
+          ? 'hover:bg-[#ed4245]/15 hover:text-[#ed4245]'
           : active
-            ? 'bg-white/[0.08] text-[#f2f3f5] hover:bg-white/[0.11]'
-            : 'hover:bg-white/[0.08] hover:text-[#f2f3f5]'
+            ? 'bg-riftapp-border-light text-[#f2f3f5] hover:bg-[#4b4d55]'
+            : 'hover:bg-riftapp-chrome-hover hover:text-[#f2f3f5]'
       } disabled:cursor-not-allowed disabled:opacity-45`}
     >
       {children}
@@ -357,7 +357,7 @@ function VoiceConnectionPopover({
   return (
     <div
       ref={popoverRef}
-      className="absolute bottom-full left-0 z-40 mb-2 w-[320px] rounded-[8px] border border-riftapp-border/60 bg-riftapp-panel p-4 shadow-modal"
+      className="absolute bottom-full left-0 z-40 mb-2 w-[320px] rounded-[8px] border border-black/20 bg-[#111214] p-4 shadow-modal"
       role="dialog"
       aria-label="Voice connection details"
     >
@@ -501,7 +501,7 @@ function VoiceHeader({
   onLeave: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2.5 px-3 pb-2 pt-3">
+    <div className="flex items-center gap-2.5 px-3 pb-2.5 pt-3">
       <VoiceConnectionSummary
         statusLabelText={statusLabelText}
         statusTone={statusTone}
@@ -626,13 +626,13 @@ function VoiceUserRow({
     <div className="flex min-h-[52px] items-center gap-2 px-2.5 pb-2 pt-1">
       <button
         onClick={onAvatarClick}
-        className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-150 hover:bg-white/[0.04]"
+        className="group flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 transition-colors duration-150 hover:bg-white/[0.06]"
         title="View Profile"
       >
         <div className="relative flex-shrink-0">
           <div
             className={`flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-[#5865f2] text-xs font-semibold text-white ${
-              voiceIsSpeaking ? 'ring-2 ring-[#3ba55d] ring-offset-1 ring-offset-[#232428]' : ''
+              voiceIsSpeaking ? 'ring-2 ring-[#3ba55d] ring-offset-1 ring-offset-riftapp-chrome' : ''
             }`}
           >
             {user.avatar_url ? (
@@ -645,7 +645,7 @@ function VoiceUserRow({
             userId={user.id}
             fallbackStatus={user.status}
             size="lg"
-            className="absolute -bottom-0.5 -right-0.5 border-[2.5px] border-[#232428]"
+            className="absolute -bottom-0.5 -right-0.5 border-[2.5px] border-riftapp-chrome"
           />
         </div>
 
@@ -875,7 +875,7 @@ export default function VoiceBottomBar() {
     : 'Voice Call';
 
   return (
-    <div className="relative flex-shrink-0 border-t border-riftapp-border/60 bg-riftapp-chrome">
+    <div className="relative flex-shrink-0 bg-riftapp-chrome shadow-[0_-1px_0_rgba(0,0,0,0.34)]">
       {inVoice ? (
         <>
           <VoiceHeader

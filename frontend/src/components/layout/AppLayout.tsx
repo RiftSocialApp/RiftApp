@@ -275,9 +275,9 @@ export default function AppLayout() {
   }, [activeConversationId, activeHubId, showFullVoiceView]);
 
   return (
-    <div className="app-root h-full min-h-0 flex overflow-hidden bg-riftapp-content">
+    <div className="app-root h-full min-h-0 flex overflow-hidden bg-riftapp-bg">
       {/* Left sidebar group: server list + channel list + bottom voice/user bar */}
-      <div className="flex-shrink-0 flex flex-col h-full bg-riftapp-chrome">
+      <div className="flex h-full flex-shrink-0 flex-col bg-riftapp-chrome shadow-[1px_0_0_rgba(0,0,0,0.34)]">
         <div className="flex flex-1 min-h-0">
           <HubSidebar />
           {!activeHubId ? <DMSidebar /> : <StreamSidebar />}

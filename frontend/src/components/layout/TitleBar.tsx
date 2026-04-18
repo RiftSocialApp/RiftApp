@@ -79,7 +79,7 @@ function TitleBar() {
 
   return (
     <div
-      className="titlebar flex h-8 items-center justify-between select-none shrink-0 bg-riftapp-chrome/95 pl-3.5 backdrop-blur-xs"
+      className="titlebar flex h-9 shrink-0 select-none items-center justify-between bg-[#1e1f22]/95 pl-4 shadow-[0_1px_0_rgba(0,0,0,0.34)] backdrop-blur-xs"
       style={
         {
           WebkitAppRegion: 'drag',
@@ -89,10 +89,10 @@ function TitleBar() {
     >
       <div className="flex min-w-0 items-center">
         <div className="flex items-center gap-2 opacity-95 transition-[opacity,filter] duration-150 hover:opacity-100 hover:brightness-110">
-          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-white/[0.06] bg-[#2b2e36] text-[#f2f3f5] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-[7px] bg-[#313338] text-[#f2f3f5] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
             <RiftMark className="h-3.5 w-3.5" />
           </span>
-          <span className="text-[15px] font-semibold leading-none tracking-[0.01em] text-[#ededed]">Rift</span>
+          <span className="text-[13px] font-semibold leading-none tracking-[0.02em] text-[#f2f3f5]">Rift</span>
         </div>
       </div>
 
@@ -105,7 +105,7 @@ function TitleBar() {
           type="button"
           onClick={handleMinimizeClick}
           onMouseDown={(event) => event.stopPropagation()}
-          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.06] hover:text-white"
+          className="window-button flex h-full w-[46px] items-center justify-center text-[#b5bac1] transition-colors hover:bg-white/[0.06] hover:text-white"
           aria-label="Minimize"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" aria-hidden>
@@ -117,7 +117,7 @@ function TitleBar() {
           type="button"
           onClick={handleMaximizeClick}
           onMouseDown={(event) => event.stopPropagation()}
-          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-white/[0.06] hover:text-white"
+          className="window-button flex h-full w-[46px] items-center justify-center text-[#b5bac1] transition-colors hover:bg-white/[0.06] hover:text-white"
           aria-label={maximized ? 'Restore' : 'Maximize'}
         >
           {maximized ? (
@@ -137,7 +137,7 @@ function TitleBar() {
           type="button"
           onClick={handleCloseClick}
           onMouseDown={(event) => event.stopPropagation()}
-          className="window-button flex h-full w-[44px] items-center justify-center text-[#aeb4c0] transition-colors hover:bg-[#ed4245] hover:text-white"
+          className="window-button flex h-full w-[46px] items-center justify-center text-[#b5bac1] transition-colors hover:bg-[#ed4245] hover:text-white"
           aria-label="Close"
         >
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.2" aria-hidden>

@@ -52,7 +52,7 @@ function GroupMemberRow({
     <div
       onClick={handleClick}
       onContextMenu={handleContextMenu}
-      className={`group flex items-center gap-2.5 rounded-md px-2 py-1.5 transition-colors ${isOffline ? 'opacity-50 hover:bg-riftapp-content-elevated' : 'hover:bg-riftapp-content-elevated'} cursor-pointer`}
+      className={`group flex cursor-pointer items-center gap-2.5 rounded-[4px] px-2 py-1.5 transition-colors ${isOffline ? 'opacity-50 hover:bg-white/[0.06]' : 'hover:bg-white/[0.06]'}`}
     >
       <div className="relative flex-shrink-0">
         {member.avatar_url ? (
@@ -129,10 +129,10 @@ export default function GroupDMMemberList({ conversation }: { conversation: Conv
   };
 
   return (
-    <div className="relative w-60 flex-shrink-0 border-l border-riftapp-border/60 bg-riftapp-content flex flex-col overflow-visible">
-      <div className="relative z-20 h-12 border-b border-riftapp-border/50 bg-riftapp-content px-3">
+    <div className="relative flex w-60 flex-shrink-0 flex-col overflow-visible bg-riftapp-content shadow-[-1px_0_0_rgba(0,0,0,0.24)]">
+      <div className="relative z-20 h-12 bg-riftapp-content px-3 shadow-[0_1px_0_rgba(0,0,0,0.24)]">
         <div className="flex h-full items-center">
-          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#24272d] px-2 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors hover:bg-[#262930] focus-within:bg-[#262930]">
+          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#1e1f22] px-2 text-[#b5bac1] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-[#191a1d] focus-within:bg-[#191a1d]">
             <SearchIcon className="h-[13px] w-[13px] shrink-0 text-[#72767d]" />
             <input
               type="text"

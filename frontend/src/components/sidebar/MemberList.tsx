@@ -33,12 +33,12 @@ function UserRow({ user }: { user: User }) {
   }, [user, openContextMenu]);
 
   return (
-    <div onClick={handleClick} onContextMenu={handleContextMenu} className={`flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors group cursor-pointer ${isOffline ? 'opacity-40 hover:bg-riftapp-content-elevated' : 'hover:bg-riftapp-content-elevated'}`}>
+    <div onClick={handleClick} onContextMenu={handleContextMenu} className={`group flex cursor-pointer items-center gap-2.5 rounded-[4px] px-2 py-1.5 transition-colors ${isOffline ? 'opacity-40 hover:bg-white/[0.06]' : 'hover:bg-white/[0.06]'}`}>
       <div className="relative flex-shrink-0">
         {user.avatar_url ? (
           <img src={publicAssetUrl(user.avatar_url)} alt="" className="w-8 h-8 rounded-full object-cover" />
         ) : (
-          <div className="w-8 h-8 rounded-full bg-riftapp-content-elevated flex items-center justify-center">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-riftapp-content-elevated">
             <span className="text-xs font-semibold text-[#c7ced9] uppercase">
               {user.display_name?.[0] || user.username[0]}
             </span>
@@ -106,10 +106,10 @@ export default function MemberList() {
   if (Object.keys(hubMembers).length === 0) return null;
 
   return (
-    <div className="relative w-60 border-l border-riftapp-border/60 bg-riftapp-content flex flex-col overflow-visible flex-shrink-0">
-      <div className="relative z-20 h-12 border-b border-riftapp-border/50 bg-riftapp-content px-3">
+    <div className="relative flex w-60 flex-shrink-0 flex-col overflow-visible bg-riftapp-content shadow-[-1px_0_0_rgba(0,0,0,0.24)]">
+      <div className="relative z-20 h-12 bg-riftapp-content px-3 shadow-[0_1px_0_rgba(0,0,0,0.24)]">
         <div className="flex h-full items-center">
-          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#24272d] px-2 text-[#b5bac1] shadow-[0_1px_0_rgba(0,0,0,0.32)] transition-colors hover:bg-[#262930] focus-within:bg-[#262930]">
+          <div className="flex h-[28px] w-full min-w-0 items-center gap-1 rounded-[4px] bg-[#1e1f22] px-2 text-[#b5bac1] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition-colors hover:bg-[#191a1d] focus-within:bg-[#191a1d]">
             <SearchIcon className="h-[13px] w-[13px] shrink-0 text-[#72767d]" />
             <input
               type="text"
@@ -139,7 +139,7 @@ export default function MemberList() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
+      <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
         {online.length > 0 && (
           <div>
             <h4 className="px-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#7b818e] mb-1">
